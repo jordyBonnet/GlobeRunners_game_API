@@ -1,0 +1,61 @@
+<mxfile host="65bd71144e">
+    <diagram id="2fhvCjmi0dHIVJ1oSKfv" name="YDB_g Relationships">
+        <mxGraphModel dx="679" dy="656" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="main.py" style="rounded=1;fillColor=#dae8fc;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="engine/game_engine.py" style="rounded=1;fillColor=#fff2cc;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="40" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="engine/state_machine.py" style="rounded=1;fillColor=#fff2cc;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="110" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="models.py" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="120" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="GameState" style="ellipse;fillColor=#e1d5e7;" vertex="1" parent="1">
+                    <mxGeometry x="540" y="80" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="PlayerState" style="ellipse;fillColor=#e1d5e7;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="200" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="Card" style="ellipse;fillColor=#e1d5e7;" vertex="1" parent="1">
+                    <mxGeometry x="425" y="250" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="2" target="3">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="2" target="5">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="3" target="5">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="4" target="5">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="3" target="6">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="3" target="7">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="3" target="8">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="4" target="6">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="4" target="7">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" style="edgeStyle=elbowEdgeStyle;endArrow=block;endFill=1;" edge="1" parent="1" source="4" target="8">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
