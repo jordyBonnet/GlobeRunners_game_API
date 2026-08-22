@@ -33,6 +33,8 @@ class GameState(BaseModel):
     winner: Optional[str] = None
     first_player_passed: bool = False
     second_player_passed: bool = False
+    temperature: Optional[int] = None        # planet temperature, rolled with a die at game start
+    day_night: Optional[str] = None          # "day" (card face up) or "night" (card face down), drawn at game start
 
     def to_json(self) -> str:
         return self.model_dump_json()

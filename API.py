@@ -34,7 +34,6 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str, player_name: st
         except RuntimeError:
             pass  # Already closed, ignore
 
-# TODO: Add endpoints for play, pass, defend, concede, get state
 
 def main():
     print("Hello from ydb-g!")

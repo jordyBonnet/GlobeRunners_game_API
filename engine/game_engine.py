@@ -6,6 +6,7 @@ import sqlite3
 from models import Card, GameState, PlayerState
 import json
 import random
+import re
 import polars as pl
 
 CARDS_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/cardpool.parquet')
@@ -58,6 +59,12 @@ def get_current_game(game_id=None):
     current_game = GameState.from_json(row[0])
     return conn, c, current_game
 
+def roll_temperature():
+    """ roll a d20 twice, keep the value closest to 10 (ties broken randomly) """
+    rolls = [random.randint(1, 20), random.randint(1, 20)]
+    best_dist = min(abs(r - 10) for r in rolls)
+    return random.choice([r for r in rolls if abs(r - 10) == best_dist])
+
 def p2_connect_to_game(player: PlayerState, game_id):
     """ connect 2nd player and initialize the game
      leave the game state as :  waiting for both players to put {start_cards_in_mana} cards in hand """
@@ -72,8 +79,12 @@ def p2_connect_to_game(player: PlayerState, game_id):
     random.shuffle(players_list)
     current_game.turn_order = players_list
     
-    # 3. Edit players hands
+    # 3. Edit players hands (and make sure all list fields are initialized)
     for p in current_game.players.values():
+        if p.deck is None:
+            p.deck = []
+        if p.discard is None:
+            p.discard = []
         p.hand = random.sample(p.deck, start_cards_in_hand)
         for card in p.hand:
             p.deck.remove(card)
@@ -88,7 +99,12 @@ def p2_connect_to_game(player: PlayerState, game_id):
     current_game.earth[0].append(current_game.turn_order[0])   # first player starts at position 0
     current_game.earth[0].append(current_game.turn_order[1])   # second player starts at position 0
 
-    # 5. Change game state
+    # 5. Roll planet temperature (2x d20, keep value closest to 10); day/night always starts on "day" and flips each turn
+    current_game.temperature = roll_temperature()
+    current_game.day_night = 'day'
+    print(f'Planet initialized: temperature = {current_game.temperature}, {current_game.day_night}')
+
+    # 6. Change game state
     current_game.state = f"waiting for both players to put {start_cards_in_mana} cards in hand"
 
     # Update the game state in the database
@@ -186,6 +202,7 @@ def handle_websocket_message(game_id: str, player: PlayerState):   # main part o
                 current_game.first_player_passed = False                    # reset first player passed
                 current_game.second_player_passed = False                   # reset second player passed
                 current_game.turn += 1                                      # increment turn
+                current_game.day_night = 'night' if current_game.day_night == 'day' else 'day'   # flip day/night each new turn
                 for p in current_game.players.values():                     # reset necessary players state
                     p.mana_spend = 0
                     p.action_chain = []
@@ -325,7 +342,7 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
         message = f"Player {player.name} played {cards_id} successfully"
     else:
         success = False
-        message = f"Player {player.name} tried to play {cards_id} but not enough mana available (available: {mana_available}, required: {cards_rows['mana'].item()})"
+        message = f"Player {player.name} tried to play {cards_id} but not enough mana available (available: {mana_available}, required: {cards_rows['mana'].sum()})"
 
     # ToDo: manage instant actions here (support faction, pendings, drops, defense cards, etc.)
 
@@ -381,37 +398,179 @@ def process_trip_chain(current_game):
 def process_card(cards_dict, player, current_game):
     """ process a cards (list) that are in the trip chain, card format:
      {
-        'cards': random.sample(p1.hand, 3),     # cards selected by user - LIST (if move mode, max 1 card, if defend mode, no max)
+        'cards': random.sample(p1.hand, 3),     # cards selected by user - LIST (if move mode == 1 card, if defend mode no max)
         'to': 'mana',                           # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
-        'mode': '',                             # mode selected by user - STRING ['', move, defend, dwelling_activation, pass]
+        'mode': '',                             # mode selected by user - STRING ['', move, defend, dwelling_activation, pending, pass]
         'pendings': []                          # cards in pendings zone that has to be added to a normal move card - LIST
     } """
     print(f'\t\t{player.name} processing cards: {cards_dict}')
 
+    # move played cards to discard pile (so the deck can be reshuffled later)
+    card_ids = cards_dict['cards']
+    if player.discard is None:
+        player.discard = []
+    player.discard.extend(card_ids)
+
     # if mode is defend do nothing
     if cards_dict['mode'] == 'defend':
+        # GERER CONDITION BLOCK
         return current_game
 
     # filter cards from CARDS_DB based on card_ids in cards_dict['cards']
-    card_ids = cards_dict['cards']
-    cards_df = CARDS_DB.filter(pl.col('card_id').is_in(card_ids))
-    print(f'\t\t\tadv: {cards_df["advancing"].item()}, mana: {cards_df["mana"].item()}')
+    card_df = CARDS_DB.filter(pl.col('card_id').is_in(card_ids))
+    print(f'\t\t\tadv: {card_df["advancing"].item()}, mana: {card_df["mana"].item()}')
 
-    # check card condition
+    # check card condition (extract scalar values: each action plays exactly 1 card)
+    condition = card_df['condition'].item()
+    effect = card_df['effect'].item()
+    condition_met = is_condition_met(condition, player, current_game)
 
-    # if condition met apply effect
+    # if condition met apply effect and advancing
+    if condition_met:
+        print(f'\t\t\tapplying effect: {effect}')
+        current_game = apply_effect(effect, player, current_game)
 
-    # apply basic advancing
-    current_game.earth[player.current_position].remove(player.name)         # remove old player position in earth
-    player.current_position += cards_df['advancing'].sum()                  # update player position
-    # check if win condition
-    if player.current_position > win_position-1:
-        current_game.winner = player.name
-        current_game.state = "game over"
-        current_game.earth[0].append(player.name)                           # put it back to start showing crossing finish line
+        # Apply basic advancing
+        basic_advancing = card_df['advancing'].sum()
+        current_game = process_advancing(basic_advancing, player, current_game)
     else:
-        current_game.earth[player.current_position].append(player.name)
+        # condition not met: reduced advancing (card mana - 1)
+        basic_advancing = card_df['mana'].sum() - 1
+        print(f'\t\t\tcondition not met, reduced advancing: {basic_advancing}')
+        current_game = process_advancing(basic_advancing, player, current_game)
 
     print(f'\t\t\tcurrent position: {player.current_position} (len(earth): {len(current_game.earth)})')
 
     return current_game
+
+def _get_oppo(player, current_game):
+    """ return the opponent PlayerState (the other player in the game), or None if playing alone """
+    for p in current_game.players.values():
+        if p.name != player.name:
+            return p
+    return None
+
+def is_condition_met(condition, player, current_game):
+    # no condition required -> always met
+    if condition == 'no_condition':
+        return True
+
+    # biome conditions: check the cell the player currently stands on
+    if 'biome' in condition:
+        cell = get_player_cell(player, current_game)
+        biome_map = {
+            'biome_Dwa': ('MO', 'OC'),
+            'biome_Dem': ('OC', 'DE'),
+            'biome_Twi': ('JU', 'OC'),
+            'biome_Mia': ('DE', 'JU'),
+            'biome_Orc': ('MO', 'JU'),
+            'biome_Mum': ('DE', 'MO'),
+        }
+        if condition in biome_map:
+            return any(b in cell for b in biome_map[condition])
+        # unknown biome -> not implemented, assume met (permissive)
+        print(f'\t\t\tcondition {condition} not implemented, assuming met')
+        return True
+
+    # distance between players (ahead = I lead the opponent, behind = opponent leads me)
+    dist_match = re.match(r'^dist_(ahead|behind)_sup_(\d+)$', condition)
+    if dist_match:
+        oppo = _get_oppo(player, current_game)
+        if oppo is None:
+            return False   # no opponent -> distance condition cannot be met
+        gap = player.current_position - oppo.current_position      # >0 : I'm ahead, <0 : I'm behind
+        threshold = int(dist_match.group(2))
+        if dist_match.group(1) == 'ahead':
+            return gap > threshold
+        return -gap > threshold
+
+    # mana conditions (own zone)
+    if condition == 'mana_inf_6':
+        return len(player.mana) < 6
+    if condition == 'mana_sup_5':
+        return len(player.mana) > 5
+
+    # mana conditions (opponent zone)
+    if condition in ('mana_inf_6_oppo', 'mana_sup_5_oppo'):
+        oppo = _get_oppo(player, current_game)
+        if oppo is None:
+            return False   # no opponent -> cannot evaluate
+        n = len(oppo.mana)
+        return n < 6 if condition == 'mana_inf_6_oppo' else n > 5
+
+    # cards in own hand
+    if condition == 'cards_in_hand_inf_4':
+        return len(player.hand) < 4
+    if condition == 'cards_in_hand_sup_3':
+        return len(player.hand) > 3
+
+    # cards in opponent's hand (engine sees the full state; only hidden at API level)
+    if condition in ('cards_in_hand_inf_4_oppo', 'cards_in_hand_sup_3_oppo'):
+        oppo = _get_oppo(player, current_game)
+        if oppo is None:
+            return False   # no opponent -> cannot evaluate
+        n = len(oppo.hand)
+        return n < 4 if condition == 'cards_in_hand_inf_4_oppo' else n > 3
+
+    # temperature conditions (planet temperature rolled at game start)
+    temp_match = re.match(r'^temp_(inf|sup)_(\d+)$', condition)
+    if temp_match:
+        if current_game.temperature is None:
+            return False   # temperature not rolled yet -> cannot evaluate
+        threshold = int(temp_match.group(2))
+        return current_game.temperature < threshold if temp_match.group(1) == 'inf' else current_game.temperature > threshold
+
+    # day/night conditions (starts on "day", flips each turn)
+    if condition in ('day', 'night'):
+        return current_game.day_night == condition
+
+    # any other not-yet-implemented condition: assume met so the card can still advance
+    print(f'\t\t\tcondition {condition} not implemented, assuming met')
+    return True
+
+def apply_effect(effect, player, current_game):
+
+    return current_game
+
+def process_advancing(advancing_value, player, current_game):
+    """ process advancing of a player on the earth, checking for traps and drops """
+    if advancing_value == 0:
+        return current_game
+
+    # +1 to move forward, -1 to move backward (single loop handles both directions)
+    step = 1 if advancing_value > 0 else -1
+
+    for _ in range(abs(advancing_value)):
+        new_position = player.current_position + step
+
+        # boundary check: cannot go below position 0
+        if new_position < 0:
+            break
+
+        current_game.earth[player.current_position].remove(player.name)         # remove old player position in earth
+
+        # check win condition - if player is at the end of the earth
+        if step > 0 and new_position >= win_position:
+            # player has reached the end of the earth, set game state to "game over" and declare winner
+            current_game.winner = player.name
+            current_game.state = "game over"
+            current_game.earth[0].append(player.name)                           # put it back to start showing crossing finish line
+            break
+
+        player.current_position = new_position
+
+        # check if stepping on a trap or drop (if yes apply effect)
+        cell = get_player_cell(player, current_game)
+        if 'trap' in cell:
+            # apply trap effect
+            current_game = apply_effect('trap', player, current_game)
+        if 'drop' in cell:
+            # apply drop effect
+            current_game = apply_effect('drop', player, current_game)
+
+        current_game.earth[player.current_position].append(player.name)     # update new player position in earth
+
+    return current_game
+
+def get_player_cell(player, current_game):
+    return current_game.earth[player.current_position]
