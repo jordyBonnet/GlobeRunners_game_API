@@ -129,6 +129,24 @@ def get_game(game_id=None):
 
     return current_game.to_json()
 
+def _check_deadlock(current_game):
+    """ check if the game reached a dead end: both players have no cards left in hand/deck/discard
+     (all their cards are stuck in the mana zones). In that case nobody can ever move again, so
+     the game ends: winner = player furthest ahead, draw (winner stays None) on tie.
+     returns True if a deadlock was detected (and sets state to "game over") """
+    for p in current_game.players.values():
+        if len(p.hand or []) + len(p.deck or []) + len(p.discard or []):
+            return False
+
+    first = current_game.players[current_game.turn_order[0]]
+    second = current_game.players[current_game.turn_order[1]]
+    # winner is the player furthest ahead (tie -> draw, winner stays None)
+    if (first.current_position or 0) != (second.current_position or 0):
+        current_game.winner = max((first, second), key=lambda p: p.current_position or 0).name
+
+    current_game.state = "game over"
+    return True
+
 def handle_websocket_message(game_id: str, player: PlayerState):   # main part of the game code
     """ handle websocket message this is the main code of the game
     messages are expected to be in the format:
@@ -196,6 +214,12 @@ def handle_websocket_message(game_id: str, player: PlayerState):   # main part o
             if current_game.state == "game over":
                 success = True
                 message = f"Game over! Winner: {current_game.winner}"
+            elif _check_deadlock(current_game):
+                # all cards stuck in mana zones -> nobody can move anymore, end the game
+                if current_game.winner is not None:
+                    message = f"Deadlock - no more playable cards for both players. Winner (furthest ahead): {current_game.winner}"
+                else:
+                    message = "Deadlock - no more playable cards for both players. Draw!"
             else:
                 # ... then prepare for next turn    
                 current_game.turn_order = current_game.turn_order[::-1]     # change turn order
