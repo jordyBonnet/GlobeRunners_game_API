@@ -428,11 +428,12 @@ def process_card(cards_dict, player, current_game):
     # if condition met apply effect and advancing
     if condition_met:
         print(f'\t\t\tapplying effect: {effect}')
-        current_game = apply_effect(effect, player, current_game)
-
-        # Apply basic advancing
         basic_advancing = card_df['advancing'].sum()
-        current_game = process_advancing(basic_advancing, player, current_game)
+        current_game = apply_effect(effect, card_df['effect_number'].item(), basic_advancing, player, current_game)
+
+        # Apply basic advancing (movement effects already moved the player inside apply_effect)
+        if effect not in ('advancing', 'backward', 'jump'):
+            current_game = process_advancing(basic_advancing, player, current_game)
     else:
         # condition not met: reduced advancing (card mana - 1)
         basic_advancing = card_df['mana'].sum() - 1
@@ -449,6 +450,55 @@ def _get_oppo(player, current_game):
         if p.name != player.name:
             return p
     return None
+
+def _next_from_deck(p):
+    """ pop the next card from p.deck, reshuffling the discard pile when the deck runs out.
+     returns None if both deck and discard are empty """
+    if p.discard is None:
+        p.discard = []
+    if not p.deck and p.discard:   # deck empty -> reshuffle discard pile into a new deck
+        p.deck.extend(p.discard)
+        random.shuffle(p.deck)
+        p.discard.clear()
+    return p.deck.pop(0) if p.deck else None
+
+def _draw_cards(p, n):
+    """ draw up to n cards from p.deck into p.hand (reshuffling the discard pile when needed).
+     returns the number of cards actually drawn """
+    drawn = 0
+    while drawn < n:
+        card = _next_from_deck(p)
+        if card is None:
+            break
+        p.hand.append(card)
+        drawn += 1
+    return drawn
+
+def _ramp_mana(p, n):
+    """ move up to n cards from p.deck into p.mana (reshuffling the discard pile when needed).
+     returns the number of cards actually moved """
+    if p.mana is None:
+        p.mana = []
+    moved = 0
+    while moved < n:
+        card = _next_from_deck(p)
+        if card is None:
+            break
+        p.mana.append(card)
+        moved += 1
+    return moved
+
+def _tax_mana(p, n):
+    """ move up to n cards from p.mana into p.discard (last cards of the mana zone first).
+     returns the number of cards actually taxed """
+    if p.discard is None:
+        p.discard = []
+    n = min(n, len(p.mana))
+    taxed = p.mana[-n:] if n else []
+    for card in taxed:
+        p.mana.remove(card)
+    p.discard.extend(taxed)
+    return len(taxed)
 
 def is_condition_met(condition, player, current_game):
     # no condition required -> always met
@@ -528,8 +578,143 @@ def is_condition_met(condition, player, current_game):
     print(f'\t\t\tcondition {condition} not implemented, assuming met')
     return True
 
-def apply_effect(effect, player, current_game):
+def apply_effect(effect, effect_number, basic_advancing, player, current_game):
+    """ apply the card effect (all effects are handled here)
+     effect_number: quantitative parameter of the effect from CARDS_DB (e.g. N cards to draw, N cells to recoil)
+     basic_advancing: base advancing value of the played card (needed by movement effects) """
 
+    # --- movement effects (they handle the full movement themselves) ---
+    if effect == 'advancing':
+        bonus = effect_number   # extra forward cells on top of base
+        print(f'\t\t\teffect advancing: +{bonus} extra cell(s)')
+        return process_advancing(basic_advancing + bonus, player, current_game)
+
+    if effect == 'backward':
+        recoil = effect_number   # negative value (e.g. -1 or -2)
+        current_game = process_advancing(basic_advancing, player, current_game)
+        if current_game.state != "game over":     # no recoil after crossing the finish line
+            print(f'\t\t\teffect backward: {recoil} cell(s) recoil')
+            current_game = process_advancing(recoil, player, current_game)
+        return current_game
+
+    # --- opponent movement effects (the player's own basic advancing is still applied by process_card) ---
+    if effect == 'advancing_oppo':
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None and current_game.state != "game over":
+            print(f'\t\t\teffect advancing_oppo: {oppo.name} advances {effect_number} cell(s)')
+            current_game = process_advancing(effect_number, oppo, current_game)
+        return current_game
+
+    if effect == 'backward_oppo':
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None and current_game.state != "game over":
+            print(f'\t\t\teffect backward_oppo: {oppo.name} recoils {effect_number} cell(s)')
+            current_game = process_advancing(effect_number, oppo, current_game)   # negative value (e.g. -1), clamped at position 0
+        return current_game
+
+    # --- card effects: draw / discard (own or opponent) ---
+    if effect == 'draw':
+        n = abs(effect_number)   # positive value (1-2)
+        drawn = _draw_cards(player, n)
+        print(f'\t\t\teffect draw: {player.name} draws {drawn}/{n} card(s), hand now {len(player.hand)}')
+        return current_game
+
+    if effect == 'draw_oppo':   # fatigue: opponent gets extra cards to manage
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None:
+            n = abs(effect_number)   # positive value (1-2)
+            drawn = _draw_cards(oppo, n)
+            print(f'\t\t\teffect draw_oppo: {oppo.name} draws {drawn}/{n} card(s), hand now {len(oppo.hand)}')
+        return current_game
+
+    if effect == 'discard':   # discard N cards from own hand (auto: last cards of the hand)
+        n = min(abs(effect_number), len(player.hand))   # negative value (-1 to -2) -> number of cards
+        discarded = player.hand[-n:] if n else []
+        for card in discarded:
+            player.hand.remove(card)
+        if player.discard is None:
+            player.discard = []
+        player.discard.extend(discarded)
+        print(f'\t\t\teffect discard: {player.name} discards {len(discarded)} card(s), hand now {len(player.hand)}')
+        return current_game
+
+    if effect == 'discard_oppo':   # opponent discards 1 card (auto: last card of their hand)
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None and len(oppo.hand) > 0:
+            n = min(abs(effect_number), len(oppo.hand))   # -1 -> 1 card
+            discarded = oppo.hand[-n:]
+            for card in discarded:
+                oppo.hand.remove(card)
+            if oppo.discard is None:
+                oppo.discard = []
+            oppo.discard.extend(discarded)
+            print(f'\t\t\teffect discard_oppo: {oppo.name} discards {len(discarded)} card(s), hand now {len(oppo.hand)}')
+        return current_game
+
+    # --- resource effects (deck -> mana zone, mana zone -> discard) ---
+    if effect == 'ramp':   # N cards from own deck to own mana zone
+        n = abs(effect_number)   # positive value (1-2)
+        moved = _ramp_mana(player, n)
+        print(f'\t\t\teffect ramp: {player.name} moves {moved}/{n} card(s) from deck to mana, mana now {len(player.mana)}')
+        return current_game
+
+    if effect == 'ramp_oppo':   # 1 card from opponent's deck to opponent's mana zone
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None:
+            n = abs(effect_number)   # 1
+            moved = _ramp_mana(oppo, n)
+            print(f'\t\t\teffect ramp_oppo: {oppo.name} moves {moved}/{n} card(s) from deck to mana, mana now {len(oppo.mana)}')
+        return current_game
+
+    if effect == 'taxation':   # N cards from own mana zone to discard pile
+        n = abs(effect_number)   # positive value (1-2)
+        taxed = _tax_mana(player, n)
+        print(f'\t\t\teffect taxation: {player.name} taxes {taxed}/{n} card(s) from mana to discard, mana now {len(player.mana)}')
+        return current_game
+
+    if effect == 'taxation_oppo':   # 1 card from opponent's mana zone to their discard pile
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None:
+            n = abs(effect_number)   # 1
+            taxed = _tax_mana(oppo, n)
+            print(f'\t\t\teffect taxation_oppo: {oppo.name} taxes {taxed}/{n} card(s) from mana to discard, mana now {len(oppo.mana)}')
+        return current_game
+
+    if effect == 'jump':   # jump directly to the destination cell (skipping intermediate cells)
+        print(f'\t\t\teffect jump: {player.name} jumps {basic_advancing} cell(s), skipping intermediate cells')
+        return _jump(player, basic_advancing, current_game)
+
+    # --- other effects not implemented yet (wrecking_ball, grappling_hook, ...) ---
+    return current_game
+
+def _jump(player, n, current_game):
+    """ jump directly to the destination cell: intermediate cells are skipped entirely
+     (no per-step trap/drop checks), only the landing cell is checked.
+     win condition still applies on arrival. jump cards always move forward (advancing >= 2) """
+    if n == 0 or current_game.state == "game over":
+        return current_game
+
+    new_position = player.current_position + n
+
+    current_game.earth[player.current_position].remove(player.name)         # remove old player position in earth
+
+    # check win condition - if the landing cell is at/past the end of the earth
+    if new_position >= win_position:
+        current_game.winner = player.name
+        current_game.state = "game over"
+        current_game.earth[0].append(player.name)                           # put it back to start showing crossing finish line
+        return current_game
+
+    player.current_position = new_position
+
+    # check if landing on a trap or drop (intermediate cells were skipped, only the destination matters)
+    cell = get_player_cell(player, current_game)
+    if 'trap' in cell:
+        current_game = apply_effect('trap', 0, 0, player, current_game)
+    if 'drop' in cell:
+        current_game = apply_effect('drop', 0, 0, player, current_game)
+
+    current_game.earth[player.current_position].append(player.name)     # update new player position in earth
     return current_game
 
 def process_advancing(advancing_value, player, current_game):
@@ -563,10 +748,10 @@ def process_advancing(advancing_value, player, current_game):
         cell = get_player_cell(player, current_game)
         if 'trap' in cell:
             # apply trap effect
-            current_game = apply_effect('trap', player, current_game)
+            current_game = apply_effect('trap', 0, 0, player, current_game)
         if 'drop' in cell:
             # apply drop effect
-            current_game = apply_effect('drop', player, current_game)
+            current_game = apply_effect('drop', 0, 0, player, current_game)
 
         current_game.earth[player.current_position].append(player.name)     # update new player position in earth
 

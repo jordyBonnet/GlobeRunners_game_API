@@ -129,7 +129,10 @@ def test_reduced_advancing_when_condition_not_met():
     import polars as pl
 
     # build a game where A's deck contains two real dist_ahead_sup_3 cards (fresh_game uses fake ids)
-    cond_cards = ge.CARDS_DB.filter(pl.col('condition') == 'dist_ahead_sup_3')['card_id'].to_list()[:2]
+    # exclude movement-effect cards so expected advancing stays simply the base value
+    cond_cards = ge.CARDS_DB.filter(
+        (pl.col('condition') == 'dist_ahead_sup_3') & (~pl.col('effect').is_in(['advancing', 'backward']))
+    )['card_id'].to_list()[:2]
     filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c not in cond_cards][:13]
     p1 = PlayerState(name='A', deck=cond_cards + filler)
     p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
@@ -200,6 +203,312 @@ def test_temperature_and_day_night():
     assert ge.is_condition_met('night', a, gs) is True
 
     print('temperature/day-night tests PASSED\n')
+
+
+def test_movement_effects():
+    print('=== unit tests: advancing & backward effects ===')
+    import polars as pl
+
+    # pick real no_condition cards: one with effect=advancing, one with effect=backward
+    adv_card = ge.CARDS_DB.filter((pl.col('effect') == 'advancing') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    back_card = ge.CARDS_DB.filter((pl.col('effect') == 'backward') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c not in (adv_card['card_id'], back_card['card_id'])][:13]
+
+    p1 = PlayerState(name='A', deck=[adv_card['card_id'], back_card['card_id']] + filler)
+    p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
+    gid = ge.create_new_game(player=p1.model_dump())
+    ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    conn, c, gs = ge.get_current_game(gid)
+    conn.close()
+    a = gs.players['A']
+
+    # effect=advancing: total movement = base advancing + effect_number bonus
+    msg = {'cards': [adv_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg, a, gs)
+    expected = adv_card['advancing'] + adv_card['effect_number']
+    print(f"advancing effect card (base={adv_card['advancing']}, bonus={adv_card['effect_number']}) -> position: {a.current_position}")
+    assert a.current_position == expected, f'expected {expected}, got {a.current_position}'
+
+    # effect=backward: move forward base advancing, then recoil by effect_number (negative)
+    pos_before = a.current_position
+    msg2 = {'cards': [back_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg2, a, gs)
+    expected2 = pos_before + back_card['advancing'] + back_card['effect_number']
+    print(f"backward effect card (base={back_card['advancing']}, recoil={back_card['effect_number']}) -> position: {a.current_position}")
+    assert a.current_position == expected2, f'expected {expected2}, got {a.current_position}'
+
+    # no recoil after crossing the finish line: put A at 23 and play a backward card with base >= 1
+    gs = fresh_game()
+    a = gs.players['A']
+    ge.process_advancing(23, a, gs)   # at position 23, one step away from winning
+    msg3 = {'cards': [back_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg3, a, gs)
+    print(f"backward card at position 23 -> winner: {gs.winner}, state: {gs.state}, position: {a.current_position}")
+    assert gs.state == 'game over' and gs.winner == 'A'
+    assert a.current_position == 23   # no recoil applied after winning
+
+    print('movement effects tests PASSED\n')
+
+
+def test_oppo_movement_effects():
+    print('=== unit tests: advancing_oppo & backward_oppo effects ===')
+    import polars as pl
+
+    # pick real no_condition cards for both opponent-movement effects
+    adv_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'advancing_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    back_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'backward_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c not in (adv_oppo_card['card_id'], back_oppo_card['card_id'])][:13]
+
+    p1 = PlayerState(name='A', deck=[adv_oppo_card['card_id'], back_oppo_card['card_id']] + filler)
+    p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
+    gid = ge.create_new_game(player=p1.model_dump())
+    ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    conn, c, gs = ge.get_current_game(gid)
+    conn.close()
+    a, b = gs.players['A'], gs.players['B']
+
+    # effect=advancing_oppo: A moves its base advancing, B is pushed forward by effect_number
+    msg = {'cards': [adv_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg, a, gs)
+    print(f"advancing_oppo card (A base={adv_oppo_card['advancing']}, oppo push={adv_oppo_card['effect_number']}): A at {a.current_position}, B at {b.current_position}")
+    assert a.current_position == adv_oppo_card['advancing'], f'A should move its base advancing, got {a.current_position}'
+    assert b.current_position == adv_oppo_card['effect_number'], f'B should be pushed by effect_number, got {b.current_position}'
+
+    # effect=backward_oppo: A moves its base advancing, B recoils by 1 (clamped at position 0)
+    pos_a_before = a.current_position
+    pos_b_before = b.current_position
+    msg2 = {'cards': [back_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg2, a, gs)
+    expected_b = max(pos_b_before + back_oppo_card['effect_number'], 0)   # recoil clamped at position 0
+    print(f"backward_oppo card (A base={back_oppo_card['advancing']}, oppo recoil={back_oppo_card['effect_number']}): A at {a.current_position}, B at {b.current_position}")
+    assert a.current_position == pos_a_before + back_oppo_card['advancing'], f'A should move its base advancing, got {a.current_position}'
+    assert b.current_position == expected_b, f'B should recoil (clamped at 0), got {b.current_position}, expected {expected_b}'
+
+    # B not at 0: verify a real recoil of exactly 1 cell
+    gs = fresh_game()
+    a, b = gs.players['A'], gs.players['B']
+    ge.process_advancing(3, b, gs)   # B at position 3
+    msg3 = {'cards': [back_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg3, a, gs)
+    print(f"backward_oppo with B at 3: A at {a.current_position}, B at {b.current_position}")
+    assert b.current_position == 2, f'B should recoil from 3 to 2, got {b.current_position}'
+
+    print('oppo movement effects tests PASSED\n')
+
+
+def test_draw_discard_effects():
+    print('=== unit tests: draw / discard effects ===')
+    import polars as pl
+
+    # pick real no_condition cards for the four card effects
+    draw_card = ge.CARDS_DB.filter((pl.col('effect') == 'draw') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    discard_card = ge.CARDS_DB.filter((pl.col('effect') == 'discard') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    draw_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'draw_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    discard_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'discard_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    all_ids = {draw_card['card_id'], discard_card['card_id'], draw_oppo_card['card_id'], discard_oppo_card['card_id']}
+    filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c not in all_ids][:11]
+
+    p1 = PlayerState(name='A', deck=[draw_card['card_id'], discard_card['card_id'], draw_oppo_card['card_id'], discard_oppo_card['card_id']] + filler)
+    p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
+    gid = ge.create_new_game(player=p1.model_dump())
+    ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    conn, c, gs = ge.get_current_game(gid)
+    conn.close()
+    a, b = gs.players['A'], gs.players['B']
+
+    # effect=draw: A's hand grows by effect_number, deck shrinks by the same amount (base advancing still applied)
+    n_draw = abs(draw_card['effect_number'])
+    hand_a0, deck_a0 = len(a.hand), len(a.deck)
+    msg = {'cards': [draw_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg, a, gs)
+    print(f"draw card (N={n_draw}): A hand {hand_a0} -> {len(a.hand)}, deck {deck_a0} -> {len(a.deck)}")
+    assert len(a.hand) == hand_a0 + n_draw and len(a.deck) == deck_a0 - n_draw
+
+    # effect=discard: A's hand shrinks by |effect_number|, cards land in discard pile (played card already there)
+    n_disc = abs(discard_card['effect_number'])
+    hand_a1 = len(a.hand)
+    msg2 = {'cards': [discard_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg2, a, gs)
+    print(f"discard card (N={n_disc}): A hand {hand_a1} -> {len(a.hand)}, discard pile: {len(a.discard)}")
+    assert len(a.hand) == hand_a1 - n_disc
+    assert len(a.discard) == 2 + n_disc   # played draw card + played discard card + discarded cards
+
+    # effect=draw_oppo (fatigue): B's hand grows, B's deck shrinks; A still moves its base advancing
+    n_draw_o = abs(draw_oppo_card['effect_number'])
+    pos_a2 = a.current_position
+    hand_b0, deck_b0 = len(b.hand), len(b.deck)
+    msg3 = {'cards': [draw_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg3, a, gs)
+    print(f"draw_oppo card (N={n_draw_o}): B hand {hand_b0} -> {len(b.hand)}, deck {deck_b0} -> {len(b.deck)}; A at {a.current_position}")
+    assert len(b.hand) == hand_b0 + n_draw_o and len(b.deck) == deck_b0 - n_draw_o
+    assert a.current_position == pos_a2 + draw_oppo_card['advancing']   # own base advancing still applied
+
+    # effect=discard_oppo: B's hand shrinks by 1, card lands in B's discard pile
+    hand_b1 = len(b.hand)
+    msg4 = {'cards': [discard_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg4, a, gs)
+    print(f"discard_oppo card: B hand {hand_b1} -> {len(b.hand)}, B discard pile: {len(b.discard)}")
+    assert len(b.hand) == hand_b1 - 1
+    assert len(b.discard) == 1   # only the discarded card (B never played anything)
+
+    # reshuffle when deck runs out: empty deck + cards in discard -> draw from reshuffled pile, stops when exhausted
+    gs = fresh_game()
+    a = gs.players['A']
+    hand_a2 = len(a.hand)
+    a.deck = []
+    a.discard = ['r1', 'r2', 'r3']
+    drawn = ge._draw_cards(a, 5)   # only 3 available after reshuffle
+    print(f'reshuffle draw: drew {drawn}/3, hand {hand_a2} -> {len(a.hand)}, deck: {a.deck}, discard: {a.discard}')
+    assert drawn == 3 and len(a.hand) == hand_a2 + 3 and a.deck == [] and a.discard == []
+
+    print('draw/discard effects tests PASSED\n')
+
+
+def test_resource_effects():
+    print('=== unit tests: ramp / taxation effects ===')
+    import polars as pl
+
+    # pick real no_condition cards for the four resource effects
+    ramp_card = ge.CARDS_DB.filter((pl.col('effect') == 'ramp') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    tax_card = ge.CARDS_DB.filter((pl.col('effect') == 'taxation') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    ramp_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'ramp_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    tax_oppo_card = ge.CARDS_DB.filter((pl.col('effect') == 'taxation_oppo') & (pl.col('condition') == 'no_condition')).row(0, named=True)
+    all_ids = {ramp_card['card_id'], tax_card['card_id'], ramp_oppo_card['card_id'], tax_oppo_card['card_id']}
+    filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c not in all_ids][:11]
+
+    p1 = PlayerState(name='A', deck=[ramp_card['card_id'], tax_card['card_id'], ramp_oppo_card['card_id'], tax_oppo_card['card_id']] + filler)
+    p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
+    gid = ge.create_new_game(player=p1.model_dump())
+    ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    conn, c, gs = ge.get_current_game(gid)
+    conn.close()
+    a, b = gs.players['A'], gs.players['B']
+
+    # effect=ramp: N cards from A's deck to A's mana zone (hand untouched, base advancing still applied)
+    n_ramp = abs(ramp_card['effect_number'])
+    deck_a0, mana_a0, hand_a0 = len(a.deck), len(a.mana), len(a.hand)
+    msg = {'cards': [ramp_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg, a, gs)
+    print(f"ramp card (N={n_ramp}): A deck {deck_a0} -> {len(a.deck)}, mana {mana_a0} -> {len(a.mana)}, hand {hand_a0} -> {len(a.hand)}")
+    assert len(a.mana) == mana_a0 + n_ramp and len(a.deck) == deck_a0 - n_ramp
+    assert len(a.hand) == hand_a0   # ramp does not touch the hand
+    assert a.current_position == ramp_card['advancing']   # base advancing still applied
+
+    # effect=taxation: N cards from A's mana zone to A's discard pile (played card already in discard)
+    n_tax = abs(tax_card['effect_number'])
+    for _ in range(3):   # simulate the initial mana phase: put 3 hand cards into mana
+        a.mana.append(a.hand.pop())
+    mana_a1, disc_a0 = len(a.mana), len(a.discard)
+    msg2 = {'cards': [tax_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg2, a, gs)
+    print(f"taxation card (N={n_tax}): A mana {mana_a1} -> {len(a.mana)}, discard {disc_a0} -> {len(a.discard)}")
+    assert len(a.mana) == mana_a1 - n_tax
+    assert len(a.discard) == disc_a0 + 1 + n_tax   # played card + taxed cards
+
+    # effect=ramp_oppo: 1 card from B's deck to B's mana zone; A still moves its base advancing
+    pos_a2 = a.current_position
+    deck_b0, mana_b0 = len(b.deck), len(b.mana)
+    msg3 = {'cards': [ramp_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg3, a, gs)
+    print(f"ramp_oppo card: B deck {deck_b0} -> {len(b.deck)}, mana {mana_b0} -> {len(b.mana)}; A at {a.current_position}")
+    assert len(b.mana) == mana_b0 + 1 and len(b.deck) == deck_b0 - 1
+    assert a.current_position == pos_a2 + ramp_oppo_card['advancing']   # own base advancing still applied
+
+    # effect=taxation_oppo: 1 card from B's mana zone to B's discard pile
+    disc_b0 = len(b.discard)
+    msg4 = {'cards': [tax_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg4, a, gs)
+    print(f"taxation_oppo card: B mana {len(b.mana)}, discard {disc_b0} -> {len(b.discard)}")
+    assert len(b.mana) == 0
+    assert len(b.discard) == disc_b0 + 1   # only the taxed card (B never played anything)
+
+    # edge cases: ramp reshuffles an empty deck, stops when exhausted; taxation on empty mana is a no-op
+    gs = fresh_game()
+    a = gs.players['A']
+    a.deck = []
+    a.discard = ['r1', 'r2']
+    moved = ge._ramp_mana(a, 3)   # only 2 available after reshuffle
+    print(f'ramp edge case: moved {moved}/2, mana: {a.mana}, deck: {a.deck}')
+    assert moved == 2 and len(a.mana) == 2 and a.deck == [] and a.discard == []
+    taxed = ge._tax_mana(gs.players['B'], 1)   # B has empty mana zone
+    print(f'taxation edge case: taxed {taxed}/0 from empty mana')
+    assert taxed == 0
+
+    print('resource effects tests PASSED\n')
+
+
+def test_jump_effect():
+    print('=== unit tests: jump effect ===')
+    import polars as pl
+
+    # pick a real no_condition jump card with advancing >= 4 (so it can skip over an intermediate cell)
+    jump_card = ge.CARDS_DB.filter((pl.col('effect') == 'jump') & (pl.col('condition') == 'no_condition') & (pl.col('advancing') >= 4)).row(0, named=True)
+    filler = [c for c in ge.CARDS_DB['card_id'].to_list() if c != jump_card['card_id']][:14]
+
+    p1 = PlayerState(name='A', deck=[jump_card['card_id']] + filler)
+    p2 = PlayerState(name='B', deck=[f'x{i}' for i in range(15)])
+    gid = ge.create_new_game(player=p1.model_dump())
+    ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    conn, c, gs = ge.get_current_game(gid)
+    conn.close()
+    a = gs.players['A']
+
+    # spy on apply_effect to see which trap/drop checks fire during the move
+    calls = []
+    orig_apply = ge.apply_effect
+    def spy(effect, *args):
+        calls.append(effect)
+        return orig_apply(effect, *args)
+
+    # jump over an intermediate 'trap' cell: it must NOT be triggered
+    gs.earth[2].append('trap')   # trap on cell 2 (intermediate for any jump of >= 4 from position 0)
+    n_adv = jump_card['advancing']
+    msg = {'cards': [jump_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.apply_effect = spy
+    try:
+        ge.process_card(msg, a, gs)
+    finally:
+        ge.apply_effect = orig_apply
+    print(f"jump card (adv={n_adv}): A at {a.current_position}, effect calls: {calls}")
+    assert a.current_position == n_adv, f'A should land directly on cell {n_adv}, got {a.current_position}'
+    assert 'trap' not in calls, f'intermediate trap should be skipped by jump, got calls {calls}'
+
+    # contrast: normal movement over the same intermediate trap DOES trigger it
+    gs = fresh_game()
+    a = gs.players['A']
+    gs.earth[2].append('trap')
+    calls.clear()
+    ge.apply_effect = spy
+    try:
+        ge.process_advancing(3, a, gs)   # passes through cell 2 on the way to 3
+    finally:
+        ge.apply_effect = orig_apply
+    print(f"normal +3 over trap at cell 2: A at {a.current_position}, effect calls: {calls}")
+    assert 'trap' in calls, f'normal movement should trigger intermediate traps, got calls {calls}'
+
+    # landing cell trap IS triggered by jump (you land there)
+    gs = fresh_game()
+    a = gs.players['A']
+    gs.earth[3].append('trap')
+    calls.clear()
+    ge.apply_effect = spy
+    try:
+        ge._jump(a, 3, gs)   # jump directly onto the trap cell
+    finally:
+        ge.apply_effect = orig_apply
+    print(f"jump onto trap at landing cell 3: A at {a.current_position}, effect calls: {calls}")
+    assert a.current_position == 3 and 'trap' in calls, f'landing trap should be triggered, got position {a.current_position}, calls {calls}'
+
+    # jump can win the game: from position 22, a jump of >= 2 lands past the finish line (24)
+    gs = fresh_game()
+    a = gs.players['A']
+    ge.process_advancing(22, a, gs)   # at position 22
+    msg2 = {'cards': [jump_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
+    ge.process_card(msg2, a, gs)
+    print(f"jump from 22 (adv={n_adv}): winner: {gs.winner}, state: {gs.state}")
+    assert gs.state == 'game over' and gs.winner == 'A'
+
+    print('jump effect tests PASSED\n')
 
 
 def test_full_games():
@@ -288,6 +597,11 @@ if __name__ == '__main__':
     test_oppo_mana_conditions()
     test_hand_conditions()
     test_temperature_and_day_night()
+    test_movement_effects()
+    test_oppo_movement_effects()
+    test_draw_discard_effects()
+    test_resource_effects()
+    test_jump_effect()
     test_reduced_advancing_when_condition_not_met()
     test_full_games()
     print('ALL TESTS PASSED')
