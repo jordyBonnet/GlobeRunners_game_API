@@ -115,13 +115,20 @@ def p2_connect_to_game(player: PlayerState, game_id):
     return current_game_json(player['name'], current_game)
 
 def current_game_json(player_name: str, current_game: GameState):
-    """ return the current game to player, but hides the hand, mana and deck of the opponent """
-    for p in current_game.players.values():
-        if p.name != player_name:
-            p.hand = []
-            p.mana = []
-            p.deck = []
-    return current_game.to_json()
+    """ return the current game to player, but hides the hand, mana and deck of the opponent.
+       Les nombres restent publics (hand_count / mana_count / deck_count) pour que l'UI
+       affiche "N cartes en main" et "N mana" sans révéler les cartes. """
+    data = json.loads(current_game.to_json())
+    for name, p in (data.get("players") or {}).items():
+        if name == player_name:
+            continue
+        p["hand_count"] = len(p.get("hand") or [])
+        p["mana_count"] = len(p.get("mana") or [])
+        p["deck_count"] = len(p.get("deck") or [])
+        p["hand"] = []
+        p["mana"] = []
+        p["deck"] = []
+    return json.dumps(data)
 
 def get_game(game_id=None):
     """ get all informations about a game returns it as a json """

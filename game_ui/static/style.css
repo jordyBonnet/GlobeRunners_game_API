@@ -1,0 +1,379 @@
+/* ============================================================ GlobeRunners UI */
+:root {
+  --bg-0: #0b1020;
+  --bg-1: #131a2e;
+  --bg-2: #1c2540;
+  --panel: #182036;
+  --line: #2d3a5f;
+  --text: #dbe4ff;
+  --muted: #8b9ac7;
+  --accent: #4fd1c5;
+  --accent-2: #f6ad55;
+  --danger: #fc8181;
+  --ok: #68d391;
+  --card-w: clamp(64px, 7.2vw, 96px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: radial-gradient(1200px 700px at 50% -10%, #1a2444 0%, var(--bg-0) 60%) fixed;
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+}
+
+.hidden { display: none !important; }
+
+h2 { margin: 0 0 10px; font-size: 1.15rem; letter-spacing: .4px; color: var(--accent); }
+h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
+
+.hint { color: var(--muted); font-size: .82rem; line-height: 1.4; }
+.hint.small { font-size: .74rem; }
+.error-msg { color: var(--danger); font-size: .85rem; min-height: 1.2em; margin-top: 8px; white-space: pre-wrap; }
+
+/* ---------------- setup page ---------------- */
+.setup-wrap { max-width: 1060px; margin: 0 auto; padding: 24px 16px 60px; }
+.setup-header { text-align: center; margin-bottom: 22px; }
+.logo { height: 276px; object-fit: contain; filter: drop-shadow(0 4px 18px rgba(79,209,197,.35)); }
+.tagline { color: var(--muted); margin-top: 6px; font-size: .9rem; }
+
+.setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 820px) { .setup-grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: linear-gradient(180deg, var(--panel), #141b30);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+}
+
+/* tabs */
+.deck-source-tabs, .mode-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tab {
+  flex: 1; padding: 9px 10px; border-radius: 9px; cursor: pointer;
+  background: var(--bg-2); color: var(--muted); border: 1px solid var(--line);
+  font-size: .85rem; transition: all .15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: #24304f; color: var(--accent); border-color: var(--accent); }
+
+/* factions */
+.faction-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 520px) { .faction-grid { grid-template-columns: repeat(2, 1fr); } }
+.faction-btn {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; cursor: pointer;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+  font-size: .85rem; transition: all .15s; text-align: left;
+}
+.faction-btn img { width: 34px; height: 34px; object-fit: contain; }
+.faction-btn:hover { border-color: var(--accent-2); transform: translateY(-1px); }
+.faction-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px rgba(79,209,197,.25) inset; }
+
+/* csv */
+.file-btn {
+  display: inline-block; padding: 9px 14px; border-radius: 9px; cursor: pointer;
+  background: var(--bg-2); border: 1px dashed var(--line); color: var(--text); font-size: .85rem;
+}
+.file-btn:hover { border-color: var(--accent); }
+
+/* deck preview : 8 cartes max par rangée, puis retour à la ligne */
+.card-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; padding: 6px 2px 10px; align-items: end; }
+.card-row .card { width: 100%; flex: none; }
+
+/* ---------------- cards ---------------- */
+.card {
+  position: relative; width: var(--card-w); aspect-ratio: 180 / 260; flex: 0 0 auto;
+  border-radius: 9px; overflow: hidden; cursor: grab; user-select: none;
+  background: #141b30 center/cover no-repeat;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5);
+  transition: transform .12s, box-shadow .12s;
+}
+.card img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.card:hover { transform: translateY(-6px) scale(1.04); z-index: 5; box-shadow: 0 10px 22px rgba(0,0,0,.65), 0 0 0 2px var(--accent-2); }
+/* carte jouable (coût ≤ mana disponible) : contour vert/bleu */
+.card.playable { outline: 2px solid var(--accent); outline-offset: -2px; }
+.card.selected { outline: 3px solid var(--accent); outline-offset: -2px; transform: translateY(-8px) scale(1.05); z-index: 6; box-shadow: 0 12px 24px rgba(0,0,0,.7), 0 0 14px rgba(79,209,197,.5); }
+.card.dragging { opacity: .35; cursor: grabbing; }
+/* pas de pointer-events:none : le survol (aperçu 3x) doit rester actif même hors de son tour */
+.card.disabled { filter: grayscale(.6) brightness(.75); cursor: default; }
+
+/* card back (opponent / deck) */
+.card.back { background: #2a2140 center/cover no-repeat; cursor: default; }
+.card.back::after { content: ""; position: absolute; inset: 0; background: url('/assets/GR_cards_back.png') center/cover no-repeat; opacity: .95; border-radius: inherit; }
+
+/* ---------------- game view ---------------- */
+#view-game { display: flex; flex-direction: column; min-height: 100vh; }
+
+#topbar {
+  display: flex; align-items: center; gap: 14px; padding: 8px 16px;
+  background: rgba(13,18,35,.92); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20; backdrop-filter: blur(4px);
+}
+.mini-logo { height: 34px; object-fit: contain; }
+#planet-info { display: flex; gap: 8px; }
+#temp-badge, #daynight-badge {
+  padding: 4px 10px; border-radius: 999px; font-size: .8rem;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+#turn-info { margin-left: auto; display: flex; align-items: baseline; gap: 10px; }
+#turn-number { font-weight: 600; color: var(--accent-2); }
+#phase-label { color: var(--muted); font-size: .85rem; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#btn-leave {
+  padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: .8rem;
+  background: transparent; color: var(--muted); border: 1px solid var(--line);
+}
+#btn-leave:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ===================== layout global (style plateau) ===================== */
+#view-game { gap: 10px; padding-bottom: 8px; }
+
+/* topbar : tour à gauche, planète à droite */
+#turn-info { margin-left: 0; }
+#planet-info { margin-left: auto; }
+
+/* ---------------- bandes haut / bas : [nom] [zone mana à gauche] [main] ---------------- */
+.big-zone {
+  position: relative; margin: 0 14px; min-height: 150px;
+  border: 2px solid rgba(255,255,255,.55); border-radius: 16px;
+  background: linear-gradient(180deg, rgba(24,34,64,.55), rgba(16,23,44,.55));
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+}
+.band-hand {
+  --card-w: clamp(58px, 6.6vw, 92px);
+  flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 7px;
+  justify-content: flex-start;
+  justify-content: safe center;   /* main centrée ; si elle déborde, repli à gauche + scroll */
+  overflow-x: auto;
+  min-height: calc(var(--card-w) * 260 / 180);
+}
+.band-hand .card:hover { transform: translateY(-8px) scale(1.05); }
+
+/* bloc nom + compteurs (à gauche du bandeau, séparé de la zone mana) */
+.zone-chip {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px;
+  padding-right: 14px; border-right: 1px solid rgba(255,255,255,.22);
+}
+.chip-name { font-weight: 600; font-size: .9rem; white-space: nowrap; }
+.oppo-chip .chip-name::before { content: "👤 "; color: var(--muted); }
+.my-chip .chip-name::before { content: "⭐ "; color: var(--accent-2); }
+.chip-counts { color: var(--muted); font-size: .74rem; display: flex; flex-direction: column; gap: 2px; }
+
+/* goutte violette = zone mana */
+.mana-drop {
+  position: relative; width: clamp(116px, 13.5vw, 160px); aspect-ratio: 100 / 130;   /* plus d'espace pour la goutte mana */
+  display: flex; align-items: center; justify-content: center; cursor: default;
+  transition: transform .15s, filter .15s;
+}
+.mana-drop .drop-svg { width: 100%; height: 100%; filter: drop-shadow(0 6px 14px rgba(58,29,143,.6)); }
+.mana-drop .mana-cards {
+  position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
+  display: flex; gap: 3px; pointer-events: none;
+}
+.mana-drop .mana-cards .card { width: clamp(26px, 3vw, 38px); aspect-ratio: 180 / 260; border-radius: 4px; transition: transform .25s ease; }
+.mana-drop .mana-cards .card.back::after { border-radius: 4px; }
+/* carte de mana déjà engagée ce tour ("tapped") : tournée à 90° vers la droite */
+.mana-drop .mana-cards .card.tapped { transform: rotate(90deg); filter: saturate(.75) brightness(.92); }
+.drop-count {
+  position: absolute; right: -6px; bottom: -6px; z-index: 2;
+  min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px;
+  background: var(--accent-2); color: #3a2405; font-weight: 700; font-size: .8rem;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+#dz-mana { cursor: pointer; }
+#dz-mana.over { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(139,107,255,.9)); }
+#dz-mana.invalid { filter: grayscale(.5) brightness(.8); }
+
+/* rangées latérales : dwelling / pending / deck / défausse */
+.side-row { display: flex; gap: 12px; margin: 0 14px; align-items: stretch; }
+.side-panel {
+  position: relative; flex: 1; min-height: 88px;
+  border: 2px solid rgba(255,255,255,.4); border-radius: 12px;
+  background: rgba(20,29,54,.5); color: var(--muted);
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  transition: all .15s;
+}
+.side-panel .panel-ico { width: 42px; height: 42px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+/* icônes noir et blanc (maison / horloge / poubelle) -> rendues en blanc sur fond sombre */
+.side-panel.dwelling .panel-ico, .side-panel.pending .panel-ico, .side-panel.discard .panel-ico { filter: invert(1) drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+.side-panel .panel-label { font-size: .7rem; letter-spacing: .4px; }
+.side-panel .panel-count {
+  position: absolute; right: 8px; bottom: 5px;
+  font-size: .72rem; font-weight: 700; color: var(--text);
+  background: rgba(10,15,30,.7); border-radius: 6px; padding: 1px 6px;
+}
+.side-panel.deck { flex: 0 1 clamp(120px, 13vw, 170px); justify-content: center; }
+.side-panel.discard { flex: 0 1 clamp(120px, 13vw, 170px); }
+.side-panel.discard.over { border-color: var(--accent); background: rgba(79,209,197,.14); }
+.side-panel.discard.invalid { border-color: var(--danger); }
+/* mini-cartes dans les panneaux (dwelling / pending / défausse) */
+.panel-cards { display: flex; gap: 4px; min-height: calc(46px * 260 / 180); align-items: flex-end; }
+.panel-cards .card { width: 46px; aspect-ratio: 180 / 260; border-radius: 5px; cursor: default; }
+.panel-cards .card:hover { transform: translateY(-3px) scale(1.03); }
+
+/* ===================== plateau : Terre (gauche) + 2 rangées de stopovers (droite) ===================== */
+#board-wrap {
+  display: flex; align-items: center; justify-content: center; gap: 24px; margin: 0 14px;
+  padding: 14px 18px; border-radius: 16px;
+  background: radial-gradient(700px 320px at 30% 50%, rgba(30,45,86,.5), rgba(13,18,35,.35));
+}
+#board-stage { position: relative; flex: 0 0 auto; width: clamp(300px, 33vw, 430px); aspect-ratio: 1; }
+#board-bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .97; }
+
+/* drapeau de la case de départ (en haut, entre les deux rayons centraux) */
+#starting-flag {
+  position: absolute; left: 50%; top: 1.5%; transform: translateX(-50%);
+  font-size: clamp(.9rem, 1.3vw, 1.15rem); z-index: 5;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.8));
+}
+
+/* ---------------- 3 cartes centrales de la Terre ---------------- */
+#env-cards {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; gap: clamp(6px, .8vw, 10px); z-index: 5;
+}
+.env-card {
+  position: relative; width: clamp(46px, 5vw, 68px); aspect-ratio: 408 / 552;
+  border-radius: 7px; overflow: hidden; box-shadow: 0 5px 14px rgba(0,0,0,.6);
+}
+.env-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* carte jour/nuit : deux faces superposées, seule la face active est visible (retournement animé) */
+#env-dn .env-face { transition: opacity .55s ease, transform .55s ease; }
+#env-dn .face-night { opacity: 0; transform: rotateY(90deg); }
+#env-dn.dn-night .face-night { opacity: 1; transform: none; }
+#env-dn.dn-night .face-day { opacity: 0; transform: rotateY(-90deg); }
+/* valeur de la température */
+.temp-value {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
+  font-size: clamp(1rem, 1.5vw, 1.4rem); font-weight: 800; color: #fff;
+  text-shadow: 0 2px 5px #000, 0 0 12px rgba(40,120,255,.8); z-index: 2;
+}
+/* paquet cataclysmes : 4 cartes dos visible (placeholder) */
+.env-cata { background: #141b30; }
+.cata-stack { position: absolute; inset: 0; }
+.cata-stack i {
+  position: absolute; inset: 8% 9%; border-radius: 4px;
+  background: url('/assets/GR_cards_back.png') center/cover no-repeat;
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.cata-stack i:nth-child(1) { transform: translate(-8px, 8px) rotate(-7deg); }
+.cata-stack i:nth-child(2) { transform: translate(-4px, 4px) rotate(-3deg); }
+.cata-stack i:nth-child(3) { transform: translate(4px, 4px) rotate(3deg); }
+.cata-stack i:nth-child(4) { transform: translate(8px, 8px) rotate(7deg); }
+
+/* 24 positions radiales : les pions se placent entre les traits radiaux, juste à l'extérieur du globe */
+#markers-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.marker {
+  position: absolute; transform: translate(-50%, -50%); z-index: 6; pointer-events: none;
+  width: clamp(22px, 2.6vw, 34px); aspect-ratio: 1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000;
+  border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6);
+  transition: left .45s cubic-bezier(.5,1.4,.5,1), top .45s cubic-bezier(.5,1.4,.5,1);
+}
+.marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
+.marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
+
+/* 2 rangées de 5 stopovers : rangée adverse (haut) + rangée du joueur (bas), numérotées 5..1 avec « stopover 1 » à droite */
+#stopovers {
+  position: relative; flex: 0 0 auto;
+  display: flex; flex-direction: column; gap: clamp(12px, 1.8vw, 24px);
+  padding: 18px 22px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(40,54,92,.35), rgba(24,33,60,.55));
+  border: 1px solid rgba(255,255,255,.18);
+}
+.stopover-row { display: flex; align-items: center; gap: clamp(10px, 1.4vw, 18px); }
+.row-owner {
+  font-size: .78rem; color: var(--muted); letter-spacing: .3px;
+  max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row-label { font-size: .8rem; color: rgba(255,255,255,.75); letter-spacing: .3px; white-space: nowrap; }
+.slot {
+  position: relative;
+  width: clamp(70px, 8vw, 98px); aspect-ratio: 180 / 260; border-radius: 10px;
+  border: 2px solid rgba(255,255,255,.38); background: rgba(255,255,255,.045);
+  box-shadow: 0 4px 12px rgba(0,0,0,.45);
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+#row-me .slot { cursor: pointer; }
+.slot .slot-num { position: absolute; right: 7px; bottom: 5px; font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.7); }
+/* carte jouée posée dans une case de stopover */
+.slot .played { position: absolute; inset: 4% 5%; width: 90%; aspect-ratio: 180 / 260; border-radius: 6px; overflow: hidden; z-index: 2; box-shadow: 0 3px 9px rgba(0,0,0,.65); }
+.slot .played img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slot.drop-target { transform: scale(1.12); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(79,209,197,.85); z-index: 8; }
+.slot.drop-target-invalid { transform: scale(1.05); border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger), 0 0 18px rgba(252,129,129,.7); z-index: 8; }
+/* ordre de jeu 1→5 : les cases non encore accessibles sont estompées, la prochaine est surlignée */
+.stopover-row .slot { opacity: .5; }
+.stopover-row .slot.filled { opacity: 1; }
+#row-me .slot.slot-next { opacity: 1; border-color: rgba(79,209,197,.8); box-shadow: 0 0 0 2px rgba(79,209,197,.35); }
+#row-me .slot.slot-next .slot-num { color: var(--accent); }
+/* case valide (repli clic : carte sélectionnée) */
+.slot.slot-valid { cursor: pointer; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(79,209,197,.75); animation: stopoverPulse 1.4s ease-in-out infinite; z-index: 7; }
+@keyframes stopoverPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+
+/* action bar (à droite du bandeau joueur) */
+#action-bar {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-height: 42px;
+  padding-left: 14px; border-left: 1px solid rgba(255,255,255,.22); max-width: 42%;
+}
+#action-bar .primary-btn, #action-bar .ghost-btn { white-space: nowrap; }
+#action-hint { color: var(--muted); font-size: .72rem; text-align: right; max-width: 300px; line-height: 1.3; }
+.primary-btn {
+  padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: .95rem; font-weight: 600;
+  background: linear-gradient(135deg, #2c7a7b, var(--accent)); color: #04211f; border: none;
+  transition: all .15s; box-shadow: 0 4px 14px rgba(79,209,197,.3);
+}
+.primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(79,209,197,.45); }
+.primary-btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+.ghost-btn {
+  padding: 10px 18px; border-radius: 10px; cursor: pointer; font-size: .9rem;
+  background: transparent; color: var(--text); border: 1px solid var(--line); transition: all .15s;
+}
+.ghost-btn:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2); }
+.ghost-btn:disabled { opacity: .4; cursor: not-allowed; }
+.small-btn { padding: 8px 16px; font-size: .85rem; }
+
+#action-hint { color: var(--muted); font-size: .8rem; }
+
+/* message bar */
+#msg-bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 7px 16px; background: rgba(13,18,35,.92); border-top: 1px solid var(--line);
+  font-size: .8rem; color: var(--muted); min-height: 34px;
+}
+#server-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-ok { color: var(--ok); }
+.conn-bad { color: var(--danger); }
+
+/* aperçu carte au survol : 3x plus grosse, centrée verticalement (au niveau de la Terre) */
+#card-hover {
+  position: fixed; left: 16px; top: 50%; z-index: 55;
+  width: calc(clamp(58px, 6.6vw, 92px) * 3); aspect-ratio: 180 / 260;
+  border-radius: 14px; overflow: hidden; pointer-events: none;
+  box-shadow: 0 18px 44px rgba(0,0,0,.75), 0 0 0 2px var(--accent-2);
+  opacity: 0; transform: translateY(calc(-50% + 10px)) scale(.98); transition: opacity .16s ease, transform .16s ease;
+}
+#card-hover.show { opacity: 1; transform: translateY(-50%); }
+#card-hover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------------- modals ---------------- */
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(4,7,16,.82); backdrop-filter: blur(3px); }
+#card-modal-img { position: relative; max-height: 92vh; width: auto; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.8); cursor: zoom-out; }
+
+.modal-box {
+  position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 30px 42px; text-align: center; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.7);
+}
+.modal-box h2 { font-size: 1.5rem; color: var(--accent-2); margin-bottom: 8px; }
+.modal-box p { color: var(--muted); margin-bottom: 18px; }
+
+/* toast */
+#toast {
+  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 60;
+  background: #24304f; border: 1px solid var(--accent); color: var(--text);
+  padding: 10px 20px; border-radius: 10px; font-size: .85rem; box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 80vw; text-align: center;
+}
+#toast.show { opacity: 1; }
