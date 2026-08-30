@@ -28,7 +28,7 @@ class PlayerAI:
 			return top_mana_cards
 		if in_turn:
 			return {
-			'cards': top_mana_cards,        # cards selected by user - LIST (if move mode, max 1 card, if defend mode, no max)
+			'cards': top_mana_cards,        # cards selected by user - LIST (if move mode, max 1 card, if defend mode, 1-5)
 			'to': 'mana',                   # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
 			'mode': '',                     # mode selected by user - STRING ['', move, defend, dwelling_activation, pass]
 			'pendings': []                  # cards in pendings zone that has to be added to a normal move card - LIST
@@ -36,8 +36,14 @@ class PlayerAI:
 		return top_mana_cards
 
 	def _condition_met(self, condition):
-		"""Mirror of game_engine.is_condition_met (only the conditions it can evaluate)."""
+		"""Mirror of game_engine.is_condition_met (only the conditions it can evaluate with the state it has).
+			Default for any not-yet-implemented condition: MET (same canonical default as the engine's catch-all)."""
 		if condition == 'no_condition':
+			return True
+		if condition == 'cataclysm':
+			# trigger condition: the engine fires the cataclysm strike when the card
+			# resolves; the condition itself is always treated as met (effect fires).
+			# The AI cannot evaluate the strike (hidden pile) and doesn't need to.
 			return True
 		if 'biome' in condition:
 			return False  # cannot evaluate without board info -> treat as not met
@@ -72,7 +78,9 @@ class PlayerAI:
 			gap = self.player_state.current_position - self.oppo_position
 			threshold = int(dist_match.group(2))
 			return gap > threshold if dist_match.group(1) == 'ahead' else -gap > threshold
-		return False
+		# any other not-yet-implemented condition: assume met (canonical default,
+		# same as the engine's is_condition_met catch-all)
+		return True
 
 	def play_card(self):
 		"""Select a card from hand with enough mana, preferring cards whose condition is met."""
@@ -93,13 +101,30 @@ class PlayerAI:
 			return (met, row['advancing'])
 		best_card = max(playable.iter_rows(named=True), key=score)['card_id']
 		out = {
-			'cards': [best_card],     # cards selected by user - LIST (if move mode, max 1 card, if defend mode, no max)
+			'cards': [best_card],     # cards selected by user - LIST (if move mode, max 1 card, if defend mode, 1-5)
 			'to': 'stopover_x',                           # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
 			'mode': 'move',                             # mode selected by user - STRING ['', move, defend, dwelling_activation, pass]
 			'pendings': []                          # cards in pendings zone that has to be added to a normal move card - LIST
 		}
 
 		return out
+
+	def defend_card(self):
+		"""Select a card from hand with enough mana to play in DEFEND mode (sideways, blocks the
+			opponent card on the same stopover). Prefers the highest shield value.
+			Returns None if no affordable card (caller should pass instead)."""
+		mana_available = len(self.player_state.mana) - self.player_state.mana_spend
+		hand_df = self.CARDS_DB.filter(pl.col('card_id').is_in(self.player_state.hand))
+		playable = hand_df.filter(pl.col('mana') <= mana_available)
+		if playable.is_empty():
+			return None
+		best_card = max(playable.iter_rows(named=True), key=lambda r: (r['shield'], -r['mana']))['card_id']
+		return {
+			'cards': [best_card],
+			'to': 'stopover_x',   # filled by the caller (the stopover of the opponent card to block)
+			'mode': 'defend',
+			'pendings': []
+		}
 
 	def update_player_state(self, player_state, oppo_state=None, game=None):
 		"""Update the internal player state (optionally with opponent info and global game info)."""

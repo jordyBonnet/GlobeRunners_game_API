@@ -1,26 +1,26 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GlobeRunners — Analyse de parties</title>
-<link rel="stylesheet" href="/style.css" />
+<title>GlobeRunners — Game analysis</title>
+<link rel="stylesheet" href="/style.css?v=1" />
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">🌍 GlobeRunners <span class="sub">analyse des parties</span></div>
+  <div class="brand">🌍 GlobeRunners <span class="sub">game analysis</span></div>
   <div class="controls">
-    <label for="gameSelect">Partie :</label>
+    <label for="gameSelect">Game:</label>
     <select id="gameSelect" size="1"></select>
-    <button id="expandAll" title="Tout déplier">⊞ Tout déplier</button>
-    <button id="collapseAll" title="Tout replier">⊟ Tout replier</button>
+    <button id="expandAll" title="Expand all">⊞ Expand all</button>
+    <button id="collapseAll" title="Collapse all">⊟ Collapse all</button>
   </div>
 </header>
 
 <main id="content">
-  <p class="loading">Chargement des parties…</p>
+  <p class="loading">Loading games…</p>
 </main>
 
-<script src="/app.js"></script>
+<script src="/app.js?v=1"></script>
 </body>
 </html>

@@ -50,31 +50,31 @@ def _card_ref(card_id: str | None) -> dict | None:
 
 
 def _effect_text(ev: dict) -> str:
-    """Short French description of what the card did during the trip chain."""
+    """Short English description of what the card did during the trip chain."""
     eff = ev.get("effect")
     n = ev.get("effect_number") or 0
     adv = ev.get("advancing") or 0
     if not ev.get("condition_met"):
-        return f"Condition non remplie - avance réduite ({ev.get('mana_cost', 1) - 1})"
+        return f"Condition not met - reduced advancing ({ev.get('mana_cost', 1) - 1})"
     table = {
-        "advancing": lambda: f"Avance +{n} (total {adv + n})",
-        "backward": lambda: f"Avance {adv}, puis recul {-n}",
-        "jump": lambda: f"Saut direct de {adv} cases",
-        "advancing_oppo": lambda: f"L'adversaire avance de {n}",
-        "backward_oppo": lambda: f"L'adversaire recule de {-n}",
-        "draw": lambda: f"Tire {abs(n)} carte(s)",
-        "draw_oppo": lambda: f"L'adversaire tire {abs(n)} carte(s)",
-        "discard": lambda: f"Jette {abs(n)} carte(s) de sa main",
-        "discard_oppo": lambda: f"L'adversaire jette {abs(n)} carte(s)",
-        "ramp": lambda: f"{n} carte(s) du deck vers la zone mana",
-        "ramp_oppo": lambda: f"Adversaire : {n} carte(s) du deck vers son mana",
-        "taxation": lambda: f"Taxe {n} carte(s) de sa zone mana",
-        "taxation_oppo": lambda: "L'adversaire perd 1 carte de mana (taxe)",
+        "advancing": lambda: f"Advance +{n} (total {adv + n})",
+        "backward": lambda: f"Advance {adv}, then recoil {-n}",
+        "jump": lambda: f"Direct jump of {adv} cells",
+        "advancing_oppo": lambda: f"Opponent advances by {n}",
+        "backward_oppo": lambda: f"Opponent recoils by {-n}",
+        "draw": lambda: f"Draws {abs(n)} card(s)",
+        "draw_oppo": lambda: f"Opponent draws {abs(n)} card(s)",
+        "discard": lambda: f"Discards {abs(n)} card(s) from hand",
+        "discard_oppo": lambda: f"Opponent discards {abs(n)} card(s)",
+        "ramp": lambda: f"{n} card(s) from deck to the mana zone",
+        "ramp_oppo": lambda: f"Opponent: {n} card(s) from deck to their mana",
+        "taxation": lambda: f"Taxes {n} card(s) from their mana zone",
+        "taxation_oppo": lambda: "Opponent loses 1 mana card (tax)",
     }
     if eff in table:
         return table[eff]()
     # unimplemented / special effects -> neutral label
-    return f"Effet : {eff.replace('_', ' ')}"
+    return f"Effect: {eff.replace('_', ' ')}"
 
 
 def _action_public(ev: dict | None) -> dict | None:
@@ -82,11 +82,14 @@ def _action_public(ev: dict | None) -> dict | None:
         return None
     if ev.get("error"):
         return {"error": ev["error"]}
+    blocked = bool(ev.get("blocked"))
     delta = (ev.get("pos_after") or 0) - (ev.get("pos_before") or 0)
     return {
         "card": _card_ref(ev.get("card_id")),
+        "mode": ev.get("mode"),   # "move" | "defend" -> the frontend shows the defense at 90°
+        "blocked": blocked,
         "condition_met": bool(ev.get("condition_met")),
-        "effect_text": _effect_text(ev),
+        "effect_text": "" if blocked else _effect_text(ev),   # blocked: no effect played
         "pos_before": ev.get("pos_before"),
         "pos_after": ev.get("pos_after"),
         "delta": delta,
@@ -153,7 +156,7 @@ def api_games():
     for g in games:
         g["label"] = (
             f"{g['date_label']} - {' vs '.join(g['players'])} "
-            f"(tour {g['final_turn']}, gagnant : {g['winner'] or 'égalité'})"
+            f"(turn {g['final_turn']}, winner: {g['winner'] or 'tie'})"
         )
     return games
 

@@ -77,7 +77,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .file-btn:hover { border-color: var(--accent); }
 
-/* deck preview : 8 cartes max par rangée, puis retour à la ligne */
+/* deck preview: up to 8 cards per row, then wrap */
 .card-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; padding: 6px 2px 10px; align-items: end; }
 .card-row .card { width: 100%; flex: none; }
 
@@ -91,11 +91,11 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .card img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .card:hover { transform: translateY(-6px) scale(1.04); z-index: 5; box-shadow: 0 10px 22px rgba(0,0,0,.65), 0 0 0 2px var(--accent-2); }
-/* carte jouable (coût ≤ mana disponible) : contour vert/bleu */
+/* playable card (cost ≤ available mana): green/blue outline */
 .card.playable { outline: 2px solid var(--accent); outline-offset: -2px; }
 .card.selected { outline: 3px solid var(--accent); outline-offset: -2px; transform: translateY(-8px) scale(1.05); z-index: 6; box-shadow: 0 12px 24px rgba(0,0,0,.7), 0 0 14px rgba(79,209,197,.5); }
 .card.dragging { opacity: .35; cursor: grabbing; }
-/* pas de pointer-events:none : le survol (aperçu 3x) doit rester actif même hors de son tour */
+/* no pointer-events:none: the hover (3x preview) must stay active even out of turn */
 .card.disabled { filter: grayscale(.6) brightness(.75); cursor: default; }
 
 /* card back (opponent / deck) */
@@ -126,14 +126,14 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 #btn-leave:hover { color: var(--danger); border-color: var(--danger); }
 
-/* ===================== layout global (style plateau) ===================== */
+/* ===================== global layout (board styling) ===================== */
 #view-game { gap: 10px; padding-bottom: 8px; }
 
-/* topbar : tour à gauche, planète à droite */
+/* topbar: turn on the left, planet on the right */
 #turn-info { margin-left: 0; }
 #planet-info { margin-left: auto; }
 
-/* ---------------- bandes haut / bas : [nom] [zone mana à gauche] [main] ---------------- */
+/* ---------------- top / bottom bars: [name] [mana zone on the left] [hand] ---------------- */
 .big-zone {
   position: relative; margin: 0 14px; min-height: 150px;
   border: 2px solid rgba(255,255,255,.55); border-radius: 16px;
@@ -144,13 +144,13 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   --card-w: clamp(58px, 6.6vw, 92px);
   flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 7px;
   justify-content: flex-start;
-  justify-content: safe center;   /* main centrée ; si elle déborde, repli à gauche + scroll */
+  justify-content: safe center;   /* hand centered; if it overflows, fall back to left + scroll */
   overflow-x: auto;
   min-height: calc(var(--card-w) * 260 / 180);
 }
 .band-hand .card:hover { transform: translateY(-8px) scale(1.05); }
 
-/* bloc nom + compteurs (à gauche du bandeau, séparé de la zone mana) */
+/* name + counters block (left of the bar, separated from the mana zone) */
 .zone-chip {
   flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px;
   padding-right: 14px; border-right: 1px solid rgba(255,255,255,.22);
@@ -160,9 +160,9 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .my-chip .chip-name::before { content: "⭐ "; color: var(--accent-2); }
 .chip-counts { color: var(--muted); font-size: .74rem; display: flex; flex-direction: column; gap: 2px; }
 
-/* goutte violette = zone mana */
+/* purple drop = mana zone */
 .mana-drop {
-  position: relative; width: clamp(116px, 13.5vw, 160px); aspect-ratio: 100 / 130;   /* plus d'espace pour la goutte mana */
+  position: relative; width: clamp(116px, 13.5vw, 160px); aspect-ratio: 100 / 130;   /* more room for the mana drop */
   display: flex; align-items: center; justify-content: center; cursor: default;
   transition: transform .15s, filter .15s;
 }
@@ -173,7 +173,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .mana-drop .mana-cards .card { width: clamp(26px, 3vw, 38px); aspect-ratio: 180 / 260; border-radius: 4px; transition: transform .25s ease; }
 .mana-drop .mana-cards .card.back::after { border-radius: 4px; }
-/* carte de mana déjà engagée ce tour ("tapped") : tournée à 90° vers la droite */
+/* mana card already spent this turn ("tapped"): rotated 90° to the right */
 .mana-drop .mana-cards .card.tapped { transform: rotate(90deg); filter: saturate(.75) brightness(.92); }
 .drop-count {
   position: absolute; right: -6px; bottom: -6px; z-index: 2;
@@ -185,7 +185,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 #dz-mana.over { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(139,107,255,.9)); }
 #dz-mana.invalid { filter: grayscale(.5) brightness(.8); }
 
-/* rangées latérales : dwelling / pending / deck / défausse */
+/* side rows: dwelling / pending / deck / discard */
 .side-row { display: flex; gap: 12px; margin: 0 14px; align-items: stretch; }
 .side-panel {
   position: relative; flex: 1; min-height: 88px;
@@ -195,7 +195,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   transition: all .15s;
 }
 .side-panel .panel-ico { width: 42px; height: 42px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
-/* icônes noir et blanc (maison / horloge / poubelle) -> rendues en blanc sur fond sombre */
+/* black-and-white icons (house / clock / bin) -> rendered in white on a dark background */
 .side-panel.dwelling .panel-ico, .side-panel.pending .panel-ico, .side-panel.discard .panel-ico { filter: invert(1) drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
 .side-panel .panel-label { font-size: .7rem; letter-spacing: .4px; }
 .side-panel .panel-count {
@@ -207,12 +207,12 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .side-panel.discard { flex: 0 1 clamp(120px, 13vw, 170px); }
 .side-panel.discard.over { border-color: var(--accent); background: rgba(79,209,197,.14); }
 .side-panel.discard.invalid { border-color: var(--danger); }
-/* mini-cartes dans les panneaux (dwelling / pending / défausse) */
+/* mini cards inside the panels (dwelling / pending / discard) */
 .panel-cards { display: flex; gap: 4px; min-height: calc(46px * 260 / 180); align-items: flex-end; }
 .panel-cards .card { width: 46px; aspect-ratio: 180 / 260; border-radius: 5px; cursor: default; }
 .panel-cards .card:hover { transform: translateY(-3px) scale(1.03); }
 
-/* ===================== plateau : Terre (gauche) + 2 rangées de stopovers (droite) ===================== */
+/* ===================== board: Earth (left) + 2 rows of stopovers (right) ===================== */
 #board-wrap {
   display: flex; align-items: center; justify-content: center; gap: 24px; margin: 0 14px;
   padding: 14px 18px; border-radius: 16px;
@@ -221,14 +221,14 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 #board-stage { position: relative; flex: 0 0 auto; width: clamp(300px, 33vw, 430px); aspect-ratio: 1; }
 #board-bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .97; }
 
-/* drapeau de la case de départ (en haut, entre les deux rayons centraux) */
+/* starting cell flag (top, between the two central rays) */
 #starting-flag {
   position: absolute; left: 50%; top: 1.5%; transform: translateX(-50%);
   font-size: clamp(.9rem, 1.3vw, 1.15rem); z-index: 5;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.8));
 }
 
-/* ---------------- 3 cartes centrales de la Terre ---------------- */
+/* ---------------- 3 central Earth cards ---------------- */
 #env-cards {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   display: flex; gap: clamp(6px, .8vw, 10px); z-index: 5;
@@ -238,18 +238,18 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   border-radius: 7px; overflow: hidden; box-shadow: 0 5px 14px rgba(0,0,0,.6);
 }
 .env-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-/* carte jour/nuit : deux faces superposées, seule la face active est visible (retournement animé) */
+/* day/night card: two overlapping faces, only the active one is visible (animated flip) */
 #env-dn .env-face { transition: opacity .55s ease, transform .55s ease; }
 #env-dn .face-night { opacity: 0; transform: rotateY(90deg); }
 #env-dn.dn-night .face-night { opacity: 1; transform: none; }
 #env-dn.dn-night .face-day { opacity: 0; transform: rotateY(-90deg); }
-/* valeur de la température */
+/* temperature value */
 .temp-value {
   position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
   font-size: clamp(1rem, 1.5vw, 1.4rem); font-weight: 800; color: #fff;
   text-shadow: 0 2px 5px #000, 0 0 12px rgba(40,120,255,.8); z-index: 2;
 }
-/* paquet cataclysmes : 4 cartes dos visible (placeholder) */
+/* cataclysm deck: 4 face-down cards (placeholder) */
 .env-cata { background: #141b30; }
 .cata-stack { position: absolute; inset: 0; }
 .cata-stack i {
@@ -262,7 +262,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .cata-stack i:nth-child(3) { transform: translate(4px, 4px) rotate(3deg); }
 .cata-stack i:nth-child(4) { transform: translate(8px, 8px) rotate(7deg); }
 
-/* 24 positions radiales : les pions se placent entre les traits radiaux, juste à l'extérieur du globe */
+/* 24 radial positions: tokens sit between the radial lines, just outside the globe */
 #markers-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
 .marker {
   position: absolute; transform: translate(-50%, -50%); z-index: 6; pointer-events: none;
@@ -275,7 +275,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
 .marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
 
-/* 2 rangées de 5 stopovers : rangée adverse (haut) + rangée du joueur (bas), numérotées 5..1 avec « stopover 1 » à droite */
+/* 2 rows of 5 stopovers: opponent row (top) + player row (bottom), numbered 5..1 with “stopover 1” on the right */
 #stopovers {
   position: relative; flex: 0 0 auto;
   display: flex; flex-direction: column; gap: clamp(12px, 1.8vw, 24px);
@@ -298,21 +298,44 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 #row-me .slot { cursor: pointer; }
 .slot .slot-num { position: absolute; right: 7px; bottom: 5px; font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.7); }
-/* carte jouée posée dans une case de stopover */
+/* played card placed in a stopover cell */
 .slot .played { position: absolute; inset: 4% 5%; width: 90%; aspect-ratio: 180 / 260; border-radius: 6px; overflow: hidden; z-index: 2; box-shadow: 0 3px 9px rgba(0,0,0,.65); }
 .slot .played img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* defense card: the card AND its frame are presented rotated 90° (landscape),
+   straddling the cell — as if the card had been physically turned
+   to block the opposing cell across from it. */
+.slot .played.defend {
+  inset: auto; left: 50%; top: 50%;
+  width: 132%; aspect-ratio: 260 / 180;
+  transform: translate(-50%, -50%);
+  outline: 2px solid rgba(79,209,197,.9);
+}
+/* the art is rotated 90° and sized (frame height × width, 260/180 ratio)
+   to exactly fill the landscape frame after rotation */
+.slot .played.defend img {
+  position: absolute; left: 50%; top: 50%;
+  width: 69.23%; height: 144.44%;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
 .slot.drop-target { transform: scale(1.12); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(79,209,197,.85); z-index: 8; }
 .slot.drop-target-invalid { transform: scale(1.05); border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger), 0 0 18px rgba(252,129,129,.7); z-index: 8; }
-/* ordre de jeu 1→5 : les cases non encore accessibles sont estompées, la prochaine est surlignée */
+/* play order 1→5: not-yet-accessible cells are dimmed, the next one is highlighted */
 .stopover-row .slot { opacity: .5; }
 .stopover-row .slot.filled { opacity: 1; }
 #row-me .slot.slot-next { opacity: 1; border-color: rgba(79,209,197,.8); box-shadow: 0 0 0 2px rgba(79,209,197,.35); }
 #row-me .slot.slot-next .slot-num { color: var(--accent); }
-/* case valide (repli clic : carte sélectionnée) */
+/* valid cell (click fallback: selected card) */
 .slot.slot-valid { cursor: pointer; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(79,209,197,.75); animation: stopoverPulse 1.4s ease-in-out infinite; z-index: 7; }
 @keyframes stopoverPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 
-/* action bar (à droite du bandeau joueur) */
+/* defense button (between "play" and "pass") */
+.defend-btn {
+  background: linear-gradient(180deg, #2e6d64, #1f4a44);
+  color: #dff7f3; border: 1px solid rgba(79,209,197,.6); font-weight: 600;
+}
+.defend-btn:not(:disabled):hover { filter: brightness(1.12); }
+
+/* action bar (right side of the player bar) */
 #action-bar {
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-height: 42px;
   padding-left: 14px; border-left: 1px solid rgba(255,255,255,.22); max-width: 42%;
@@ -346,7 +369,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .conn-ok { color: var(--ok); }
 .conn-bad { color: var(--danger); }
 
-/* aperçu carte au survol : 3x plus grosse, centrée verticalement (au niveau de la Terre) */
+/* card hover preview: 3x bigger, vertically centered (at Earth level) */
 #card-hover {
   position: fixed; left: 16px; top: 50%; z-index: 55;
   width: calc(clamp(58px, 6.6vw, 92px) * 3); aspect-ratio: 180 / 260;

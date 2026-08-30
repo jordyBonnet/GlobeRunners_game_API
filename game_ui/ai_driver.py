@@ -1,12 +1,12 @@
-"""Pilotage d'un joueur IA (Robot) qui joue contre l'humain dans la web UI.
+"""Drives an AI player (Robot) that plays against the human in the web UI.
 
-L'IA agit directement sur le moteur (`ge.handle_websocket_message`), en passant par
-dessus le WebSocket que l'humain utilise. La boucle lit l'état de jeu officiel dans
-la base, et dès que c'est au tour du robot elle calcule son action avec PlayerAI
-(player_ai/playerai.py) et la soumet.
+The AI acts directly on the engine (`ge.handle_websocket_message`), bypassing the
+WebSocket the human uses. The loop reads the official game state from the DB, and
+whenever it's the robot's turn it computes its action with PlayerAI
+(player_ai/playerai.py) and submits it.
 
-L'humain voit les actions du robot via son polling habituel (/api/state/...) :
-aucun changement de protocole n'est nécessaire.
+The human sees the robot's actions through their usual polling (/api/state/...):
+no protocol change is needed.
 """
 
 from __future__ import annotations
@@ -26,21 +26,21 @@ PLAY_TURN_RE = re.compile(r"turn \d+ - waiting for (first|second) player \((.+?)
 
 
 def random_ai_deck(n: int = 30) -> list[str]:
-    """Deck de démarrage du robot : une faction tirée au hasard, n cartes distinctes (30 par défaut).
+    """Starting deck for the robot: one random faction, n distinct cards (30 by default).
 
-    Même logique que le starter deck du front-end (`buildStarterDeck`) : on ne tire que
-    dans une seule faction (pas de mélange), et les cartes rares sont moins fréquentes
-    (pondération rare x1 / autre x3, tirage sans remise ni doublon)."""
+    Same logic as the frontend starter deck (`buildStarterDeck`): we only draw from a
+    single faction (no mixing), and rare cards are less frequent (weighting rare x1 /
+    other x3, draw without replacement or duplicates)."""
     df = ge.get_cardpool()
     faction = random.choice(df["faction"].unique().to_list())
     sub = df.filter(pl.col("faction") == faction)
 
-    # sac pondéré : rare x1, autre x3
+    # weighted bag: rare x1, other x3
     bag: list[str] = []
     for row in sub.iter_rows(named=True):
         bag.extend([row["card_id"]] * (1 if row["rare"] else 3))
 
-    # tirage pondéré sans remise, sans doublon
+    # weighted draw without replacement, no duplicates
     deck: list[str] = []
     while len(deck) < n and bag:
         card = random.choice(bag)
@@ -51,16 +51,22 @@ def random_ai_deck(n: int = 30) -> list[str]:
 
 
 def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
-    """Calcule l'action suivante du robot à partir de l'état courant.
+    """Computes the robot's next action from the current state.
 
-    Retourne le message {'cards','to','mode','pendings'} à soumettre, ou None si le
-    robot ne doit (pas encore) agir. `st` porte les flags de phase de la boucle
-    (acted / fallback) pour qu'une seule action soit jouée par phase.
+    Returns the message {'cards','to','mode','pendings'} to submit, or None if the
+    robot should not (yet) act. `st` carries the loop's phase flags (acted / fallback)
+    so that only one action is played per phase.
     """
     state = game.state
-    # réinitialise les flags de phase quand l'état change
-    if st.get("state") != state:
-        st.update(state=state, acted=False, fallback=False)
+    # reset the phase flags when the state changes.
+    # WARNING: the key must include the turn NUMBER — the mana-phase state string
+    # is identical every turn ("waiting for both players to mana or pass"); if we only
+    # keyed on the string, a whole missed turn (opponent finished the play phase before
+    # the robot ticked) would leave acted=True stuck and the robot would refuse to play
+    # in the next mana phase -> permanent deadlock.
+    phase_key = (state, game.turn)
+    if st.get("key") != phase_key:
+        st.update(key=phase_key, state=state, acted=False, fallback=False)
 
     me = game.players.get(ai_name)
     if me is None:
@@ -68,7 +74,7 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
     oppo = next((p for n, p in game.players.items() if n != ai_name), None)
     ai.update_player_state(me, oppo, game)
 
-    # 1. Initialisation : poser 3 cartes en mana (sur les 6 de la main)
+    # 1. Initialization: put 3 cards in mana (from the 6 in hand)
     init_state = f"waiting for both players to put {ge.start_cards_in_mana} cards in hand"
     if state == init_state:
         need = ge.start_cards_in_mana - len(me.mana or [])
@@ -77,7 +83,7 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
             return {"cards": cards, "to": "mana", "mode": "", "pendings": []}
         return None
 
-    # 2. Phase mana/passe : poser exactement 1 carte en mana, ou passer
+    # 2. Mana/pass phase: put exactly 1 card in mana, or pass
     if state == "waiting for both players to mana or pass":
         if st["acted"]:
             return None
@@ -86,15 +92,45 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
             return {"cards": [], "to": "", "mode": "pass", "pendings": []}
         return ai.put_mana(1, in_turn=True)
 
-    # 3. Phase de jeu : jouer une carte abordable (ou passer)
+    # 3. Play phase: play an affordable card (or pass)
     m = PLAY_TURN_RE.match(state)
     if m and m.group(2) == ai_name:
         if st["fallback"]:
             st["fallback"] = False
             return {"cards": [], "to": "", "mode": "pass", "pendings": []}
+
+        # the robot's actions THIS turn (action_chain is reset at the end of each turn)
+        acted = [a for a in (me.action_chain or []) if a]
+        moved_this_turn = any(a.get("mode") == "move" and a.get("cards") for a in acted)
+        defended_this_turn = any(a.get("mode") == "defend" and a.get("cards") for a in acted)
+        oppo_moves = [
+            a for a in ((oppo.action_chain or []) if oppo is not None else [])
+            if a and a.get("mode") == "move" and a.get("cards")
+        ]
+
+        # 3.a REACTION (only after having already moved this turn): if the opponent played
+        #     a card (move) this turn and the robot hasn't defended yet -> answer in DEFEND
+        #     mode (card played sideways at 90°). Since the robot already advanced, the game
+        #     always progresses -> no deadlock.
+        if moved_this_turn and not defended_this_turn and oppo_moves and random.random() < 0.5:
+            defend = ai.defend_card()
+            if defend is not None:
+                # SAME ordering rule as the frontend / moves: the defend card is the
+                # robot's next card in the 1->5 order, placed on ITS next stopover.
+                # (It blocks the opponent card on this SAME stopover — each player's
+                # k-th card — and does NOT overlap the cards the robot already played.)
+                played = sum(
+                    1 for a in (me.action_chain or [])
+                    if a and a.get("mode") in ("move", "defend") and a.get("cards")
+                )
+                defend["to"] = f"stopover_{4 - min(played, 4)}"
+                return defend
+
+        # 3.b MAIN: play a card (move) — the robot advances every turn (original behavior).
         msg = ai.play_card()
-        # règle d'ordre (identique au frontend) : la k-ième carte du tour va sur le
-        # stopover k -> colonnes 4, 3, 2, 1, 0 (stopover 1 = colonne la plus à droite)
+        # ordering rule (same as the frontend): the k-th card of the turn goes to
+        # stopover k -> columns 4, 3, 2, 1, 0 (stopover 1 = right-most column).
+        # Only 'move' actions count toward the order (a defend card targets the opponent's cell).
         if msg.get("mode") == "move" and msg.get("cards"):
             played = sum(
                 1 for a in (me.action_chain or [])
@@ -107,43 +143,56 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
 
 
 async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4):
-    """Boucle en arrière-plan : dès que c'est le tour du robot, il joue.
+    """Background loop: as soon as it's the robot's turn, it plays.
 
-    S'arrête quand la partie est terminée ou si la partie a disparu de la base.
+    Stops when the game is over or if the game has disappeared from the DB.
     """
     ai = PlayerAI(player_state=None)
     st: dict = {}
-    await asyncio.sleep(interval)   # laisse le temps au frontend humain de s'installer
+    await asyncio.sleep(interval)   # give the human frontend time to set up
     while True:
         await asyncio.sleep(interval)
         try:
             conn, _, game = ge.get_current_game(game_id)
             conn.close()
         except Exception:
-            break                   # partie supprimée -> on arrête
+            break                   # game deleted -> stop
         if game.state == "game over" or game.winner:
             break
 
-        msg = ai_decide(game, ai_name, st, ai)
-        if msg is None:
-            continue
-
-        player = game.players[ai_name].model_copy()
-        player.message = msg
+        # NOTE: everything below is protected — an error (transient DB lock, unexpected
+        # exception, rejected action...) must NEVER kill the robot task: we log, reset the
+        # phase flags and retry on the next cycle.
         try:
-            resp_raw = ge.handle_websocket_message(game_id, player)
-        except Exception as e:
-            print(f"[ai] action failed for {ai_name}: {e}")
-            continue
+            msg = ai_decide(game, ai_name, st, ai)
+            if msg is None:
+                continue
 
-        # le moteur renvoie un JSON (str ou dict) avec {'message': {'success': bool, ...}}
-        try:
-            resp = json.loads(resp_raw) if isinstance(resp_raw, str) else resp_raw
+            player = game.players[ai_name].model_copy()
+            player.message = msg
+            try:
+                resp_raw = ge.handle_websocket_message(game_id, player)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"[ai] action failed for {ai_name}: {e} -> retry next cycle")
+                st["acted"] = False   # allow a retry in this same phase
+                continue
+
+            # the engine returns a JSON (str or dict) with {'message': {'success': bool, ...}}
+            try:
+                resp = json.loads(resp_raw) if isinstance(resp_raw, str) else resp_raw
+            except Exception:
+                resp = {}
+            info = resp.get("message", {}) if isinstance(resp, dict) else {}
+            ok = info.get("success", True)
+            if not ok:
+                print(f"[ai] action rejected for {ai_name}: {info.get('message')} -> retry next cycle")
+                st["acted"] = False   # the action was not applied -> we can retry
+                if msg.get("mode") != "pass":
+                    st["fallback"] = True   # next decision in the same phase -> pass
         except Exception:
-            resp = {}
-        info = resp.get("message", {}) if isinstance(resp, dict) else {}
-        ok = info.get("success", True)
-        if not ok:
-            print(f"[ai] action rejected for {ai_name}: {info.get('message')}")
-            if msg.get("mode") != "pass":
-                st["fallback"] = True   # prochaine décision sur la même phase -> passe
+            import traceback
+            traceback.print_exc()
+            print("[ai] unexpected error in AI loop -> will retry next cycle")
+            st.update(acted=False, fallback=False)

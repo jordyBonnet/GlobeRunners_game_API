@@ -1,0 +1,1259 @@
+INFO:     Started server process [24168]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+GlobeRunners UI -> http://127.0.0.1:8001
+INFO:     127.0.0.1:63314 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63321 - "GET /cardpool HTTP/1.1" 200 OK
+Planet initialized: temperature = 7, day
+INFO:     127.0.0.1:63322 - "POST /create_game_ai HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63323 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63324 - "WebSocket /ws/26_08_30_17_20_57_RfRSE/Alice" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63325 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63326 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63327 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63328 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63329 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63331 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63332 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63333 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63334 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63335 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63336 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum10_dd523a'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 1, condition: dist_ahead_sup_1, effect: advancing
+			condition not met, reduced advancing: 0
+			current position: 0 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_5a81c9'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +3 extra cell(s)
+			current position: 3 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_bc4b11'], 'to': 'stopover_3', 'mode': 'defend', 'pendings': []}
+			defend card Mum10_bc4b11 (shield 0) blocks the same stopover, no effect
+	Processing action index: 2
+		Robot processing cards: {'cards': ['Mum10_dd62d0'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 1, condition: dist_ahead_sup_1, effect: taxation_oppo
+			condition not met, reduced advancing: 0
+			current position: 0 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:63337 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63338 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63339 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63340 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63341 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63342 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63343 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63344 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63345 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63346 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63347 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63348 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63349 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63350 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63351 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63352 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63353 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum43_dcb048'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 4, condition: mana_inf_6_oppo, effect: discard_oppo
+			condition not met, reduced advancing: 3
+			current position: 3 (len(earth): 24)
+	Processing action index: 1
+INFO:     127.0.0.1:63354 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63355 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63357 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63358 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63359 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63360 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63361 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63362 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63363 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63364 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63366 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63367 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63368 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63369 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63370 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63371 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63372 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63373 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63374 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63375 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63376 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63377 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63378 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63379 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63380 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63381 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum21_b5b742'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: drop_on_board, effect: advancing
+			condition drop_on_board not implemented, assuming met
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 7 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum21_a1d586'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: temp_sup_9, effect: advancing
+			condition not met, reduced advancing: 1
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 9 (len(earth): 24)
+	Processing action index: 2
+		Robot processing cards: {'cards': ['Mum10_df75f1'], 'to': 'stopover_2', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: night, effect: advancing
+			condition not met, reduced advancing: 0
+			current position: 9 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:63382 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63383 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63384 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63385 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63386 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63387 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63388 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63389 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63390 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63391 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63392 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63393 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63394 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63395 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63396 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63397 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63398 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63399 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63400 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63401 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63402 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63403 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63404 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum10_f14837'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: mana_sup_5_oppo, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 9 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_5adbf3'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: face_point_right, effect: copy_effect
+			condition face_point_right not implemented, assuming met
+			applying effect: copy_effect
+			current position: 9 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:63407 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63408 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63409 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63410 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63411 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63412 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63413 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63414 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63415 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63416 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63417 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63418 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63419 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63420 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63421 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63422 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63423 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63424 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63425 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63426 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63427 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63428 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63429 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63431 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63432 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum32_937260'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 3, condition: temp_sup_15, effect: copy_effect
+			condition not met, reduced advancing: 2
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 12 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_6871bb'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 1, condition: dist_behind_sup_1, effect: wrecking_ball
+			condition not met, reduced advancing: 0
+			current position: 12 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:63433 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63434 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63435 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63436 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63437 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63438 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63439 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63440 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63441 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63442 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63443 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63444 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63445 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63446 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63447 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63448 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63449 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63450 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63451 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63499 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63501 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum32_ddbf04'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 3, condition: mana_sup_5_oppo, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 18 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum21_9a78d1'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: cataclysm, effect: draw
+			condition cataclysm not implemented, assuming met
+			applying effect: draw
+			effect draw: Robot draws 2/2 card(s), hand now 2
+			current position: 19 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:63502 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63503 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63504 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63505 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63506 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63507 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63508 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63509 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63510 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63511 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63512 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63513 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63514 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63515 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63516 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63517 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63518 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63519 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63520 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63521 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50756 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50757 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50758 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum10_26265b'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: mana_sup_5_oppo, effect: copy_effect
+			applying effect: copy_effect
+			current position: 19 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_bdd411'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 1, condition: face_point_left, effect: backward_oppo
+			condition face_point_left not implemented, assuming met
+			applying effect: backward_oppo
+			effect backward_oppo: Alice recoils -1 cell(s)
+			current position: 22 (len(earth): 24)
+	Processing action index: 2
+		Robot processing cards: {'cards': ['Mum21_4c9cf0'], 'to': 'stopover_2', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: face_point_right, effect: backward_oppo
+			condition face_point_right not implemented, assuming met
+			applying effect: backward_oppo
+			effect backward_oppo: Alice recoils -1 cell(s)
+			current position: 23 (len(earth): 24)
+INFO:     127.0.0.1:50759 - "GET /api/state/26_08_30_17_20_57_RfRSE/Alice HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_20_57_RfRSE' player_name='Alice'
+INFO:     127.0.0.1:50760 - "GET /game/26_08_30_17_20_57_RfRSE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /cardpool HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50764 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50767 - "GET /placeholder.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50768 - "POST /create_game HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+Planet initialized: temperature = 8, day
+INFO:     127.0.0.1:50770 - "POST /join_game/26_08_30_17_21_12_UBYjq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50771 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50772 - "WebSocket /ws/26_08_30_17_21_12_UBYjq/Alice" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50773 - "WebSocket /ws/26_08_30_17_21_12_UBYjq/Bob" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50774 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50775 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50776 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50777 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50779 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50778 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50781 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50780 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50782 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50783 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50785 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50786 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_5fac04'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 0 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_d79c4e'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Dwa, effect: advancing
+			condition not met, reduced advancing: 1
+			current position: 1 (len(earth): 24)
+	Processing action index: 1
+INFO:     127.0.0.1:50788 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50790 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50792 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50793 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50791 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50794 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50795 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50796 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50797 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50799 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50798 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50800 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50801 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50803 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50802 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_755151'], 'to': 'stopover_1', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 1/1 card(s), hand now 3
+			current position: 1 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_90a9f8'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: discard
+			applying effect: discard
+			effect discard: Bob discards 1 card(s), hand now 1
+			current position: 4 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_79c784'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 4 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_b7ec02'], 'to': 'stopover_1', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +2 extra cell(s)
+			current position: 7 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:50804 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50805 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50806 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50807 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50808 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50809 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50810 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50811 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50812 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50813 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50814 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50815 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50816 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50817 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50818 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 3
+			current position: 6 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_18e109'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: jump
+			applying effect: jump
+			effect jump: Alice jumps 2 cell(s), skipping intermediate cells
+			current position: 6 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_c76063'], 'to': 'stopover_9', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: jump
+			applying effect: jump
+			effect jump: Bob jumps 2 cell(s), skipping intermediate cells
+			current position: 8 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_33892c'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 6 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:50819 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50821 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50822 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50824 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50825 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50826 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50827 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50828 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50829 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50830 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50831 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50832 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50833 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50834 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50835 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50836 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50837 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50838 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_714dd1'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Alice moves 1/1 card(s) from deck to mana, mana now 7
+			current position: 6 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_23c12f'], 'to': 'stopover_8', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Bob moves 1/1 card(s) from deck to mana, mana now 7
+			current position: 8 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_bb44be'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			current position: 6 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_de4294'], 'to': 'stopover_12', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: taxation
+			applying effect: taxation
+			effect taxation: Bob taxes 1/1 card(s) from mana to discard, mana now 6
+			current position: 12 (len(earth): 24)
+	Processing action index: 2
+		Alice processing cards: {'cards': ['Dwa23_19ad03'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: avalanche
+			applying effect: avalanche
+			current position: 6 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_3dfd27'], 'to': 'stopover_11', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Orc, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 17 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:50839 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50840 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50841 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50842 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50843 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50844 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50845 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50846 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50847 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50849 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50848 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50850 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50851 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50853 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50852 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50854 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50855 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50856 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50857 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50859 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50860 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50861 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_90a9f8'], 'to': 'stopover_21', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: discard
+			applying effect: discard
+			effect discard: Bob discards 1 card(s), hand now 0
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 22 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_33892c'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 6 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_17', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 2
+			current position: 21 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_755151'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 1/1 card(s), hand now 1
+			current position: 6 (len(earth): 24)
+	Processing action index: 2
+		Bob processing cards: {'cards': ['Orc21_b7ec02'], 'to': 'stopover_18', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +2 extra cell(s)
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 23 (len(earth): 24)
+INFO:     127.0.0.1:50862 - "GET /api/state/26_08_30_17_21_12_UBYjq/Alice HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_21_12_UBYjq' player_name='Alice'
+INFO:     127.0.0.1:50863 - "GET /api/state/26_08_30_17_21_12_UBYjq/Bob HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_21_12_UBYjq' player_name='Bob'
+INFO:     127.0.0.1:51135 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64229 - "GET /cardpool HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64230 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64231 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64232 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64233 - "GET /placeholder.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64234 - "POST /create_game HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+Planet initialized: temperature = 11, day
+INFO:     127.0.0.1:64236 - "POST /join_game/26_08_30_17_56_27_vWPUb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64237 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64238 - "WebSocket /ws/26_08_30_17_56_27_vWPUb/Alice" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64239 - "WebSocket /ws/26_08_30_17_56_27_vWPUb/Bob" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64240 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64241 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64242 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64243 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64244 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64245 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64246 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64247 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64248 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64249 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64251 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64250 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64252 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64254 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64253 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_b7ec02'], 'to': 'stopover_1', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +2 extra cell(s)
+			current position: 3 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_4c60c6'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: backward
+			applying effect: backward
+			effect backward: -1 cell(s) recoil
+			current position: 3 (len(earth): 24)
+	Processing action index: 1
+INFO:     127.0.0.1:64255 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64256 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64258 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64259 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64260 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64261 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64262 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64263 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64264 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64265 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64267 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64268 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64269 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64270 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64271 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_19ad03'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: avalanche
+			applying effect: avalanche
+			current position: 3 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_0f5380'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: swap_cards
+			applying effect: swap_cards
+			current position: 4 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_79c784'], 'to': 'stopover_5', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 6 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_57db5e'], 'to': 'stopover_5', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 7 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:64272 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64274 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64275 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64276 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64277 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64278 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64280 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64279 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64281 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64282 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64283 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64284 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64286 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64287 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64288 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64289 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64290 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64291 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64292 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 4
+			current position: 6 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_5a81c9'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +3 extra cell(s)
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 10 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_5fac04'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 6 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_755151'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 1/1 card(s), hand now 3
+			current position: 10 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:64293 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64294 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64295 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64296 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64297 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64300 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64301 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64303 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64302 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64304 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64306 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64305 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64307 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64308 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64309 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64311 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64310 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_33892c'], 'to': 'stopover_10', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 10 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_30ee70'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Bob moves 2/2 card(s) from deck to mana, mana now 8
+			current position: 5 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_bb44be'], 'to': 'stopover_10', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			current position: 10 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_de4294'], 'to': 'stopover_10', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: taxation
+			applying effect: taxation
+			effect taxation: Bob taxes 1/1 card(s) from mana to discard, mana now 7
+			current position: 9 (len(earth): 24)
+	Processing action index: 2
+		Alice processing cards: {'cards': ['Dwa23_d79c4e'], 'to': 'stopover_13', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Dwa, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 15 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_6d4858'], 'to': 'stopover_11', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: taxation
+			applying effect: taxation
+			effect taxation: Bob taxes 2/2 card(s) from mana to discard, mana now 5
+			current position: 14 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:64312 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64313 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64314 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64315 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64316 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64317 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64318 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64319 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64320 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64322 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64323 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64324 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64325 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64326 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64327 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64328 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64329 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64330 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_57db5e'], 'to': 'stopover_16', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 18 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_19ad03'], 'to': 'stopover_15', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: avalanche
+			applying effect: avalanche
+			current position: 15 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_14', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 4
+			current position: 17 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_5a81c9'], 'to': 'stopover_15', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +3 extra cell(s)
+			current position: 18 (len(earth): 24)
+	Processing action index: 2
+		Bob processing cards: {'cards': ['Orc21_5fac04'], 'to': 'stopover_14', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 17 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_755151'], 'to': 'stopover_15', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 1/1 card(s), hand now 2
+			current position: 18 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:64333 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64334 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64335 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64336 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64338 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64337 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64340 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64339 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64341 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64343 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64344 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64345 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64346 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64347 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64348 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64349 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64350 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64351 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64352 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64353 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_79c784'], 'to': 'stopover_20', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 22 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_0f5380'], 'to': 'stopover_18', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: swap_cards
+			applying effect: swap_cards
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 19 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_d79c4e'], 'to': 'stopover_21', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Dwa, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 23 (len(earth): 24)
+INFO:     127.0.0.1:64354 - "GET /api/state/26_08_30_17_56_27_vWPUb/Alice HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_56_27_vWPUb' player_name='Alice'
+INFO:     127.0.0.1:64355 - "GET /api/state/26_08_30_17_56_27_vWPUb/Bob HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_56_27_vWPUb' player_name='Bob'
+INFO:     127.0.0.1:64358 - "GET /cardpool HTTP/1.1" 200 OK
+Planet initialized: temperature = 10, day
+INFO:     127.0.0.1:64359 - "POST /create_game_ai HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64360 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64361 - "WebSocket /ws/26_08_30_17_56_37_mCcKw/Alice" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64362 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64363 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64364 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64365 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64366 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64367 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64368 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64369 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64371 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64372 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum10_5b486f'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 1, condition: drop_on_board, effect: jump
+			condition drop_on_board not implemented, assuming met
+			applying effect: jump
+			effect jump: Robot jumps 2 cell(s), skipping intermediate cells
+			current position: 2 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_5cd6c5'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +2 extra cell(s)
+			current position: 3 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum21_adf71d'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: cataclysm, effect: draw
+			condition cataclysm not implemented, assuming met
+			applying effect: draw
+			effect draw: Robot draws 1/1 card(s), hand now 2
+			current position: 4 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:64373 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64374 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64375 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64376 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64377 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64378 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64379 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64380 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64381 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64382 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64383 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64384 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64385 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64386 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64387 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64388 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64389 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64390 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64391 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64392 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64393 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64394 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64395 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64396 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64397 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64398 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64399 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum21_3554fa'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: cards_in_hand_inf_4_oppo, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 5 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_b7e37c'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 1, condition: no_condition, effect: copy_effect
+			applying effect: copy_effect
+			current position: 4 (len(earth): 24)
+	Processing action index: 2
+		Robot processing cards: {'cards': ['Mum10_be56cf'], 'to': 'stopover_2', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 1, condition: face_point_left, effect: advancing
+			condition face_point_left not implemented, assuming met
+			applying effect: advancing
+			effect advancing: +3 extra cell(s)
+			current position: 8 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:64400 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64401 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64402 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64403 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64404 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64405 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64406 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64407 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64408 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64409 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64410 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64411 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64412 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64413 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64414 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64415 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64416 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64417 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64418 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64419 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64420 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64421 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64422 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64423 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64424 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64426 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64427 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum43_9067c0'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 4, condition: cards_in_hand_sup_3_oppo, effect: backward_oppo
+			condition not met, reduced advancing: 3
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 12 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum10_8c39d6'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: drop_on_board, effect: discard_oppo
+			condition drop_on_board not implemented, assuming met
+			applying effect: discard_oppo
+			current position: 12 (len(earth): 24)
+	Processing action index: 2
+INFO:     127.0.0.1:64428 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64429 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64430 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64431 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64432 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64433 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64434 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64435 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64436 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64437 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64438 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64439 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64440 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64441 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64442 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64443 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64444 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64445 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64446 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64447 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64448 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64449 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64450 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64451 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64452 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum21_d364f8'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: face_point_left, effect: backward_oppo
+			condition face_point_left not implemented, assuming met
+			applying effect: backward_oppo
+			effect backward_oppo: Alice recoils -1 cell(s)
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 17 (len(earth): 24)
+	Processing action index: 1
+		Robot processing cards: {'cards': ['Mum32_880cfb'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 3, condition: biome_Mum, effect: backward_oppo
+			applying effect: backward_oppo
+			effect backward_oppo: Alice recoils -1 cell(s)
+			faction biome bonus: +1 advancing for Robot (token on home biome)
+			current position: 22 (len(earth): 24)
+	Processing action index: 2
+		Robot processing cards: {'cards': ['Mum10_39fc0f'], 'to': 'stopover_2', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 1, condition: mana_inf_6_oppo, effect: wrecking_ball
+			condition not met, reduced advancing: 0
+			current position: 22 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:64454 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64455 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64456 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64457 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64458 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64459 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64460 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64461 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64462 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64463 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64464 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64465 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64466 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64467 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64468 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64469 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64470 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64471 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64472 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64473 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64475 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64476 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Robot processing cards: {'cards': ['Mum10_39bf11'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 1, condition: face_point_left, effect: advancing
+			condition face_point_left not implemented, assuming met
+			applying effect: advancing
+			effect advancing: +2 extra cell(s)
+			current position: 23 (len(earth): 24)
+INFO:     127.0.0.1:64477 - "GET /api/state/26_08_30_17_56_37_mCcKw/Alice HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_17_56_37_mCcKw' player_name='Alice'
+INFO:     127.0.0.1:64478 - "GET /game/26_08_30_17_56_37_mCcKw HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60606 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50735 - "GET /cardpool HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50736 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50737 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50738 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50739 - "GET /placeholder.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50740 - "POST /create_game HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50741 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+Planet initialized: temperature = 10, day
+INFO:     127.0.0.1:50742 - "POST /join_game/26_08_30_18_26_23_hTfdE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50743 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50744 - "WebSocket /ws/26_08_30_18_26_23_hTfdE/Alice" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50745 - "WebSocket /ws/26_08_30_18_26_23_hTfdE/Bob" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50746 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50747 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50748 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50749 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50750 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50751 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50753 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50752 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50754 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50755 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50756 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50757 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50758 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50759 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_30ee70'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Bob moves 2/2 card(s) from deck to mana, mana now 5
+			current position: 0 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_18e109'], 'to': 'stopover_2', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: jump
+			applying effect: jump
+			effect jump: Alice jumps 2 cell(s), skipping intermediate cells
+			current position: 2 (len(earth): 24)
+	Processing action index: 1
+INFO:     127.0.0.1:50760 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50764 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50768 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50767 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50771 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50770 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50772 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50773 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50774 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50775 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50776 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50777 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50778 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_ccdc2a'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: backward
+			applying effect: backward
+			effect backward: -2 cell(s) recoil
+			current position: 5 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_0f5380'], 'to': 'stopover_1', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 2, condition: no_condition, effect: swap_cards
+			applying effect: swap_cards
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 2 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_79c784'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 8 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_143e70'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 1/1 card(s), hand now 2
+			current position: 2 (len(earth): 24)
+	Processing action index: 2
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_0', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 4
+			current position: 1 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:50779 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50780 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50781 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50782 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50783 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50785 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50786 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50788 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50789 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50790 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50791 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50792 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50793 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50794 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50795 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_5fac04'], 'to': 'stopover_1', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 1 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_dfc129'], 'to': 'stopover_8', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 2/2 card(s), hand now 4
+			current position: 7 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_90a9f8'], 'to': 'stopover_5', 'mode': 'move', 'pendings': []}
+			adv: 4, mana: 2, condition: no_condition, effect: discard
+			applying effect: discard
+			effect discard: Bob discards 1 card(s), hand now 2
+			faction biome bonus: +1 advancing for Bob (token on home biome)
+			current position: 6 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_33892c'], 'to': 'stopover_8', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 7 (len(earth): 24)
+	Processing action index: 2
+		Bob processing cards: {'cards': ['Orc21_9882e1'], 'to': 'stopover_6', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: discard
+			applying effect: discard
+			effect discard: Bob discards 2 card(s), hand now 0
+			current position: 11 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:50796 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50797 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50798 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50799 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50800 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50801 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50802 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50803 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50804 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50806 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50807 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50808 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50809 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50810 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50811 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50812 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_714dd1'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Alice moves 1/1 card(s) from deck to mana, mana now 7
+			current position: 7 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_11', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 2
+			current position: 10 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_19ad03'], 'to': 'stopover_7', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: avalanche
+			applying effect: avalanche
+			current position: 7 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_9882e1'], 'to': 'stopover_16', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: discard
+			applying effect: discard
+			effect discard: Bob discards 2 card(s), hand now 0
+			current position: 15 (len(earth): 24)
+	Processing action index: 2
+		Alice processing cards: {'cards': ['Dwa23_d79c4e'], 'to': 'stopover_10', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Dwa, effect: advancing
+			condition not met, reduced advancing: 1
+			current position: 8 (len(earth): 24)
+	Processing action index: 3
+INFO:     127.0.0.1:50813 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50815 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50814 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50816 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50817 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50818 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50819 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50821 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50822 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50824 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50823 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50825 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50826 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50827 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50828 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50829 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Bob processing cards: {'cards': ['Orc21_30ee70'], 'to': 'stopover_15', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Bob moves 2/2 card(s) from deck to mana, mana now 11
+			current position: 14 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_dfc129'], 'to': 'stopover_8', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Alice draws 2/2 card(s), hand now 3
+			current position: 7 (len(earth): 24)
+	Processing action index: 1
+		Bob processing cards: {'cards': ['Orc21_5fac04'], 'to': 'stopover_15', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 14 (len(earth): 24)
+		Alice processing cards: {'cards': ['Dwa23_ccdc2a'], 'to': 'stopover_13', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: backward
+			applying effect: backward
+			effect backward: -2 cell(s) recoil
+			current position: 10 (len(earth): 24)
+	Processing action index: 2
+		Alice processing cards: {'cards': ['Dwa23_79c784'], 'to': 'stopover_10', 'mode': 'move', 'pendings': []}
+			adv: 2, mana: 2, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 13 (len(earth): 24)
+	Processing action index: 3
+		Alice processing cards: {'cards': ['Dwa23_33892c'], 'to': 'stopover_8', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: wrecking_ball
+			applying effect: wrecking_ball
+			current position: 13 (len(earth): 24)
+	Processing action index: 4
+INFO:     127.0.0.1:50830 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50831 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50832 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50833 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50834 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50835 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50836 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50837 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50838 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50840 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50841 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50842 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50843 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50844 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50845 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50847 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50848 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+Processing trip chain...
+	Processing action index: 0
+		Alice processing cards: {'cards': ['Dwa23_d79c4e'], 'to': 'stopover_16', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 2, condition: biome_Dwa, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 18 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_e2affa'], 'to': 'stopover_14', 'mode': 'move', 'pendings': []}
+			adv: -1, mana: 2, condition: no_condition, effect: draw
+			applying effect: draw
+			effect draw: Bob draws 2/2 card(s), hand now 2
+			current position: 13 (len(earth): 24)
+	Processing action index: 1
+		Alice processing cards: {'cards': ['Dwa23_714dd1'], 'to': 'stopover_13', 'mode': 'move', 'pendings': []}
+			adv: 0, mana: 2, condition: no_condition, effect: ramp
+			applying effect: ramp
+			effect ramp: Alice moves 1/1 card(s) from deck to mana, mana now 10
+			current position: 18 (len(earth): 24)
+		Bob processing cards: {'cards': ['Orc21_6d4858'], 'to': 'stopover_19', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: taxation
+			applying effect: taxation
+			effect taxation: Bob taxes 2/2 card(s) from mana to discard, mana now 10
+			current position: 18 (len(earth): 24)
+	Processing action index: 2
+		Alice processing cards: {'cards': ['Dwa23_ccdc2a'], 'to': 'stopover_18', 'mode': 'move', 'pendings': []}
+			adv: 5, mana: 2, condition: no_condition, effect: backward
+			applying effect: backward
+			faction biome bonus: +1 advancing for Alice (token on home biome)
+			current position: 23 (len(earth): 24)
+INFO:     127.0.0.1:50849 - "GET /api/state/26_08_30_18_26_23_hTfdE/Alice HTTP/1.1" 200 OK
+WebSocket disconnected: game_id='26_08_30_18_26_23_hTfdE' player_name='Alice'
+INFO:     127.0.0.1:50850 - "GET /api/state/26_08_30_18_26_23_hTfdE/Bob HTTP/1.1" 200 OK

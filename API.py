@@ -13,6 +13,9 @@ GET  /cardpool                 -> card pool as a list of dicts
 WS   /ws/{game_id}/{player_name}
                                the client sends one JSON message at a time:
                                {"cards": [...], "to": "...", "mode": "...", "pendings": []}
+                               modes: '' (mana/discard), 'move' (1 card on stopover_x),
+                                      'defend' (1-5 cards on stopover_x, played sideways at 90°,
+                                      blocks the opponent card on the same stopover), 'pass'
                                the server replies with the personalized game state (opponent's
                                hand/mana/deck hidden). The first message received on connect is
                                the initial personalized state.
@@ -138,7 +141,12 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str, player_name: st
             # sees updates when IT sends a message, so per-connection state can be stale)
             conn, _, current_game = ge.get_current_game(game_id)
 
-            # reject out-of-turn messages (the engine would otherwise attribute them to the wrong player)
+            # reject out-of-turn messages (the engine would otherwise attribute them to the wrong
+            # player): during the play phase the engine dispatches by STATE, not by name — the first
+            # actor fills the 'first' slot, the second the 'second' slot, whoever they are. An
+            # out-of-turn 'pass' would therefore be silently counted as the OPPONENT's action and
+            # could close the turn alone (skipping the other player). The state string always names
+            # the player who must act next, so a pass from anyone else is always invalid.
             expected = _expected_player_name(current_game.state)
             if expected is not None and expected != player_name:
                 conn.close()

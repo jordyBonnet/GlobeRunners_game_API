@@ -1,7 +1,7 @@
-"""E2E smoke test : un humain (WS) joue une partie complète contre l'IA (/create_game_ai).
+"""E2E smoke test: a human (WS) plays a full game against the AI (/create_game_ai).
 
-Le robot doit agir en arrière-plan (mana init, mana/pass, plays).
-Run (server must be up on port 8001) :
+The robot must act in the background (initial mana, mana/pass, plays).
+Run (server must be up on port 8001):
     python tests/_ai_e2e.py
 """
 import asyncio
@@ -38,7 +38,7 @@ async def main():
     oppo = r.get("opponent", "Robot")
     print(f"created AI game {gid} vs {oppo}")
 
-    # la partie doit déjà être initialisée (2 joueurs)
+    # the game must already be initialized (2 players)
     st = http_get(f"/api/state/{gid}/Alice")
     assert st["players"] and len(st["players"]) == 2, f"opponent not in game: {st.get('players')}"
 
@@ -106,14 +106,14 @@ async def main():
         else:
             raise RuntimeError("game did not end after 450 steps")
 
-    # le robot doit avoir réellement joué (historique de messages non vide)
+    # the robot must have actually played (non-empty message history)
     full = http_get(f"/game/{gid}")
     rob = full["players"][oppo]
     assert len(rob["messages_history"]) >= 2, f"robot barely played: {len(rob['messages_history'])} messages"
 
-    # le robot doit poser ses cartes dans l'ordre sur les stopovers : chaque tour
-    # redémarre au stopover 1 (colonne 4) puis 3, 2, 1, 0 (l'action_chain est réinitialisée
-    # à la fin de chaque tour)
+    # the robot must play its cards in order on the stopovers: each turn
+    # restarts at stopover 1 (column 4) then 3, 2, 1, 0 (action_chain is reset
+    # at the end of each turn)
     moves = [m["to"] for m in rob["messages_history"] if m.get("mode") == "move"]
     assert moves, "robot never played a card on a stopover"
     cs = [int(m.rsplit("_", 1)[1]) for m in moves]

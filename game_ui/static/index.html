@@ -1,33 +1,33 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
-<link rel="stylesheet" href="/static/style.css?v=2">
+<link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
 
-<!-- ============================== PAGE SETUP (deck + partie) ============================== -->
+<!-- ============================== PAGE SETUP (deck + game) ============================== -->
 <div id="view-setup" class="setup-wrap">
   <header class="setup-header">
     <img src="/assets/GlobeRunners_large_logo.png" alt="GlobeRunners" class="logo">
-    <p class="tagline">Course autour de la Terre — premier joueur à atteindre la case 24 gagne.</p>
+    <p class="tagline">Race around the Earth — first player to reach cell 24 wins.</p>
   </header>
 
   <div class="setup-grid">
-    <!-- colonne deck -->
+    <!-- deck column -->
     <section class="panel">
-      <h2>1. Ton deck</h2>
+      <h2>1. Your deck</h2>
 
       <div class="deck-source-tabs">
-        <button id="tab-starter" class="tab active">Decks de démarrage</button>
-        <button id="tab-csv" class="tab">Charger un CSV</button>
+        <button id="tab-starter" class="tab active">Starter decks</button>
+        <button id="tab-csv" class="tab">Load a CSV</button>
       </div>
 
-      <!-- decks de démarrage -->
+      <!-- starter decks -->
       <div id="starter-panel" class="deck-source">
-        <p class="hint">Choisis une faction : le deck de 30 cartes est généré automatiquement (3 mana + 6 main + 21 deck).</p>
+        <p class="hint">Pick a faction: the 30-card deck is generated automatically (3 mana + 6 hand + 21 deck).</p>
         <div id="faction-grid" class="faction-grid"></div>
       </div>
 
@@ -35,77 +35,77 @@
       <div id="csv-panel" class="deck-source hidden">
         <label class="file-btn">
           <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
-          📂 Choisir un fichier CSV
+          📂 Choose a CSV file
         </label>
         <span id="csv-filename" class="hint"></span>
-        <p class="hint small">Format attendu : une colonne <code>card_id</code> (avec ou sans en-tête), 30 cartes.</p>
+        <p class="hint small">Expected format: a single <code>card_id</code> column (with or without a header), 30 cards.</p>
       </div>
 
-      <!-- aperçu du deck -->
-      <h3 id="deck-preview-title" class="hidden">Deck chargé (<span id="deck-count">0</span>/30)</h3>
+      <!-- deck preview -->
+      <h3 id="deck-preview-title" class="hidden">Deck loaded (<span id="deck-count">0</span>/30)</h3>
       <div id="deck-preview" class="card-row hidden"></div>
     </section>
 
-    <!-- colonne partie -->
+    <!-- game column -->
     <section class="panel">
-      <h2>2. Créer ou rejoindre une partie</h2>
+      <h2>2. Create or join a game</h2>
 
-      <label class="field-label" for="player-name">Ton pseudo</label>
-      <input type="text" id="player-name" maxlength="20" placeholder="ex : Anne" autocomplete="off">
+      <label class="field-label" for="player-name">Your nickname</label>
+      <input type="text" id="player-name" maxlength="20" placeholder="e.g. Anne" autocomplete="off">
 
       <div class="mode-tabs">
-        <button id="tab-create" class="tab active">Créer une partie</button>
-        <button id="tab-ai" class="tab">Contre l'IA</button>
-        <button id="tab-join" class="tab">Rejoindre</button>
+        <button id="tab-create" class="tab active">Create a game</button>
+        <button id="tab-ai" class="tab">Vs. AI</button>
+        <button id="tab-join" class="tab">Join</button>
       </div>
 
       <div id="create-panel" class="mode-panel">
-        <p class="hint">Une fois la partie créée, partage l'identifiant ci-dessous à ton adversaire.</p>
+        <p class="hint">Once the game is created, share the ID below with your opponent.</p>
         <div id="created-game-box" class="game-id-box hidden">
-          <span class="label">ID de la partie</span>
+          <span class="label">Game ID</span>
           <code id="created-game-id"></code>
-          <button id="copy-gid" title="Copier l'identifiant">📋 Copier</button>
+          <button id="copy-gid" title="Copy the ID">📋 Copy</button>
         </div>
       </div>
 
       <div id="ai-panel" class="mode-panel hidden">
-        <p class="hint">Le robot <b>Robot</b> rejoint la partie automatiquement (deck aléatoire) : clique « Lancer » et joue tout de suite.</p>
+        <p class="hint">The robot <b>Robot</b> joins the game automatically (random deck): click "Start" and play right away.</p>
       </div>
 
       <div id="join-panel" class="mode-panel hidden">
-        <label class="field-label" for="join-game-id">ID de la partie</label>
-        <input type="text" id="join-game-id" placeholder="ex : 26_08_24_15_30_12_aBcDe" autocomplete="off">
+        <label class="field-label" for="join-game-id">Game ID</label>
+        <input type="text" id="join-game-id" placeholder="e.g. 26_08_24_15_30_12_aBcDe" autocomplete="off">
       </div>
 
-      <button id="btn-launch" class="primary-btn" disabled>Lancer</button>
+      <button id="btn-launch" class="primary-btn" disabled>Start</button>
       <p id="setup-error" class="error-msg"></p>
     </section>
   </div>
 </div>
 
-<!-- ============================== PAGE JEU ============================== -->
+<!-- ============================== GAME PAGE ============================== -->
 <div id="view-game" class="hidden">
-  <!-- bandeau supérieur : tour + infos planète -->
+  <!-- top bar: turn + planet info -->
   <header id="topbar">
     <img src="/assets/GlobeRunners_icone.png" alt="" class="mini-logo">
     <div id="turn-info">
-      <span id="turn-number">Tour 1</span>
+      <span id="turn-number">Turn 1</span>
       <span id="phase-label"></span>
     </div>
     <div id="planet-info">
-      <span id="temp-badge" title="Température de la planète (1 à 20)">🌡️ ?</span>
-      <span id="daynight-badge" title="Jour / nuit (change à chaque tour)">☀️ Jour</span>
+      <span id="temp-badge" title="Planet temperature (1 to 20)">🌡️ ?</span>
+      <span id="daynight-badge" title="Day / night (flips every turn)">☀️ Day</span>
     </div>
-    <button id="btn-leave" title="Quitter la partie (l'état reste sauvegardé)">✕ Quitter</button>
+    <button id="btn-leave" title="Leave the game (state stays saved)">✕ Leave</button>
   </header>
 
-  <!-- ===================== ZONE ADVERSE (bandeau haut) : [nom] [mana à gauche] [main (dos)] ===================== -->
+  <!-- ===================== OPPONENT ZONE (top bar): [name] [mana on the left] [hand (face-down)] ===================== -->
   <section id="oppo-zone" class="big-zone">
     <div class="zone-chip oppo-chip">
       <span id="oppo-name" class="chip-name"></span>
       <span id="oppo-counts" class="chip-counts"></span>
     </div>
-    <div class="mana-drop" id="oppo-mana" title="Zone mana de l'adversaire">
+    <div class="mana-drop" id="oppo-mana" title="Opponent's mana zone">
       <svg class="drop-svg" viewBox="0 0 100 130" aria-hidden="true">
         <defs><linearGradient id="dg1" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#3a1d8f"/>
@@ -119,45 +119,45 @@
     <div class="band-hand" id="oppo-hand"></div>
   </section>
 
-  <!-- rangée adverse : dwelling / pending / deck / défausse -->
+  <!-- opponent row: dwelling / pending / deck / discard -->
   <div id="oppo-side" class="side-row">
-    <div class="side-panel dwelling" title="Dwelling adverse (bientôt)">
+    <div class="side-panel dwelling" title="Opponent's dwelling (coming soon)">
       <img class="panel-ico" src="/assets/marker_house.png" alt="">
       <div class="panel-cards" id="oppo-dwelling"></div>
     </div>
-    <div class="side-panel pending" title="Pending zone adverse (bientôt)">
+    <div class="side-panel pending" title="Opponent's pending zone (coming soon)">
       <img class="panel-ico" src="/assets/marker_pending.png" alt="">
       <span class="panel-label">Pending zone</span>
       <div class="panel-cards" id="oppo-pendings"></div>
     </div>
-    <div class="side-panel deck" title="Deck de l'adversaire">
+    <div class="side-panel deck" title="Opponent's deck">
       <img class="panel-ico" src="/assets/marker_card_oppo.png" alt="">
       <span class="panel-count" id="oppo-deck-count">–</span>
     </div>
-    <div class="side-panel discard" title="Défausse de l'adversaire">
+    <div class="side-panel discard" title="Opponent's discard pile">
       <img class="panel-ico" src="/assets/marker_bin.png" alt="">
       <div class="panel-cards" id="oppo-discard"></div>
       <span class="panel-count" id="oppo-discard-count">0</span>
     </div>
   </div>
 
-  <!-- ===================== CENTRE : Terre (cartes env. au centre + pions sur les rayons) + 2 rangées de stopovers ===================== -->
+  <!-- ===================== CENTER: Earth (env cards in the middle + tokens on the rays) + 2 rows of stopovers ===================== -->
   <main id="board-wrap">
     <div id="board-stage">
       <img src="/assets/earth_background_playmat.png" alt="" id="board-bg">
       <div id="starting-flag" title="Starting cell (position 0)">🏁</div>
 
-      <!-- 3 cartes centrales : jour/nuit • température • cataclysmes (placeholder) -->
+      <!-- 3 central cards: day/night • temperature • cataclysms (placeholder) -->
       <div id="env-cards">
-        <div class="env-card" id="env-dn" title="Jour / Nuit — la carte se retourne à chaque tour">
-          <img class="env-face face-day" src="/assets/envcard_day_night_back.png" alt="Jour">
-          <img class="env-face face-night" src="/assets/envcard_day_night_front.png" alt="Nuit">
+        <div class="env-card" id="env-dn" title="Day / Night — the card flips every turn">
+          <img class="env-face face-day" src="/assets/envcard_day_night_back.png" alt="Day">
+          <img class="env-face face-night" src="/assets/envcard_day_night_front.png" alt="Night">
         </div>
-        <div class="env-card" id="env-temp" title="Température de la planète (1 à 20)">
-          <img src="/assets/envcard_temperature_fc.png" alt="Température">
+        <div class="env-card" id="env-temp" title="Planet temperature (1 to 20)">
+          <img src="/assets/envcard_temperature_fc.png" alt="Temperature">
           <span class="temp-value" id="env-temp-val">?</span>
         </div>
-        <div class="env-card env-cata" title="Paquet cataclysmes (4 cartes) — pas encore implementé">
+        <div class="env-card env-cata" title="Cataclysm deck (4 cards) — not implemented yet">
           <div class="cata-stack"><i></i><i></i><i></i><i></i></div>
         </div>
       </div>
@@ -165,48 +165,48 @@
       <div id="markers-layer"></div>
     </div>
 
-    <!-- 2 rangées de 5 stopovers : rangée adverse (haut) + rangée du joueur (bas) -->
+    <!-- 2 rows of 5 stopovers: opponent row (top) + player row (bottom) -->
     <div id="stopovers">
-      <div class="stopover-row" id="row-oppo" title="Cartes jouées par l'adversaire">
+      <div class="stopover-row" id="row-oppo" title="Cards played by the opponent">
         <span class="row-owner" id="row-oppo-owner"></span>
         <span class="row-label">stopover&nbsp;1</span>
       </div>
-      <div class="stopover-row me-row" id="row-me" title="Tes cartes jouées">
+      <div class="stopover-row me-row" id="row-me" title="Your played cards">
         <span class="row-owner" id="row-me-owner"></span>
         <span class="row-label">stopover&nbsp;1</span>
       </div>
     </div>
   </main>
 
-  <!-- rangée du joueur : dwelling / pending / deck / défausse -->
+  <!-- player row: dwelling / pending / deck / discard -->
   <div id="my-side" class="side-row">
-    <div class="side-panel dwelling" title="Mon dwelling (bientôt)">
+    <div class="side-panel dwelling" title="My dwelling (coming soon)">
       <img class="panel-ico" src="/assets/marker_house.png" alt="">
       <div class="panel-cards" id="my-dwelling"></div>
     </div>
-    <div class="side-panel pending" title="Ma pending zone (bientôt)">
+    <div class="side-panel pending" title="My pending zone (coming soon)">
       <img class="panel-ico" src="/assets/marker_pending.png" alt="">
       <span class="panel-label">Pending zone</span>
       <div class="panel-cards" id="my-pendings"></div>
     </div>
-    <div class="side-panel deck" title="Mon deck">
+    <div class="side-panel deck" title="My deck">
       <img class="panel-ico" src="/assets/marker_card_p.png" alt="">
       <span class="panel-count" id="my-deck-count">0</span>
     </div>
-    <div class="side-panel discard" id="dz-discard" title="Défausse — jeter une carte (déposer ici)">
+    <div class="side-panel discard" id="dz-discard" title="Discard pile — throw a card away (drop it here)">
       <img class="panel-ico" src="/assets/marker_bin.png" alt="">
       <div class="panel-cards" id="my-discard"></div>
       <span class="panel-count" id="my-discard-count">0</span>
     </div>
   </div>
 
-  <!-- ===================== ZONE JOUEUR (bandeau bas) : [nom] [mana à gauche] [main] [actions] ===================== -->
+  <!-- ===================== PLAYER ZONE (bottom bar): [name] [mana on the left] [hand] [actions] ===================== -->
   <section id="my-zone" class="big-zone">
     <div class="zone-chip my-chip">
       <span id="my-name" class="chip-name"></span>
       <span id="mana-info" class="chip-counts"></span>
     </div>
-    <div id="dz-mana" class="mana-drop" title="Zone mana : dépose une carte ici (1 par tour, ou 3 à l'initialisation)">
+    <div id="dz-mana" class="mana-drop" title="Mana zone: drop a card here (1 per turn, or 3 at initialization)">
       <svg class="drop-svg" viewBox="0 0 100 130" aria-hidden="true">
         <defs><linearGradient id="dg2" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#3a1d8f"/>
@@ -219,37 +219,38 @@
     </div>
     <div class="band-hand" id="my-hand"></div>
     <div id="action-bar">
-      <button id="btn-play" class="primary-btn small-btn" disabled>Jouer la carte</button>
-      <button id="btn-pass" class="ghost-btn small-btn" disabled>Passer</button>
+      <button id="btn-play" class="primary-btn small-btn" disabled>Play the card</button>
+      <button id="btn-defend" class="defend-btn small-btn" disabled title="Play the card in defense (engaged at 90°): it blocks the opponent's card on the same stopover if the shields are enough">⛨ Play in defense</button>
+      <button id="btn-pass" class="ghost-btn small-btn" disabled>Pass</button>
       <span id="action-hint"></span>
     </div>
   </section>
 
-  <!-- zone de messages -->
+  <!-- messages zone -->
   <footer id="msg-bar">
     <span id="server-msg"></span>
-    <span id="conn-state" class="conn-ok">● connecté</span>
+    <span id="conn-state" class="conn-ok">● connected</span>
   </footer>
 </div>
 
-<!-- aperçu carte au survol (3x, centré verticalement) -->
+<!-- card hover preview (3x, vertically centered) -->
 <div id="card-hover"><img id="card-hover-img" src="" alt=""></div>
 
-<!-- modale carte (zoom) -->
+<!-- card modal (zoom) -->
 <div id="card-modal" class="modal hidden">
   <div class="modal-backdrop"></div>
   <img id="card-modal-img" src="" alt="">
 </div>
 
-<!-- modale fin de partie -->
+<!-- end-of-game modal -->
 <div id="endgame-modal" class="modal hidden">
   <div class="modal-box">
     <h2 id="endgame-title"></h2>
     <p id="endgame-sub"></p>
-    <button id="btn-endgame-ok" class="primary-btn">Retour à l'accueil</button>
+    <button id="btn-endgame-ok" class="primary-btn">Back to home</button>
   </div>
 </div>
 
-<script src="/static/app.js?v=2"></script>
+<script src="/static/app.js?v=5"></script>
 </body>
 </html>

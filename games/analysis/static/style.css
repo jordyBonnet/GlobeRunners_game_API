@@ -158,7 +158,35 @@ details.turn[open] .chev { transform: rotate(90deg); }
 .card-hoverable { cursor: zoom-in; transition: transform .12s ease, box-shadow .12s ease; }
 .card-hoverable:hover { transform: scale(1.06); box-shadow: 0 4px 18px rgba(77,163,255,.35); z-index: 2; position: relative; }
 
-/* dos de carte (identité inconnue) */
+/* ---- DEFENSE card: image (card + frame) engaged at 90° (clockwise) in a
+     landscape box, like in the game UI ---- */
+.card-defend-wrap {
+  position: relative;
+  display: inline-block;
+  width: 85px;   /* = height of the normal card (90°) */
+  height: 64px;  /* = width of the normal card */
+  flex-shrink: 0;
+  border-radius: 8px;
+  outline: 2px solid rgba(79, 209, 197, .9);   /* green-blue outline = defense */
+  outline-offset: 1px;
+}
+.card-defend-wrap img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 85px;
+  transform: translate(-50%, -50%) rotate(90deg);   /* card + frame, 90° right */
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #000;
+}
+.card-defend-wrap img.card-hoverable:hover {
+  transform: translate(-50%, -50%) rotate(90deg) scale(1.06);
+}
+
+/* card back (unknown identity) */
 .card-back {
   width: 64px; height: 85px; border-radius: 6px; flex-shrink: 0;
   background: repeating-linear-gradient(45deg, #233150 0 8px, #1c2740 8px 16px);
@@ -167,9 +195,10 @@ details.turn[open] .chev { transform: rotate(90deg); }
   font-size: 22px; font-weight: 700;
 }
 
-/* rangée des mains de départ */
+/* starting hands row (reconstructed cards, small format) */
 .hands-row { display: flex; gap: 24px; margin-bottom: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .hand-item { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hand-card { width: 40px; height: 54px; border-radius: 4px; }
 .card-info { min-width: 0; }
 .card-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;}
 .card-faction { color: var(--muted); font-size: 11px; }
@@ -177,6 +206,8 @@ details.turn[open] .chev { transform: rotate(90deg); }
 .cond-tag { display:inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;}
 .cond-met { background: rgba(61,220,132,.15); color: var(--good); }
 .cond-notmet { background: rgba(255,93,93,.15); color: var(--bad); }
+.cond-blocked { background: rgba(79,209,197,.18); color: #4fd1c5; font-weight: 700; }
+.cond-defend { background: rgba(79,209,197,.18); color: #4fd1c5; font-weight: 700; }
 
 .delta { font-weight: 700; font-size: 13px; margin-left: auto; white-space: nowrap; }
 .delta.pos { color: var(--good); }
@@ -194,7 +225,7 @@ details.turn[open] .chev { transform: rotate(90deg); }
 
 footer.foot { text-align:center; color: var(--muted); font-size: 12px; padding: 24px 0 32px; }
 
-/* ---- tooltip carte en gros (bas à gauche) ---- */
+/* ---- big card tooltip (bottom left) ---- */
 #cardHover {
   position: fixed;
   left: 18px;

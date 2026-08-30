@@ -1,11 +1,11 @@
-/* GlobeRunners - analyse de parties (frontend) */
+/* GlobeRunners - game analysis (frontend) */
 
 const $ = (sel) => document.querySelector(sel);
 const content = $("#content");
 const gameSelect = $("#gameSelect");
 
 const PLAYER_COLORS = ["var(--p1)", "var(--p2)"];
-const WIN_POS = 24; // position d'arrivée (les gagnants restent affichés à 23)
+const WIN_POS = 24; // finishing position (winners remain displayed at 23)
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -20,13 +20,13 @@ function playerColor(players, name) {
 
 function cardImg(card, sizeClass = "card-img") {
   if (!card || !card.img) return `<img class="${sizeClass}" alt="?" />`;
-  // jamais d'id de carte affiché : uniquement l'image + le nom
+  // never display a card id: image + name only
   return `<img class="${sizeClass} card-hoverable" src="${esc(card.img)}" alt="${esc(card.name)}" data-img="${esc(card.img)}" data-name="${esc(card.name)}" loading="lazy" onerror="this.style.opacity=.25" />`;
 }
 
 function cardBack() {
-  // dos de carte : identité inconnue (carte tirée, ordre du deck aléatoire)
-  return `<div class="card-back card-hoverable" title="Carte tirée (identité inconnue)">?</div>`;
+  // card back: unknown identity (drawn card, random deck order)
+  return `<div class="card-back card-hoverable" title="Drawn card (unknown identity)">?</div>`;
 }
 
 function cardBlock(card) {
@@ -49,21 +49,34 @@ function actionCellHtml(name, act, players) {
   if (!act || (act.error && !act.card)) {
     return `<div class="action-cell empty">—</div>`;
   }
+  const isDefend = act.mode === "defend";
   const met = act.condition_met;
-  const condTag = met
-    ? `<span class="cond-tag cond-met" title="condition remplie">✓ condition</span>`
-    : `<span class="cond-tag cond-notmet" title="condition non remplie">✗ condition</span>`;
+  const defendTag = isDefend
+    ? `<span class="cond-tag cond-defend" title="played in defense mode (card engaged at 90°)">🛡 defense</span>`
+    : "";
+  const condTag = act.blocked
+    ? `<span class="cond-tag cond-blocked" title="blocked by the opponent's defense card(s) on the same stopover">🛡 blocked</span>`
+    : met
+      ? `<span class="cond-tag cond-met" title="condition met">✓ condition</span>`
+      : `<span class="cond-tag cond-notmet" title="condition not met">✗ condition</span>`;
+  const posLine = act.blocked
+    ? `blocked at cell ${act.pos_before ?? "?"} — no effect, no advancing`
+    : `cell ${act.pos_before ?? "?"} → <b>${act.pos_after ?? "?"}</b>`;
+  // defense card: image (card + frame) engaged at 90° in a landscape box
+  const imgHtml = isDefend
+    ? `<span class="card-defend-wrap" title="Card played in defense (90°)">${cardImg(act.card, "card-defend")}</span>`
+    : cardImg(act.card);
   return `
-    <div class="action-cell ${players.indexOf(name) === 0 ? "p1" : "p2"}">
-      ${cardImg(act.card)}
+    <div class="action-cell ${players.indexOf(name) === 0 ? "p1" : "p2"}${isDefend ? " cell-defend" : ""}">
+      ${imgHtml}
       ${cardBlock(act.card)}
       <div style="flex:1;min-width:0">
-        <div class="effect-text">${esc(act.effect_text || "")} ${condTag}</div>
+        <div class="effect-text">${esc(act.effect_text || "")} ${defendTag}${condTag}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:4px">
-          case ${act.pos_before ?? "?"} → <b>${act.pos_after ?? "?"}</b>
+          ${posLine}
         </div>
       </div>
-      ${deltaHtml(act.delta)}
+      ${act.blocked ? "" : deltaHtml(act.delta)}
     </div>`;
 }
 
@@ -77,12 +90,12 @@ function renderTurn(t, players) {
   const c1 = playerColor(players, n1);
   const c2 = playerColor(players, n2);
 
-  // mana put (setup du tour) - liste de cartes (3 au tour 1, 1 ensuite)
+  // mana put (turn setup) - list of cards (3 on turn 1, 1 afterwards)
   let manaHtml = "";
   const mp = t.mana_puts || {};
   if (Object.values(mp).some((c) => Array.isArray(c) && c.length)) {
     manaHtml = `<div class="mana-row">
-      <span style="color:var(--muted)">Mise en mana :</span>
+      <span style="color:var(--muted)">Mana put:</span>
       ${players.map((n) => {
         const cards = mp[n] || [];
         return `<span class="mana-item"><span class="dot" style="background:${playerColor(players, n)}"></span>${esc(n)} : ${
@@ -92,7 +105,7 @@ function renderTurn(t, players) {
     </div>`;
   }
 
-  // main de départ du tour (avant que les cartes soient jouées)
+  // starting hand of the turn (before the cards are played)
   const hs = t.hands_start || {};
   let handsHtml = "";
   if (Object.values(hs).some((h) => h && ((h.cards || []).length || (h.unknown_count || 0)))) {
@@ -101,13 +114,13 @@ function renderTurn(t, players) {
         const h = hs[n] || { cards: [], unknown_count: 0 };
         const backs = Array.from({ length: h.unknown_count || 0 }, () => cardBack()).join("");
         return `<span class="hand-item"><span class="dot" style="background:${playerColor(players, n)}"></span>${esc(n)} : ${
-          (h.cards || []).map((c) => cardImg(c)).join("") + backs
+          (h.cards || []).map((c) => cardImg(c, "card-img hand-card")).join("") + backs
         }</span>`;
       }).join("")}
     </div>`;
   }
 
-  // actions en parallèle (index par index)
+  // parallel actions (index by index)
   const rows = (t.actions || []).map((act) => `
     <div class="action-row">
       ${actionCellHtml(n1, act[n1], players)}
@@ -122,8 +135,8 @@ function renderTurn(t, players) {
     <details class="turn" id="turn-${t.turn}">
       <summary>
         <span class="chev">▶</span>
-        <span class="turn-num">Tour ${t.turn}</span>
-        <span class="dn">${t.day_night === "day" ? "☀️ jour" : "🌙 nuit"} · premier : ${esc(t.order[0])}</span>
+        <span class="turn-num">Turn ${t.turn}</span>
+        <span class="dn">${t.day_night === "day" ? "☀️ day" : "🌙 night"} · first: ${esc(t.order[0])}</span>
         <span class="pos-summary">
           <span class="p"><span class="dot" style="background:${c1}"></span>${esc(n1)}: ${pb[n1] ?? "?"} → <b>${pa[n1] ?? "?"}</b></span>
           <span class="p"><span class="dot" style="background:${c2}"></span>${esc(n2)}: ${pb[n2] ?? "?"} → <b>${pa[n2] ?? "?"}</b></span>
@@ -132,10 +145,10 @@ function renderTurn(t, players) {
       <div class="turn-body">
         ${manaHtml}
         ${handsHtml}
-        ${rows || `<div style="color:var(--muted);font-size:13px">Aucune carte jouée ce tour.</div>`}
+        ${rows || `<div style="color:var(--muted);font-size:13px">No card played this turn.</div>`}
         <div class="final-pos">
-          <span class="p"><span class="dot" style="background:${c1}"></span>${esc(n1)} : case <b>${pa[n1] ?? "?"}</b> ${posTrack(pa[n1] ?? 0, c1)}</span>
-          <span class="p"><span class="dot" style="background:${c2}"></span>${esc(n2)} : case <b>${pa[n2] ?? "?"}</b> ${posTrack(pa[n2] ?? 0, c2)}</span>
+          <span class="p"><span class="dot" style="background:${c1}"></span>${esc(n1)}: cell <b>${pa[n1] ?? "?"}</b> ${posTrack(pa[n1] ?? 0, c1)}</span>
+          <span class="p"><span class="dot" style="background:${c2}"></span>${esc(n2)}: cell <b>${pa[n2] ?? "?"}</b> ${posTrack(pa[n2] ?? 0, c2)}</span>
         </div>
       </div>
     </details>`;
@@ -144,27 +157,27 @@ function renderTurn(t, players) {
 function renderGame(g) {
   const players = g.players || [];
   const winnerBadge = g.winner
-    ? `<span class="badge winner">🏆 Gagnant : ${esc(g.winner)}</span>`
-    : `<span class="badge">Égalité</span>`;
+    ? `<span class="badge winner">🏆 Winner: ${esc(g.winner)}</span>`
+    : `<span class="badge">Tie</span>`;
   const verifBadge = g.verified
-    ? `<span class="badge verified" title="le replay reproduit exactement l'état final stocké">✓ replay vérifié</span>`
-    : `<span class="badge unverified" title="léger écart avec l'état final stocké (version du moteur)">⚠ replay approximatif</span>`;
+    ? `<span class="badge verified" title="the replay reproduces the stored final state exactly">✓ replay verified</span>`
+    : `<span class="badge unverified" title="slight drift from the stored final state (engine version)">⚠ approximate replay</span>`;
 
   const ended = g.ended || {};
   let endText = "";
-  if (ended.type === "finish") endText = `Terminée au tour ${ended.turn} — arrivée en ligne.`;
-  else if (ended.type === "deadlock") endText = `Terminée au tour ${ended.turn} — blocage (plus de cartes jouables).`;
+  if (ended.type === "finish") endText = `Ended at turn ${ended.turn} — reached the finish line.`;
+  else if (ended.type === "deadlock") endText = `Ended at turn ${ended.turn} — deadlock (no playable card left).`;
 
   const warnings = (g.warnings || []).length
-    ? `<div class="warnings">⚠ Notes du replay :<ul>${g.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>`
+    ? `<div class="warnings">⚠ Replay notes:<ul>${g.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>`
     : "";
 
   return `
     <section class="game-head">
-      <h1>Partie ${esc(g.date_label)} ${winnerBadge} ${verifBadge}</h1>
+      <h1>Game ${esc(g.date_label)} ${winnerBadge} ${verifBadge}</h1>
       <div class="meta-row">
-        <span>Joueurs : <b>${players.map(esc).join(" vs ")}</b></span>
-        <span>Température planétaire : <b>${g.temperature ?? "?"}</b></span>
+        <span>Players: <b>${players.map(esc).join(" vs ")}</b></span>
+        <span>Planet temperature: <b>${g.temperature ?? "?"}</b></span>
         ${endText ? `<span>${esc(endText)}</span>` : ""}
       </div>
       ${warnings}
@@ -176,7 +189,7 @@ function renderGame(g) {
 
     ${(g.turns || []).map((t) => renderTurn(t, players)).join("")}
 
-    <footer class="foot">Positions après chaque phase de résolution de la trip chain · arrivée à la case ${WIN_POS}</footer>`;
+    <footer class="foot">Positions after each trip-chain resolution phase · finish at cell ${WIN_POS}</footer>`;
 }
 
 async function loadGames() {
@@ -192,24 +205,24 @@ async function loadGames() {
       gameSelect.appendChild(opt);
     }
     if (!games.length) {
-      content.innerHTML = `<p class="error">Aucune partie trouvée dans games.db</p>`;
+      content.innerHTML = `<p class="error">No game found in games.db</p>`;
       return;
     }
     await selectGame(games[0].id);
   } catch (e) {
-    content.innerHTML = `<p class="error">Erreur de chargement : ${esc(e.message)}</p>`;
+    content.innerHTML = `<p class="error">Loading error: ${esc(e.message)}</p>`;
   }
 }
 
 async function selectGame(id) {
-  content.innerHTML = `<p class="loading">Analyse de la partie…</p>`;
+  content.innerHTML = `<p class="loading">Analyzing the game…</p>`;
   try {
     const res = await fetch(`/api/game/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(res.status);
     const g = await res.json();
     content.innerHTML = renderGame(g);
   } catch (e) {
-    content.innerHTML = `<p class="error">Erreur : ${esc(e.message)}</p>`;
+    content.innerHTML = `<p class="error">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -222,7 +235,7 @@ $("#collapseAll").addEventListener("click", () => {
   document.querySelectorAll("details.turn").forEach((d) => (d.open = false));
 });
 
-// ---- tooltip carte en gros, bas à gauche de l'écran ----
+// ---- big card tooltip, bottom left of the screen ----
 const hoverBox = document.createElement("div");
 hoverBox.id = "cardHover";
 document.body.appendChild(hoverBox);
@@ -238,7 +251,7 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => {
   const el = e.target.closest(".card-hoverable");
   if (!el) return;
-  // ne masquer que si on sort vers un élément non carte
+  // only hide when leaving toward a non-card element
   const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest(".card-hoverable") : null;
   if (to === el) return;
   hoverTimer = setTimeout(() => hoverBox.classList.remove("show"), 120);
