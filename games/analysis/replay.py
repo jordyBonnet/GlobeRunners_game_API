@@ -305,11 +305,16 @@ def _pick_ramp(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
             chosen.append(c)
             poolset.discard(c)
 
+    # cards that must pass through the HAND for an upcoming play / mana put -
+    # the engine played/put them from the hand, so a ramp could NOT have taken
+    # them (a ramped card sits in the mana zone and can never be played)
+    needed = {c for (ti, c) in ctx["needs"] if ti >= cur_turn}
+
     # 1) cards that must end in the mana zone (ramp is the only way in, besides puts)
     for c in sorted(ctx["final_mana"]):
         if len(chosen) >= n:
             break
-        if c in in_mana or c in ctx["initial_mana"]:
+        if c in in_mana or c in ctx["initial_mana"] or c in needed:
             continue
         take(c)
     # 2) cards that must end in the discard pile (ramped now, taxed later)
@@ -317,7 +322,7 @@ def _pick_ramp(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
         for c in sorted(ctx["final_discard"]):
             if len(chosen) >= n:
                 break
-            if c in in_mana or c in ctx["initial_mana"] or ctx["drawn"][c]:
+            if c in in_mana or c in ctx["initial_mana"] or ctx["drawn"][c] or c in needed:
                 continue
             take(c)
     # 3) filler: never needed cards, never protected-zone cards
@@ -495,21 +500,33 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
     # takes the top card and puts it at the bottom (pure rotation), so the cycle
     # order is identical and only the starting card must be rewound:
     #   initial = final rotated RIGHT by k, where k = number of triggers in the game.
-    # A trigger happens for every RESOLVED (move-mode, non-blocked) action whose
-    # card has condition 'cataclysm'. (A cataclysm card that was BLOCKED mid-game
-    # is a rare edge case: it would over-rewind by one position.)
+    # A trigger fires ONLY when a 'cataclysm'-condition card actually RESOLVES
+    # (move mode, not blocked, chain not cut short by a win). A BLOCKED cataclysm
+    # card — or one flushed un-resolved by a mid-chain win — does NOT trigger, so
+    # counting all such cards would over-rewind the pile and shift every strike.
+    # Count k from the stored game log instead: the engine writes exactly one
+    # '⚡ cataclysm — <biome> strikes' note per actual trigger.
     final_pile = list(state_dict.get("cataclysm_pile") or [])
     if (game.engine_version or 0) >= 3 and final_pile:
         k = 0
-        for seg in segs.values():
-            for t in seg.get("turns") or []:
-                for m in t.get("moves") or []:
-                    if (m.get("mode") or "") != "move":
-                        continue
-                    for cid in m.get("cards") or []:
-                        row = _card_row(cid)
-                        if row and row.get("condition") == "cataclysm":
-                            k += 1
+        for t in (state_dict.get("log") or []):
+            for s in t.get("stopovers") or []:
+                for e in s.get("entries") or []:
+                    if any(str(n).startswith("⚡ cataclysm —") for n in (e.get("notes") or [])):
+                        k += 1
+        if k == 0 and not (state_dict.get("log") or []):
+            # no stored log (game predates the log feature): best effort — count
+            # the cataclysm move cards (a blocked one would over-rewind by one,
+            # a rare edge case for those old games)
+            for seg in segs.values():
+                for t in seg.get("turns") or []:
+                    for m in t.get("moves") or []:
+                        if (m.get("mode") or "") != "move":
+                            continue
+                        for cid in m.get("cards") or []:
+                            row = _card_row(cid)
+                            if row and row.get("condition") == "cataclysm":
+                                k += 1
         k %= len(final_pile)
         if k:
             final_pile = final_pile[-k:] + final_pile[:-k]   # rewind the rotations
@@ -552,8 +569,9 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
                 _pick_tax(target, n, ctx)
 
     grappling_activated = False
+    effect_activated = False
     with contextlib.redirect_stdout(buf):
-        _, grappling_activated = ge.process_card(msg, p, game)
+        _, grappling_activated, effect_activated = ge.process_card(msg, p, game)
 
     out = buf.getvalue()
     return {
@@ -578,6 +596,17 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
         # grappling_hook: this card will copy its facing card's advancement (applied
         # in _replay_trip_chain, mirroring ge.process_trip_chain)
         "grappling_activated": bool(grappling_activated),
+        # copy_effect (rule of engine_version 7): this card will copy its facing
+        # card's effect, applied with this player as the actor (applied in
+        # _replay_trip_chain, mirroring ge.process_trip_chain); the copy only happens
+        # when the FACING card's effect fired too (no recursion: a facing copy_effect
+        # has nothing to copy - enforced by ge.apply_copy_effect)
+        "copy_activated": bool(row["effect"] == "copy_effect" and effect_activated
+                               and (game.engine_version or 0) >= 7),
+        # effect_activated: this card's effect actually fired (condition met, not
+        # blocked, not effect_canceled) - the gate for being COPYED by a facing
+        # copy_effect card
+        "effect_activated": bool(effect_activated),
     }
 
 
@@ -593,11 +622,34 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
     # resolves exactly as in a real game
     game.players[first_name].action_chain = list(chain_f)
     game.players[second_name].action_chain = list(chain_s)
+
+    # pet_trap (rule of engine_version 8): the INSTANT effect fired at PLAY TIME -
+    # every drop token was placed on its owner's cell BEFORE the trip chain
+    # resolved (while both players were still at their pre-chain positions), so
+    # the mirror places them all here, before any card has moved.
+    if (game.engine_version or 0) >= 8:
+        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+            for m in chain:
+                if (m.get('mode') or '') != 'move':
+                    continue
+                for cid in (m.get('cards') or [])[:1]:
+                    row = _card_row(cid)
+                    if row and row.get('effect') == 'pet_trap':
+                        cell = game.players[nm].current_position or 0
+                        game.drop_tokens[cell] = game.drop_tokens.get(cell, 0) + 1
+
     try:
         actions: list[dict] = []
         i = 0
         over = False
         while not over:
+            # the engine checks the game state BEFORE processing every action
+            # (ge.process_trip_chain returns immediately on a mid-chain win) - a
+            # win during the previous index's grappling/copy must stop the chain
+            # here, not let the next index resolve
+            if game.state == "game over":
+                over = True
+                break
             row = {}
             for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
                 if i < len(chain):
@@ -615,7 +667,11 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
             # advancement (pos_after - pos_before), so the two copies don't recurse.
             f = row.get(first_name)
             s = row.get(second_name)
-            if f and f.get("grappling_activated"):
+            # the engine returns IMMEDIATELY on a mid-chain win (before any
+            # grappling copy) - so a copy must not fire when the game ended on the
+            # facing card (mirrors the game-over checks around apply_grappling_copy
+            # in ge.process_trip_chain)
+            if game.state != "game over" and f and f.get("grappling_activated"):
                 s_adv = (s.get("pos_after", 0) - s.get("pos_before", 0)) if s else 0
                 ge.apply_grappling_copy(game, game.players[first_name],
                                        ge.grappling_copy_amount(game, s_adv))
@@ -624,7 +680,54 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                 ge.apply_grappling_copy(game, game.players[second_name],
                                        ge.grappling_copy_amount(game, f_adv))
 
+            # copy_effect copies (mirror of ge.process_trip_chain): a validated
+            # copy_effect card copies the facing card's effect, applied with the
+            # copier as the actor. Only when the facing card's effect fired (known
+            # here: both actions of this index are resolved) and it is not a
+            # copy_effect itself (no recursion - ge.apply_copy_effect enforces it).
+            for copier_nm, facing_nm in ((first_name, second_name), (second_name, first_name)):
+                if game.state == "game over":
+                    break
+                c_info, o_info = row.get(copier_nm), row.get(facing_nm)
+                if not (c_info and o_info and c_info.get("copy_activated") and o_info.get("effect_activated")):
+                    continue
+                # pin the cards the copy will move (the facing card's zone-moving
+                # effect, applied with the copier as the actor) before the engine pops them
+                ev = _effect_events(o_info.get("effect"), o_info.get("effect_number"))
+                if ev:
+                    kind, n, own = ev
+                    target = game.players[copier_nm] if own else _other_player(game, game.players[copier_nm])
+                    if target is not None:
+                        ctx = ctxs[target.name]
+                        if kind == "draw":
+                            _pick_draw(target, n, ctx, cur_turn)
+                        elif kind == "ramp":
+                            _pick_ramp(target, n, ctx, cur_turn)
+                        elif kind == "discard":
+                            _pick_discard(target, n, ctx)
+                        elif kind == "tax":
+                            _pick_tax(target, n, ctx)
+                ge.apply_copy_effect(game, game.players[copier_nm], chains[copier_nm][i],
+                                     game.players[facing_nm], chains[facing_nm][i])
+
             if over:
+                # mid-chain win: mirror the engine's flush (ge.process_trip_chain
+                # pushes the UNPROCESSED action cards to their owners' discard so
+                # the final state conserves every card - the replay would lose
+                # them here, since played cards left the hand at chain build)
+                resolved = {
+                    first_name: sum(1 for a in actions if a.get(first_name) is not None),
+                    second_name: sum(1 for a in actions if a.get(second_name) is not None),
+                }
+                for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+                    p = game.players[nm]
+                    for a in chain[resolved[nm]:]:
+                        cards = (a or {}).get('cards') or []
+                        if not cards:
+                            continue
+                        if p.discard is None:
+                            p.discard = []
+                        p.discard.extend(cards)
                 return actions
             if i >= len(chain_f) and i >= len(chain_s):
                 return actions
@@ -642,9 +745,11 @@ def analyze_game(state_dict: dict) -> dict:
     final_turn = int(state_dict.get("turn") or 1)
     warnings: list[str] = []
 
-    # Old engine quirk: some played cards are missing from ALL final zones
-    # (storage bug). In the current engine a played card always ends up in the
-    # discard pile, so we reconstruct them there to complete the identity pool.
+    # One-off historical artifact: a few OLD games (created before the mid-chain-win
+    # flush fix in ge.process_trip_chain) lost their unprocessed play cards - the
+    # cards are missing from ALL final zones. The current engine conserves every
+    # card (flushed to discard on a mid-chain win), so for those old games we
+    # reconstruct the missing cards in the discard to complete the identity pool.
     state_dict = dict(state_dict)
     fixed_players: dict[str, dict] = {}
     for n, p in state_dict["players"].items():
@@ -653,12 +758,10 @@ def analyze_game(state_dict: dict) -> dict:
             final_set.update(p.get(z) or [])
         hist = {c for m in (p.get("messages_history") or []) for c in (m.get("cards") or [])}
         missing = sorted(hist - final_set)
+        p = dict(p)
         if missing:
-            p = dict(p)
             p["discard"] = list(p.get("discard") or []) + missing
-            fixed_players[n] = p
-        else:
-            fixed_players[n] = p
+        fixed_players[n] = p
     state_dict["players"] = fixed_players
 
     segs = {n: segment_history(state_dict["players"][n].get("messages_history") or []) for n in names}
@@ -765,6 +868,7 @@ def analyze_game(state_dict: dict) -> dict:
         # prepare next turn (engine order: flip order, reset spend/chains, flip day/night)
         turn_order = list(reversed(turn_order))
         day_night = "night" if day_night == "day" else "day"
+        game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
         for n in names:
             game.players[n].mana_spend = 0
             game.players[n].action_chain = []
@@ -801,6 +905,13 @@ def analyze_game(state_dict: dict) -> dict:
             if sorted(getattr(rp, zone) or []) != sorted(sp.get(zone) or []):
                 warnings.append(f"{n}: identities of the {zone} zone not exactly reconstructed")
 
+    # pet_trap (engine_version 8): the unconsumed drop tokens left on the board
+    # must match the stored ones (tokens consumed by triggers are gone from both)
+    stored_drops = {int(k): int(v) for k, v in (state_dict.get('drop_tokens') or {}).items()}
+    replayed_drops = {int(k): int(v) for k, v in (game.drop_tokens or {}).items()}
+    if stored_drops != replayed_drops:
+        warnings.append(f"drop tokens diverge (replayed {replayed_drops}, stored {stored_drops})")
+
     verified = positions_ok and (state_dict.get("state") != "game over" or ended is not None)
     if not positions_ok:
         warnings.append(
@@ -829,6 +940,14 @@ if __name__ == "__main__":
         if len(st.get("players") or {}) < 2:
             # abandoned game (2nd player never connected) -> nothing to replay
             print(f"SKIP {gid}  (1 player, never started)")
+            continue
+        # in-progress game with a pending trip chain: the stored state holds a card
+        # that was PLAYED but not yet RESOLVED (the opponent never passed), while a
+        # full-history replay always resolves everything -> the stored state can
+        # never verify. Skip it (analyze_game still works for the analysis UI).
+        _state = st.get("state") or ""
+        if _state.startswith("turn") and _state.endswith("to play"):
+            print(f"SKIP {gid}  (in progress - unresolved trip chain)")
             continue
         n_total += 1
         res = analyze_game(st)

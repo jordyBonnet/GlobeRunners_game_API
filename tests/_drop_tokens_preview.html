@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>drop tokens preview</title>
+<link rel="stylesheet" href="/static/style.css?v=9">
+<style>
+  body { background:#0d1117; margin:0; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  #board-stage { position: relative; width: 430px; aspect-ratio: 1; }
+</style>
+</head>
+<body>
+<div id="board-stage">
+  <img src="/assets/earth_background_playmat.png" alt="" id="board-bg">
+  <div id="markers-layer"></div>
+</div>
+<script>
+const N_CELLS = 24;
+const POS_RADIUS = 49;
+function polar(angleDeg, radiusPct) {
+  const a = (angleDeg * Math.PI) / 180;
+  return { x: 50 + radiusPct * Math.cos(a), y: 50 + radiusPct * Math.sin(a) };
+}
+const POS24 = [];
+for (let i = 0; i < N_CELLS; i++) POS24[i] = polar(-90 + (i + 0.5) * (360 / N_CELLS), POS_RADIUS);
+
+// ---- player markers (as in renderBoard) ----
+const st = {
+  players: {
+    me:   { current_position: 10 },
+    oppo: { current_position: 11 },
+  },
+  // 3 traps stacked on cell 10, 1 on cell 15, 8 (capped fan + badge) on cell 4
+  drop_tokens: { "10": 3, "15": 1, "4": 8 },
+};
+const layer = document.getElementById("markers-layer");
+for (const [name, p] of Object.entries(st.players)) {
+  const pos = Math.min(p.current_position || 0, N_CELLS - 1);
+  const el = document.createElement("div");
+  el.className = "marker " + (name === "me" ? "me" : "oppo");
+  el.textContent = name.slice(0, 1).toUpperCase();
+  const pt = POS24[pos];
+  el.style.left = pt.x + "%";
+  el.style.top = pt.y + "%";
+  layer.appendChild(el);
+}
+
+// ---- EXACT copy of the new fan rendering from app.js (renderBoard) ----
+const drops = st.drop_tokens || {};
+const MAX_FAN = 6;                 // cap on visible tokens per cell (badge shows the true count)
+const FAN_STEP_PX = 5;             // per-token up-right offset
+for (const [cell, count] of Object.entries(drops)) {
+  const pos = Math.min(parseInt(cell, 10) || 0, N_CELLS - 1);
+  const pt = POS24[pos];
+  if (!pt) continue;
+  const n = Math.min(count, MAX_FAN);
+  for (let k = 0; k < n; k++) {
+    const el = document.createElement("div");
+    el.className = "drop-token";
+    el.title = `Trap ${k + 1}/${count} on cell ${pos} — the next token arriving here is knocked back by −${count} (then the traps are consumed)`;
+    el.innerHTML = `<img src="/assets/effect_pettrap.png" alt="trap" onerror="this.onerror=null;this.src='/placeholder.svg'">`
+      + (k === n - 1 && count > 1 ? `<b>${count}</b>` : "");
+    el.style.left = `calc(${pt.x}% + ${k * FAN_STEP_PX}px)`;
+    el.style.top = `calc(${pt.y}% - ${k * FAN_STEP_PX}px)`;
+    el.style.zIndex = 5 + k;       // upper-right tokens on top
+    layer.appendChild(el);
+  }
+}
+document.title = "rendered OK";
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@ class PlayerAI:
 		self.oppo_hand = None       # number of cards in opponent's hand
 		self.temperature = None     # planet temperature (set via update_player_state)
 		self.day_night = None       # current day/night phase (set via update_player_state)
+		self.drops_on_board = None  # any drop/trap on the earth (set via update_player_state)
 		CARDS_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/cardpool.parquet')
 		self.CARDS_DB = pl.read_parquet(CARDS_DB_PATH)
 
@@ -71,6 +72,12 @@ class PlayerAI:
 			return self.temperature < threshold if temp_match.group(1) == 'inf' else self.temperature > threshold
 		if condition in ('day', 'night'):
 			return self.day_night == condition
+		if condition == 'drop_on_board':
+			# any drop/trap on the earth (rule of engine_version 9), computed in
+			# update_player_state from the public board state (True for old games
+			# < 9: canonical default = met). Unknown (no board info) -> not met,
+			# like the other board-dependent conditions (biome).
+			return bool(self.drops_on_board)
 		dist_match = re.match(r'^dist_(ahead|behind)_sup_(\d+)$', condition)
 		if dist_match:
 			if self.oppo_position is None:
@@ -136,4 +143,12 @@ class PlayerAI:
 		if game is not None:
 			self.temperature = game.temperature
 			self.day_night = game.day_night
+			# drop_on_board (engine_version 9): any drop token / trap on the earth
+			if (game.engine_version or 0) < 9:
+				self.drops_on_board = True   # old rules: unimplemented -> canonical default (met)
+			else:
+				self.drops_on_board = (
+					any(n > 0 for n in (game.drop_tokens or {}).values())
+					or any((c and ('trap' in c or 'drop' in c)) for c in (game.earth or []))
+				)
 		

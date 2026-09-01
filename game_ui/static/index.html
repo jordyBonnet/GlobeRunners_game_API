@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
-<link rel="stylesheet" href="/static/style.css?v=5">
+<link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 
@@ -176,6 +176,12 @@
         <span class="row-label">stopover&nbsp;1</span>
       </div>
     </div>
+
+    <!-- game log: collapsible recap of every resolved turn (turn -> stopover -> both players' cards) -->
+    <section id="log-panel" class="hidden" title="Game log — collapsible recap of every resolved turn">
+      <h3 class="log-title">📜 Game log</h3>
+      <div id="log-body"></div>
+    </section>
   </main>
 
   <!-- player row: dwelling / pending / deck / discard -->
@@ -251,6 +257,6 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>

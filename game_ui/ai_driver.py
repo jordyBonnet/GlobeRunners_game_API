@@ -128,13 +128,15 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
 
         # 3.b MAIN: play a card (move) — the robot advances every turn (original behavior).
         msg = ai.play_card()
-        # ordering rule (same as the frontend): the k-th card of the turn goes to
-        # stopover k -> columns 4, 3, 2, 1, 0 (stopover 1 = right-most column).
-        # Only 'move' actions count toward the order (a defend card targets the opponent's cell).
+        # ordering rule (same as the frontend's nextSlotCol): the k-th card of the
+        # turn — move OR defend — goes to stopover k -> columns 4, 3, 2, 1, 0
+        # (stopover 1 = right-most column). BOTH modes consume a slot, so no two
+        # cards ever land on the same stopover, and the robot's k-th defend sits
+        # on the same stopover as the opponent's k-th card (which it blocks).
         if msg.get("mode") == "move" and msg.get("cards"):
             played = sum(
                 1 for a in (me.action_chain or [])
-                if a and a.get("mode") == "move" and a.get("cards")
+                if a and a.get("mode") in ("move", "defend") and a.get("cards")
             )
             msg["to"] = f"stopover_{4 - min(played, 4)}"
         return msg

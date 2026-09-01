@@ -169,7 +169,10 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .mana-drop .drop-svg { width: 100%; height: 100%; filter: drop-shadow(0 6px 14px rgba(58,29,143,.6)); }
 .mana-drop .mana-cards {
   position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
-  display: flex; gap: 3px; pointer-events: none;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; pointer-events: none;
+  /* max 4 card backs per line (4 cards + 3 gaps) — beyond that they wrap upward,
+     so the zone doesn't sprawl across the whole banner */
+  width: calc(4 * clamp(26px, 3vw, 38px) + 9px);
 }
 .mana-drop .mana-cards .card { width: clamp(26px, 3vw, 38px); aspect-ratio: 180 / 260; border-radius: 4px; transition: transform .25s ease; }
 .mana-drop .mana-cards .card.back::after { border-radius: 4px; }
@@ -214,9 +217,14 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 
 /* ===================== board: Earth (left) + 2 rows of stopovers (right) ===================== */
 #board-wrap {
+  position: relative;   /* #log-panel is pinned to the right edge (absolute) */
   display: flex; align-items: center; justify-content: center; gap: 24px; margin: 0 14px;
   padding: 14px 18px; border-radius: 16px;
   background: radial-gradient(700px 320px at 30% 50%, rgba(30,45,86,.5), rgba(13,18,35,.35));
+  /* fixed row height = the taller of (board square, stopovers block) + this vertical padding:
+     long/expanded game logs never stretch the row — the log panel gets a definite height
+     (align-self: stretch) and #log-body scrolls inside it instead. */
+  max-height: max(372px, calc(clamp(300px, 33vw, 430px) + 28px));
 }
 #board-stage { position: relative; flex: 0 0 auto; width: clamp(300px, 33vw, 430px); aspect-ratio: 1; }
 #board-bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .97; }
@@ -275,6 +283,20 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
 .marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
 
+/* pet_trap drop token on the Earth (public board marker, cell-centered) */
+.drop-token {
+  position: absolute; transform: translate(-50%, -50%); z-index: 5;
+  width: clamp(24px, 2.8vw, 38px); aspect-ratio: 1;
+  pointer-events: auto; cursor: help;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.65));
+}
+.drop-token img { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.drop-token b {
+  position: absolute; right: -7px; bottom: -7px;
+  background: #7a1f1f; color: #ffd9a0; border: 1.5px solid #ffd9a0;
+  border-radius: 9px; font-size: 10px; line-height: 1; padding: 2px 4px; font-weight: 700;
+}
+
 /* 2 rows of 5 stopovers: opponent row (top) + player row (bottom), numbered 5..1 with “stopover 1” on the right */
 #stopovers {
   position: relative; flex: 0 0 auto;
@@ -327,6 +349,54 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 /* valid cell (click fallback: selected card) */
 .slot.slot-valid { cursor: pointer; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(79,209,197,.75); animation: stopoverPulse 1.4s ease-in-out infinite; z-index: 7; }
 @keyframes stopoverPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+
+/* ===================== game log ===================== */
+/* pinned to the RIGHT edge (absolute, out of the flex flow) so the board + trip-chain
+   stay truly centered in the row.
+   top/bottom 14px = #board-wrap's vertical padding -> panel height = the board's height;
+   it never grows when turns are expanded — #log-body scrolls inside.
+   The WIDTH is fitted by JS (fitLogWidth) to the free space left of the panel, so the
+   centered board + trip-chain are never overlapped, whatever the window width. */
+#log-panel {
+  position: absolute; right: 0; top: 14px; bottom: 14px;
+  width: clamp(240px, 23vw, 340px);
+  display: flex; flex-direction: column; min-height: 0;
+  border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
+  background: linear-gradient(90deg, rgba(40,54,92,.35), rgba(24,33,60,.55));
+  overflow: hidden;
+}
+.log-title { margin: 0; padding: 12px 14px 6px; font-size: .95rem; }
+#log-body { flex: 1; overflow-y: auto; padding: 2px 10px 12px; min-height: 0; }
+#log-body details { margin: 2px 0; }
+#log-body summary { cursor: pointer; user-select: none; padding: 4px 6px; border-radius: 8px; font-size: .82rem; }
+#log-body summary:hover { background: rgba(255,255,255,.07); }
+.log-turn > summary { font-weight: 700; color: var(--accent-2); }
+.log-sv > summary { color: var(--muted); font-size: .78rem; }
+.log-entry { padding: 5px 4px 5px 16px; border-bottom: 1px dashed rgba(255,255,255,.09); }
+.log-sv > .log-entry:last-child { border-bottom: none; }
+.log-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; line-height: 1.9; }
+.log-ord { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.log-name { font-weight: 600; font-size: .8rem; }
+.log-pos { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.log-pos.final { color: var(--text); font-weight: 600; }
+.log-card {
+  width: 22px; aspect-ratio: 180/260; border-radius: 3px; overflow: hidden;
+  cursor: zoom-in; flex: 0 0 auto; box-shadow: 0 1px 4px rgba(0,0,0,.6); transition: transform .12s;
+}
+.log-card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.log-card:hover { outline: 2px solid var(--accent-2); transform: scale(1.18); z-index: 3; }
+.log-tag {
+  display: inline-block; padding: 0 7px; border-radius: 999px; font-size: .66rem; font-weight: 600;
+  line-height: 1.6; white-space: nowrap;
+}
+.log-tag.met { color: var(--ok); background: rgba(104,211,145,.13); border: 1px solid rgba(104,211,145,.55); }
+.log-tag.unmet { color: var(--danger); background: rgba(252,129,129,.12); border: 1px solid rgba(252,129,129,.5); }
+.log-tag.effect { color: var(--accent); background: rgba(79,209,197,.11); border: 1px solid rgba(79,209,197,.45); }
+/* effect that never fired (the card was blocked / its effect canceled) */
+.log-tag.effect.dim { opacity: .55; text-decoration: line-through; }
+.log-tag.neg { color: var(--danger); background: rgba(252,129,129,.14); border: 1px solid rgba(252,129,129,.55); }
+.log-tag.shield { color: #b7c5ea; background: rgba(139,154,199,.14); border: 1px solid rgba(139,154,199,.45); }
+.log-note { font-size: .68rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
 
 /* defense button (between "play" and "pass") */
 .defend-btn {

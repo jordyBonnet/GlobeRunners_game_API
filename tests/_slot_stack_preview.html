@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>slot stack preview</title>
+<style>
+  body { background: #10141c; padding: 40px; font-family: sans-serif; }
+  .board { display: flex; gap: 6px; align-items: center; }
+  .slot {
+    position: relative;
+    width: 98px; aspect-ratio: 180 / 260; border-radius: 10px;
+    border: 2px solid rgba(255,255,255,.38); background: rgba(255,255,255,.045);
+    box-shadow: 0 4px 12px rgba(0,0,0,.45);
+  }
+  .slot .slot-num { position: absolute; right: 7px; bottom: 5px; font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.7); }
+  .slot .played { position: absolute; inset: 4% 5%; width: 90%; aspect-ratio: 180 / 260; border-radius: 6px; overflow: hidden; z-index: 2; box-shadow: 0 3px 9px rgba(0,0,0,.65); }
+  .slot .played.defend { inset: auto; left: 50%; top: 50%; width: 132%; aspect-ratio: 260 / 180; transform: translate(-50%, -50%); outline: 2px solid rgba(79,209,197,.9); }
+  .card-move  { background: linear-gradient(160deg, #6d4c2f, #3a2a1a); }
+  .card-defend { background: linear-gradient(160deg, #2f5d6d, #1a3a44); }
+  .lbl { color:#cfd8e3; font-size: 13px; margin: 0 0 8px 2px; }
+</style></head>
+<body>
+  <div>
+    <p class="lbl">BEFORE (no offset — the two cards fully overlap):</p>
+    <div class="board">
+      <div class="slot"><span class="slot-num">3</span>
+        <div class="played card-defend defend"></div>
+        <div class="played card-move"></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:30px">
+    <p class="lbl">AFTER (2nd card nudged up by 8px — both visible):</p>
+    <div class="board">
+      <div class="slot"><span class="slot-num">3</span>
+        <div class="played card-defend defend"></div>
+        <div class="played card-move" style="margin-top:-8px"></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:30px">
+    <p class="lbl">AFTER (3 cards in one slot — 0px / -8px / -16px):</p>
+    <div class="board">
+      <div class="slot"><span class="slot-num">3</span>
+        <div class="played card-defend defend"></div>
+        <div class="played card-move" style="margin-top:-8px"></div>
+        <div class="played card-move" style="margin-top:-16px"></div>
+      </div>
+    </div>
+  </div>
+</body></html>

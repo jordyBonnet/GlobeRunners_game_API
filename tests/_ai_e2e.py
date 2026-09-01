@@ -113,14 +113,16 @@ async def main():
 
     # the robot must play its cards in order on the stopovers: each turn
     # restarts at stopover 1 (column 4) then 3, 2, 1, 0 (action_chain is reset
-    # at the end of each turn)
-    moves = [m["to"] for m in rob["messages_history"] if m.get("mode") == "move"]
-    assert moves, "robot never played a card on a stopover"
-    cs = [int(m.rsplit("_", 1)[1]) for m in moves]
-    assert cs[0] == 4, f"first stopover of the first turn must be 4: {moves}"
+    # at the end of each turn). Both 'move' AND 'defend' plays consume a slot in
+    # that order (same rule as the frontend), so the sequence must be strictly
+    # decreasing within a turn and no slot may repeat.
+    plays = [m["to"] for m in rob["messages_history"] if m.get("mode") in ("move", "defend") and m.get("cards")]
+    assert plays, "robot never played a card on a stopover"
+    cs = [int(m.rsplit("_", 1)[1]) for m in plays]
+    assert cs[0] == 4, f"first stopover of the first turn must be 4: {plays}"
     for prev, c in zip(cs, cs[1:]):
-        assert c == 4 or c == prev - 1, f"robot stopover order wrong: {moves} (at {prev} -> {c})"
-    print(f"robot played {len(rob['messages_history'])} actions ({len(moves)} stopovers in order) — E2E OK")
+        assert c == 4 or c == prev - 1, f"robot stopover order wrong: {plays} (at {prev} -> {c})"
+    print(f"robot played {len(rob['messages_history'])} actions ({len(plays)} stopovers in order, defends included) — E2E OK")
 
 
 if __name__ == "__main__":

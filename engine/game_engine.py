@@ -138,9 +138,14 @@ def p2_connect_to_game(player: PlayerState, game_id):
 
     # 7. Mark the rules version this game is played with (the replay/analysis
     #    tooling uses it to pin older games to the rules they were actually played under)
+    #    9 = + drop_on_board condition (met if any drop or trap is on the earth)
+    #    8 = + pet_trap effect (INSTANT play-time effect: drop token on the player's cell,
+    #        triggered when any token arrives on the cell, knockback -1 per token)
+    #    7 = + copy_effect effect (copy the facing card's effect, applied with the copier as actor)
+    #    6 = + effect_canceled effect (cancel the facing card's effect)
     #    5 = + grappling_hook effect (copy the facing card's total advancement)
     #    4 = + avalanche effect (knockback of all tokens on the MO biome)
-    current_game.engine_version = 6
+    current_game.engine_version = 9
 
     # Update the game state in the database
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (current_game.to_json(), game_id))
@@ -347,8 +352,24 @@ def handle_websocket_message(game_id: str, player: PlayerState):   # main part o
     conn.close()
     return current_game_json(player.name, current_game)
 
+# ---------------------------------------------------------------------------
+# Playable pool (deck entry points): cards with these conditions are NOT allowed
+# in NEW games (the deck must be built from, and validated against, this pool).
+# `face_point_left` / `face_point_right` are not implemented yet — the moment they
+# are (or the rule is dropped), remove them from the tuple (or set it to ()).
+#
+# NOTE: this filters get_cardpool() only — the raw pool (CARDS_DB) stays COMPLETE,
+# so the engine can still resolve those cards in OLD games, and the replay / AI /
+# tests keep seeing them.
+# ---------------------------------------------------------------------------
+EXCLUDED_CONDITIONS = ('face_point_left', 'face_point_right')
+PLAYABLE_POOL = CARDS_DB.filter(~pl.col('condition').is_in(EXCLUDED_CONDITIONS))
+
+
 def get_cardpool() -> pl.DataFrame:
-    return CARDS_DB
+    """ Card pool for NEW games (deck construction, starter deck, deck validation,
+    robot deck). Excludes EXCLUDED_CONDITIONS — see the note above. """
+    return PLAYABLE_POOL
 
 def message_check(message):
     """ check that the message received is valid """
@@ -427,7 +448,18 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
         success = False
         message = f"Player {player.name} tried to play {cards_id} but not enough mana available (available: {mana_available}, required: {cards_rows['mana'].sum()})"
 
-    # ToDo: manage instant actions here (support faction, pendings, drops, defense cards, etc.)
+    # --- INSTANT effects (rule of engine_version 8) -----------------------------------
+    # pet_trap (and, later, swap_cards / wrecking_ball) fire the moment the card is
+    # PLAYED - not at trip-chain resolution - so they cannot be blocked, canceled or
+    # condition-gated: the effect is already on the board before the chain starts.
+    # pet_trap leaves a drop token on the player's current cell; it triggers when
+    # ANY player's token later ARRIVES on that cell (knockback -1 per token).
+    if success and (current_game.engine_version or 0) >= 8:
+        cells = _apply_instant_effects(player, current_game, player.message)
+        if cells:
+            # engine annotation on the action (shared dict: also lands in
+            # action_chain / messages_history): the turn log reads the exact cells
+            player.message['drop_placed_on'] = cells
 
     for p in current_game.players.values():
         if p.name == player.name:
@@ -442,6 +474,34 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
 
     return player, current_game, success, message
 
+def _apply_instant_effects(player, current_game, msg):
+    """ INSTANT effects: fire at PLAY TIME (right after the card is accepted),
+     before the trip chain resolves - they cannot be blocked or canceled.
+     pet_trap (engine_version 8): leaves ONE drop token on the player's current
+     cell (tokens stack on the same cell). Move mode only: a defend play plays
+     no effect, so it places no token.
+     Returns the list of cells that received a drop token ([] if none). """
+    if not msg or (msg.get('mode') or '') != 'move':
+        return []
+    placed = []
+    for card_id in (msg.get('cards') or [])[:1]:
+        rows = CARDS_DB.filter(pl.col('card_id') == card_id)
+        if rows.is_empty():
+            continue
+        r = rows.row(0, named=True)
+        if r['effect'] == 'pet_trap':
+            cell = player.current_position or 0
+            current_game.drop_tokens[cell] = current_game.drop_tokens.get(cell, 0) + 1
+            placed.append(cell)
+            print(f'\t\t\tINSTANT pet_trap: drop token placed on cell {cell} (total there: {current_game.drop_tokens[cell]})')
+    return placed
+
+def _cell_has_drop(current_game, cell_index):
+    """ pet_trap (engine_version 8): True if the cell carries at least one drop
+     token (placed at play time by a pet_trap card). Empty for older games
+     (drop_tokens defaults to {}), so this is a no-op for them. """
+    return (current_game.drop_tokens or {}).get(cell_index, 0) > 0
+
 def grappling_copy_amount(game, facing_adv):
     """ grappling_hook: the forward movement a player copies from its facing card's
     total advancement (the net cells that facing card moved). 0 when the rule is not
@@ -452,22 +512,107 @@ def grappling_copy_amount(game, facing_adv):
     return max(0, int(facing_adv or 0))
 
 
-def apply_grappling_copy(game, player, amount):
+def apply_grappling_copy(game, player, amount, log_entry=None):
     """ grappling_hook: apply the copied forward advance (the facing card's total
     advancement). It is a pure copy of the facing card's movement, so it is applied
     WITHOUT the player's own faction biome bonus (allow_bonus=False) - but it still
     goes through process_advancing so the win condition and trap/drop checks apply. """
     if amount > 0:
         print(f'\t\t\tgrappling_hook: {player.name} copies the facing card advancement (+{amount})')
-        return process_advancing(amount, player, game, allow_bonus=False)
+        if log_entry is not None:
+            log_entry['notes'].append(f'grappling hook — copied +{amount} from the facing card')
+        return process_advancing(amount, player, game, allow_bonus=False, log_entry=log_entry)
     return game
 
+def apply_copy_effect(game, copier, copier_action, facing_player, facing_action, log_entry=None):
+    """ copy_effect (rule of engine_version 7): the copier copies the effect of its
+    FACING card (the opponent card at the same trip-chain index / stopover), applied
+    with the COPIER as the actor (so _oppo effects target the copier's opponent)
+    and with the FACING card's data (effect_number + basic advancing).
+
+    The trip chain calls it only when BOTH facing effects fired (condition met, not
+    blocked, not effect_canceled). Guards kept here too:
+    - rule not active (engine_version < 7) -> no-op (replay pinning of older games),
+    - the copier's card is not a copy_effect card -> no-op,
+    - the facing card is a copy_effect itself -> no recursion, nothing to copy.
+    Effects with no behavior in apply_effect (unstoppable, effect_canceled,
+    grappling_hook, ...) are harmless no-ops when copied. """
+    if (game.engine_version or 0) < 7:
+        return game
+    if not (copier_action or {}).get('cards') or (copier_action or {}).get('mode') != 'move':
+        return game
+    rows = CARDS_DB.filter(pl.col('card_id') == copier_action['cards'][0])
+    if rows.is_empty() or rows.row(0, named=True)['effect'] != 'copy_effect':
+        return game
+    if not (facing_action or {}).get('cards') or (facing_action or {}).get('mode') != 'move':
+        return game
+    rows = CARDS_DB.filter(pl.col('card_id') == facing_action['cards'][0])
+    if rows.is_empty():
+        return game
+    facing = rows.row(0, named=True)
+    if facing['effect'] == 'copy_effect':      # no recursion: a facing copy_effect has nothing to copy
+        return game
+
+    print(f'\t\t\tcopy_effect: {copier.name} copies "{facing["effect"]}" from the facing card {facing["name"]}')
+    if log_entry is not None:
+        log_entry['notes'].append(f'copy_effect — copied "{facing["effect"]}" from the facing card ({facing["name"]})')
+    return apply_effect(facing['effect'], facing['effect_number'], int(facing['advancing']), copier, game, log_entry)
+
+
+# ------------------------------------------------------------------ turn log
+# Public per-turn recap of the resolution, persisted in GameState.log so the UI
+# can show a collapsible history: turn -> stopover -> each player's line
+# (card, condition met, effect, negative effects, notes, positions).
+# Only PUBLIC information is recorded: played cards are public (they were on the
+# stopovers), positions are public, condition met / effect / block / cancel are
+# part of the public resolution. No hand/mana/deck content ever goes in here.
+
+def new_log_entry(player, action, order):
+    """ create an empty per-player log entry for one action of the trip chain.
+     Filled during resolution: condition_met / effect / shield / negatives / notes / pos_after """
+    entry = {
+        'player': player.name,
+        'order': order,                          # 1 = first player of the turn, 2 = second
+        'mode': (action or {}).get('mode') or '',
+        'to': (action or {}).get('to'),          # e.g. 'stopover_4'
+        'cards': list((action or {}).get('cards') or []),   # move: 1 card, defend: 1-5
+        'pos_before': player.current_position or 0,
+        'pos_after': None,
+        'condition_met': None,                   # None = defend (the condition is never evaluated)
+        'effect': None,                          # the card's effect (from the pool)
+        'shield': None,                          # defend only: total shield of the defended cards
+        'negatives': [],                         # blocked, effect canceled, ...
+        'notes': [],                             # cataclysm / avalanche / grappling copy / win, ...
+    }
+    # pet_trap (engine_version 8): the drop token was placed at PLAY TIME (before
+    # the trip chain started) - the engine annotated the exact cell(s) on the action
+    for cell in ((action or {}).get('drop_placed_on') or []):
+        entry['notes'].append(f'🪤 pet_trap — drop token placed on cell {cell} (fires when any token arrives)')
+    return entry
+
+def _log_stopover(sv, turn_log, resolved):
+    """ finalize one stopover entry: set each resolved entry's pos_after (AFTER any
+     grappling copies) and append the stopover to the turn log (only if a card was played) """
+    for entry, player in resolved:
+        if entry is not None:
+            entry['pos_after'] = player.current_position or 0
+    for entry, _ in resolved:
+        if entry is not None:
+            sv['entries'].append(entry)
+    if sv['entries']:
+        turn_log['stopovers'].append(sv)
 
 def process_trip_chain(current_game):
     """ process the action chain of the game, effect first then advancing.
      grappling_hook copies: after BOTH facing cards at an index have resolved, each
      validated grappling card advances by the total advancement of the facing card
-     (see apply_grappling_copy / grappling_copy_amount). """
+     (see apply_grappling_copy / grappling_copy_amount).
+     copy_effect copies: after BOTH facing cards at an index have resolved, each
+     validated copy_effect card applies the effect of the facing card with itself as
+     the actor (see apply_copy_effect) - only when the facing effect fired.
+
+     Also records the public turn log in GameState.log (turn -> stopover -> entries).
+     """
     print('Processing trip chain...')
     # Select first and 2nd player in the turn order
     first_player = current_game.players[current_game.turn_order[0]]
@@ -475,34 +620,76 @@ def process_trip_chain(current_game):
     first_p_over = False
     second_p_over = False
 
+    def flush_unresolved(first_resolved, second_resolved):
+        """ The game just ended mid-chain (a win). The PLAYED cards of the UNRESOLVED
+            actions have already left their owner's hand (player_play removes them at
+            play time) but were never moved to the discard pile (process_card does
+            that when the action resolves) -> without this flush they are lost from
+            every zone and the final state no longer conserves the deck. Flush them
+            to their owners' discard piles (each action once, in play order). """
+        for p, done in ((first_player, first_resolved), (second_player, second_resolved)):
+            chain = p.action_chain or []
+            for a in chain[(i + 1) if done else i:]:
+                cards = (a or {}).get('cards') or []
+                if not cards:
+                    continue
+                if p.discard is None:
+                    p.discard = []
+                p.discard.extend(cards)
+                print(f'\t\t\tgame over mid-chain: flushed {len(cards)} unresolved card(s) of {p.name} to discard')
+
+    # turn log: appended up-front so a mid-chain win ("game over" early return)
+    # still keeps the partial turn in the log
+    log_list = current_game.log
+    if not isinstance(log_list, list):
+        current_game.log = log_list = []
+    turn_log = {'turn': current_game.turn, 'stopovers': []}
+    log_list.append(turn_log)
+
     over = False
     i = 0
     while not over:
         print(f'\tProcessing action index: {i}')
+        # both entries are created BEFORE resolution so cross-events (a block fired
+        # on the opponent's card, a grappling copy, ...) can be attached to either line
+        entry_f = new_log_entry(first_player, first_player.action_chain[i], 1) if i < len(first_player.action_chain) else None
+        entry_s = new_log_entry(second_player, second_player.action_chain[i], 2) if i < len(second_player.action_chain) else None
+        sv = {
+            'stopover': (entry_f or entry_s or {}).get('to') or f'stopover_{max(0, 4 - i)}',
+            'entries': [],
+        }
         # Process action for first player at index i
         first_grapple = False
         first_adv = 0
+        first_effect_ok = False
         if i < len(first_player.action_chain):
             pos_before = first_player.current_position
-            current_game, first_grapple = process_card(first_player.action_chain[i], first_player, current_game)
+            current_game, first_grapple, first_effect_ok = process_card(first_player.action_chain[i], first_player, current_game,
+                                                       log_entry=entry_f, oppo_entry=entry_s)
             first_adv = (first_player.current_position or 0) - pos_before
         else:
             first_p_over = True
 
         if current_game.state == "game over":
+            flush_unresolved(True, False)
+            _log_stopover(sv, turn_log, [(entry_f, first_player)])
             return current_game
 
         # Process action for second player at index i
         second_grapple = False
         second_adv = 0
+        second_effect_ok = False
         if i < len(second_player.action_chain):
             pos_before = second_player.current_position
-            current_game, second_grapple = process_card(second_player.action_chain[i], second_player, current_game)
+            current_game, second_grapple, second_effect_ok = process_card(second_player.action_chain[i], second_player, current_game,
+                                                        log_entry=entry_s, oppo_entry=entry_f)
             second_adv = (second_player.current_position or 0) - pos_before
         else:
             second_p_over = True
 
         if current_game.state == "game over":
+            flush_unresolved(True, True)
+            _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
             return current_game
 
         # grappling_hook copies: each validated grappling card copies the total
@@ -510,12 +697,42 @@ def process_trip_chain(current_game):
         # Applied AFTER both cards have resolved so the facing advancement is known.
         if first_grapple:
             current_game = apply_grappling_copy(current_game, first_player,
-                                                grappling_copy_amount(current_game, second_adv))
+                                                grappling_copy_amount(current_game, second_adv), entry_f)
         if current_game.state == "game over":
+            flush_unresolved(True, True)
+            _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
             return current_game
         if second_grapple:
             current_game = apply_grappling_copy(current_game, second_player,
-                                                grappling_copy_amount(current_game, first_adv))
+                                                grappling_copy_amount(current_game, first_adv), entry_s)
+        if current_game.state == "game over":
+            flush_unresolved(True, True)
+            _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
+            return current_game
+
+        # copy_effect copies (rule of engine_version 7): a validated copy_effect card
+        # copies the effect of its FACING card (the opponent card at this same index /
+        # stopover), applied with the copier as the actor. It only happens when the
+        # facing card's effect actually fired (condition met, not blocked, not
+        # effect_canceled) and the facing card is not a copy_effect itself (no
+        # recursion) - enforced by apply_copy_effect.
+        if first_effect_ok and second_effect_ok:
+            current_game = apply_copy_effect(current_game, first_player, first_player.action_chain[i],
+                                             second_player, second_player.action_chain[i], entry_f)
+        if current_game.state == "game over":
+            flush_unresolved(True, True)
+            _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
+            return current_game
+        if second_effect_ok and first_effect_ok:
+            current_game = apply_copy_effect(current_game, second_player, second_player.action_chain[i],
+                                             first_player, first_player.action_chain[i], entry_s)
+        if current_game.state == "game over":
+            flush_unresolved(True, True)
+            _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
+            return current_game
+
+        # finalize the stopover entry (positions are read AFTER the grappling copies)
+        _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
 
         # Check if both players are over
         if first_p_over and second_p_over:
@@ -524,10 +741,20 @@ def process_trip_chain(current_game):
 
         i += 1
 
+    # both players passed with no card this turn: nothing resolved -> drop the empty entry
+    if not turn_log['stopovers']:
+        log_list.remove(turn_log)
+
     return current_game
 
-def process_card(cards_dict, player, current_game):
+def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=None):
     """ process a cards (list) that are in the trip chain, card format:
+     log_entry: this player's log entry (filled with condition_met / effect / shield /
+     negatives / notes during the resolution); oppo_entry: the opponent's entry for the
+     SAME stopover (receives the cross-events: "blocked X's card", block-card effect).
+     Returns (current_game, grappling_activated, effect_activated) - effect_activated
+     is True when the card's effect actually fired (condition met, not canceled); the
+     trip chain uses it for copy_effect (a copy only happens when the facing effect fired).
      {
         'cards': random.sample(p1.hand, 3),     # cards selected by user - LIST (if move mode == 1 card, if defend mode no max)
         'to': 'mana',                           # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
@@ -550,25 +777,34 @@ def process_card(cards_dict, player, current_game):
     #     only if they actually block an opponent card on this same stopover
     #     They block the opponent card on the SAME stopover (checked when that card resolves). ---
     if cards_dict['mode'] == 'defend':
+        shield_total = 0
         for card_id in card_ids:
             row = CARDS_DB.filter(pl.col('card_id') == card_id)
             if row.is_empty():
                 continue
             r = row.row(0, named=True)
+            shield_total += int(r['shield'] or 0)
+            if log_entry is not None and log_entry.get('effect') is None:
+                log_entry['effect'] = r['effect']
             if r['condition'] == 'block':
                 print(f'\t\t\tdefend card {card_id} (condition "block") armed on {stopover}: its effect fires only if it blocks an opponent card')
             else:
                 print(f'\t\t\tdefend card {card_id} (shield {r["shield"]}) blocks the same stopover, no effect')
-        return current_game, False   # defend cards never advance / never grapple
+        if log_entry is not None:
+            log_entry['shield'] = shield_total
+        return current_game, False, False   # defend cards never advance / never grapple / never fire an effect
 
     # --- MOVE (normal) mode: resolve the card, but first check the opponent's
     #     defend cards on the SAME stopover (block / unstoppable / shields vs mana). ---
     grappling_activated = False
+    effect_activated = False
     for card_id in card_ids[:1]:   # normal play: exactly 1 card
         rows = CARDS_DB.filter(pl.col('card_id') == card_id)
         if rows.is_empty():
             continue
         row = rows.row(0, named=True)
+        if log_entry is not None:
+            log_entry['effect'] = row['effect']
 
         # BLOCK check: is the opponent playing defend card(s) on this same stopover?
         oppo = _get_oppo(player, current_game)
@@ -576,6 +812,8 @@ def process_card(cards_dict, player, current_game):
             # exception 1: an "unstoppable" card whose condition is met is not affected
             if row['effect'] == 'unstoppable' and is_condition_met(row['condition'], player, current_game):
                 print(f'\t\t\tcard {card_id} is unstoppable (condition met) -> ignores the block')
+                if log_entry is not None:
+                    log_entry['notes'].append('unstoppable — ignored the opponent block')
             else:
                 # exception 2: the block only holds if the total shields >= the card's mana
                 shields = _oppo_defend_shields(oppo, stopover)
@@ -583,16 +821,22 @@ def process_card(cards_dict, player, current_game):
                     print(f'\t\t\tcard {card_id} BLOCKED by {oppo.name} defend card(s) on {stopover} '
                           f'(shields {shields} >= mana {row["mana"]}) -> no effect, no advancing')
                     # the defender's dedicated block cards (condition == "block") now fire their effect
-                    current_game = _fire_block_effects(oppo, stopover, current_game)
+                    current_game = _fire_block_effects(oppo, stopover, current_game, defender_entry=oppo_entry)
                     current_game.message = {'success': True, 'message': f'Card blocked by {oppo.name} on {stopover}'}
+                    if log_entry is not None:
+                        log_entry['negatives'].append(f'blocked — shields {shields} ≥ cost {row["mana"]}')
+                    if oppo_entry is not None:
+                        oppo_entry['notes'].append(f'blocked {player.name}’s card on {stopover}')
                     continue
                 print(f'\t\t\tblock failed (shields {shields} < mana {row["mana"]}), card {card_id} plays normally')
+                if log_entry is not None:
+                    log_entry['notes'].append(f'block broken — shields {shields} < cost {row["mana"]}')
 
-        current_game, grappling_activated = _resolve_card(row, player, current_game, stopover)
+        current_game, grappling_activated, effect_activated = _resolve_card(row, player, current_game, stopover, log_entry)
 
     print(f'\t\t\tcurrent position: {player.current_position} (len(earth): {len(current_game.earth)})')
 
-    return current_game, grappling_activated
+    return current_game, grappling_activated, effect_activated
 
 def _oppo_defend_actions(oppo, stopover):
     """ list of the opponent's defend actions played on the given stopover
@@ -628,7 +872,7 @@ def _oppo_has_valid_effect_canceled(oppo, stopover, current_game):
     return False
 
 
-def _fire_block_effects(defender, stopover, current_game):
+def _fire_block_effects(defender, stopover, current_game, defender_entry=None):
     """ Fire the effect of the defender's dedicated block cards (condition == 'block')
     played on this stopover. Called ONLY when an opponent card on this stopover was
     actually blocked (so a block card that did not block anything has no effect). """
@@ -640,10 +884,12 @@ def _fire_block_effects(defender, stopover, current_game):
             r = rows.row(0, named=True)
             if r['condition'] == 'block':
                 print(f'\t\t\tblock card {card_id} triggered (it blocked an opponent card on {stopover}) -> applying effect: {r["effect"]}')
-                current_game = apply_effect(r['effect'], r['effect_number'], int(r['advancing']), defender, current_game)
+                if defender_entry is not None:
+                    defender_entry['notes'].append(f'block card {r["name"]} — effect fired: {r["effect"]}')
+                current_game = apply_effect(r['effect'], r['effect_number'], int(r['advancing']), defender, current_game, defender_entry)
     return current_game
 
-def trigger_cataclysm(current_game):
+def trigger_cataclysm(current_game, log_entry=None):
     """ Cataclysm trigger (condition 'cataclysm', fired once per resolved card in
      _resolve_card). Rule:
      1. Look at the TOP card of the cataclysm pile (4 cards, one per biome,
@@ -660,9 +906,11 @@ def trigger_cataclysm(current_game):
     biome = pile.pop(0)
     pile.append(biome)   # drawn card goes to the bottom of the pile
 
-    return _knockback_biome(biome, current_game, f'cataclysm: {biome} strikes')
+    if log_entry is not None:
+        log_entry['notes'].append(f'⚡ cataclysm — {biome} strikes')
+    return _knockback_biome(biome, current_game, f'cataclysm: {biome} strikes', log_entry)
 
-def _knockback_biome(biome, current_game, label='strike'):
+def _knockback_biome(biome, current_game, label='strike', log_entry=None):
     """ ALL player tokens (both players) on cells of the given biome are knocked back
      to the FIRST cell of that biome (the start of the 6-cell segment). Tokens not on
      the biome are untouched. Shared by the cataclysm trigger (random biome from the
@@ -681,17 +929,20 @@ def _knockback_biome(biome, current_game, label='strike'):
         cell = current_game.earth[pos]
         if cell and cell[0] == biome:
             print(f'\t\t\t{label}: {p.name} is knocked back from cell {pos} to cell {start} (start of the biome)')
+            if log_entry is not None:
+                log_entry['notes'].append(f'{label}: {p.name} knocked back {pos} → {start}')
             current_game.earth[pos].remove(p.name)
             p.current_position = start
             current_game.earth[start].append(p.name)
     return current_game
 
 
-def _resolve_card(row, player, current_game, stopover=None):
+def _resolve_card(row, player, current_game, stopover=None, log_entry=None):
     """ resolve ONE card of the trip chain: condition -> effect -> advancing
      (movement effects handle their own advancing inside apply_effect).
      stopover: the stopover this card was played on (e.g. 'stopover_4') - needed for
      the effect_canceled check (opponent cancel card on the SAME stopover).
+     log_entry: the player's log entry (filled with condition_met / negatives / notes).
      Returns (current_game, grappling_activated) - grappling_activated is True when
      this is a grappling_hook card whose condition was met (rule active); the trip
      chain then applies the copy of the facing card's advancing after that card
@@ -705,11 +956,31 @@ def _resolve_card(row, player, current_game, stopover=None):
     # which may be called for evaluation only - e.g. by the replay or the
     # unstoppable check - and must stay side-effect free)
     if condition == 'cataclysm':
-        current_game = trigger_cataclysm(current_game)
+        current_game = trigger_cataclysm(current_game, log_entry)
 
     # check card condition
     condition_met = is_condition_met(condition, player, current_game)
+    if log_entry is not None:
+        log_entry['condition_met'] = condition_met
 
+    # effect_canceled (rule of engine_version 6): before applying this card's
+    # effect, check if the opponent has a VALID effect_canceled card (move mode,
+    # condition met) on the SAME stopover - if so, this card's effect is
+    # CANCELED: it does NOT fire (including any movement it would have caused),
+    # but the card still advances by its basic value.
+    effect_cancelled = False
+    if condition_met and (current_game.engine_version or 0) >= 6 and stopover:
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None and _oppo_has_valid_effect_canceled(oppo, stopover, current_game):
+            effect_cancelled = True
+            print(f'\t\t\teffect {effect} CANCELED by {oppo.name} effect_canceled card on {stopover} -> no effect, basic advancing only')
+            if log_entry is not None:
+                log_entry['negatives'].append(f'effect canceled by {oppo.name}')
+
+    # effect_activated: this card's effect actually fired (condition met, not
+    # canceled). The trip chain uses it for copy_effect: a copy only happens when
+    # the FACING card's effect fired (and the copier's own, of course).
+    effect_activated = condition_met and not effect_cancelled
     # grappling_hook: the card's OWN advancing is applied below as usual; the
     # "copy of the facing card's advancing" is flagged here and applied by the trip
     # chain (it needs the facing card's movement, only known once that card resolved)
@@ -717,35 +988,23 @@ def _resolve_card(row, player, current_game, stopover=None):
                            and (current_game.engine_version or 0) >= 5)
 
     if condition_met:
-        # effect_canceled (rule of engine_version 6): before applying this card's
-        # effect, check if the opponent has a VALID effect_canceled card (move mode,
-        # condition met) on the SAME stopover - if so, this card's effect is
-        # CANCELED: it does NOT fire (including any movement it would have caused),
-        # but the card still advances by its basic value.
-        effect_cancelled = False
-        if (current_game.engine_version or 0) >= 6 and stopover:
-            oppo = _get_oppo(player, current_game)
-            if oppo is not None and _oppo_has_valid_effect_canceled(oppo, stopover, current_game):
-                effect_cancelled = True
-                print(f'\t\t\teffect {effect} CANCELED by {oppo.name} effect_canceled card on {stopover} -> no effect, basic advancing only')
-
         if effect_cancelled:
             # the effect is canceled: only the basic advancing is applied
-            current_game = process_advancing(basic_advancing, player, current_game)
+            current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
         else:
             print(f'\t\t\tapplying effect: {effect}')
-            current_game = apply_effect(effect, row['effect_number'], basic_advancing, player, current_game)
+            current_game = apply_effect(effect, row['effect_number'], basic_advancing, player, current_game, log_entry)
 
             # Apply basic advancing (movement effects already moved the player inside apply_effect)
             if effect not in ('advancing', 'backward', 'jump'):
-                current_game = process_advancing(basic_advancing, player, current_game)
+                current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
     else:
         # condition not met: reduced advancing (card mana - 1)
         basic_advancing = int(row['mana']) - 1
         print(f'\t\t\tcondition not met, reduced advancing: {basic_advancing}')
-        current_game = process_advancing(basic_advancing, player, current_game)
+        current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
 
-    return current_game, grappling_activated
+    return current_game, grappling_activated, effect_activated
 
 def _get_oppo(player, current_game):
     """ return the opponent PlayerState (the other player in the game), or None if playing alone """
@@ -906,14 +1165,29 @@ def is_condition_met(condition, player, current_game):
     if condition in ('day', 'night'):
         return current_game.day_night == condition
 
+    # drop_on_board (rule of engine_version 9): met if ANY drop or trap is on the
+    # earth - a drop token (placed by a pet_trap card, in drop_tokens) or a
+    # 'trap'/'drop' cell content. Old games (< 9) keep the canonical default:
+    # an unimplemented condition is treated as met.
+    if condition == 'drop_on_board':
+        if (current_game.engine_version or 0) < 9:
+            return True
+        if any(n > 0 for n in (current_game.drop_tokens or {}).values()):
+            return True
+        for cell in current_game.earth or []:
+            if cell and ('trap' in cell or 'drop' in cell):
+                return True
+        return False
+
     # any other not-yet-implemented condition: assume met so the card can still advance
     print(f'\t\t\tcondition {condition} not implemented, assuming met')
     return True
 
-def apply_effect(effect, effect_number, basic_advancing, player, current_game):
+def apply_effect(effect, effect_number, basic_advancing, player, current_game, log_entry=None):
     """ apply the card effect (all effects are handled here)
      effect_number: quantitative parameter of the effect from CARDS_DB (e.g. N cards to draw, N cells to recoil)
-     basic_advancing: base advancing value of the played card (needed by movement effects) """
+     basic_advancing: base advancing value of the played card (needed by movement effects)
+     log_entry: the playing player's log entry (receives notes for knockbacks / wins) """
 
     # --- movement effects (they handle the full movement themselves) ---
     if effect == 'advancing':
@@ -1018,8 +1292,10 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game):
         if jump_distance > 0 and _on_home_biome(player, current_game):
             print(f'\t\t\tfaction biome bonus: +1 jump distance for {player.name} (token on home biome)')
             jump_distance += 1
+            if log_entry is not None and log_entry.get('player') == player.name:
+                log_entry['notes'].append('faction biome bonus +1 (token on home biome)')
         print(f'\t\t\teffect jump: {player.name} jumps {jump_distance} cell(s), skipping intermediate cells')
-        return _jump(player, jump_distance, current_game)
+        return _jump(player, jump_distance, current_game, log_entry)
 
     # --- board effect: avalanche (rule of engine_version 4) ---
     if effect == 'avalanche':
@@ -1029,7 +1305,9 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game):
         # if it was on MO). effect_number is 0 in the pool (unused).
         # Games with engine_version < 4 keep the old no-op behavior (replay pinning).
         if (current_game.engine_version or 0) >= 4:
-            current_game = _knockback_biome('MO', current_game, 'avalanche: MO strikes')
+            if log_entry is not None:
+                log_entry['notes'].append('🏔 avalanche — MO strikes')
+            current_game = _knockback_biome('MO', current_game, 'avalanche: MO strikes', log_entry)
         else:
             print(f'\t\t\teffect avalanche: no-op (engine_version < 4)')
         return current_game
@@ -1041,10 +1319,35 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game):
     if effect == 'grappling_hook':
         return current_game
 
-    # --- other effects not implemented yet (wrecking_ball, copy_effect, ...) ---
+    # --- pet_trap (rule of engine_version 8): INSTANT effect - it ALREADY fired
+    #     at play time (_apply_instant_effects placed the drop token on the
+    #     player's cell). At resolution the card only advances by its basic
+    #     value, so this branch is a no-op marker (like grappling_hook). ---
+    if effect == 'pet_trap':
+        return current_game
+
+    # --- board token trigger: a DROP token (placed by pet_trap) on this cell.
+    #     Fired by process_advancing / _jump when a player's token ARRIVES on the
+    #     cell: ALL tokens on the cell are consumed and the player is knocked
+    #     back -1 per token (a direct recoil, clamped at cell 0). The recoil is
+    #     NOT stepped through the cells, so it cannot re-trigger other drops
+    #     (no chains / ping-pong). The caller appends the player's name to the
+    #     final cell after the check (the name is not on the cell yet here). ---
+    if effect == 'drop':
+        cell = player.current_position or 0
+        n = (current_game.drop_tokens or {}).get(cell, 0)
+        if n:
+            del current_game.drop_tokens[cell]
+            print(f'\t\t\tdrop token(s) on cell {cell}: {player.name} knocked back -{n}')
+            if log_entry is not None and log_entry.get('player') == player.name:
+                log_entry['notes'].append(f'🪤 drop on cell {cell} — knocked back -{n}')
+            player.current_position = max(0, cell - n)   # direct recoil (no per-step checks -> no re-trigger)
+        return current_game
+
+    # --- other effects not implemented yet (wrecking_ball, swap_cards, rooted, ...) ---
     return current_game
 
-def _jump(player, n, current_game):
+def _jump(player, n, current_game, log_entry=None):
     """ jump directly to the destination cell: intermediate cells are skipped entirely
      (no per-step trap/drop checks), only the landing cell is checked.
      win condition still applies on arrival. jump cards always move forward (advancing >= 2) """
@@ -1059,6 +1362,8 @@ def _jump(player, n, current_game):
     if new_position >= win_position:
         current_game.winner = player.name
         current_game.state = "game over"
+        if log_entry is not None:
+            log_entry['notes'].append(f'🏆 {player.name} reached cell 24 — win!')
         current_game.earth[0].append(player.name)                           # put it back to start showing crossing finish line
         return current_game
 
@@ -1067,18 +1372,20 @@ def _jump(player, n, current_game):
     # check if landing on a trap or drop (intermediate cells were skipped, only the destination matters)
     cell = get_player_cell(player, current_game)
     if 'trap' in cell:
-        current_game = apply_effect('trap', 0, 0, player, current_game)
-    if 'drop' in cell:
-        current_game = apply_effect('drop', 0, 0, player, current_game)
+        current_game = apply_effect('trap', 0, 0, player, current_game, log_entry)
+    if _cell_has_drop(current_game, player.current_position):
+        current_game = apply_effect('drop', 0, 0, player, current_game, log_entry)
 
     current_game.earth[player.current_position].append(player.name)     # update new player position in earth
     return current_game
 
-def process_advancing(advancing_value, player, current_game, allow_bonus=True):
+def process_advancing(advancing_value, player, current_game, allow_bonus=True, log_entry=None):
     """ process advancing of a player on the earth, checking for traps and drops
      allow_bonus: apply the faction biome +1 for forward movement (default True).
      The grappling_hook copy (apply_grappling_copy) passes allow_bonus=False so it is
-     a pure copy of the facing card's movement, not boosted by the player's own bonus. """
+     a pure copy of the facing card's movement, not boosted by the player's own bonus.
+     log_entry: the log entry of the player who played the card (receives the
+     biome-bonus note only when it is the entry owner who moves, and the win note). """
     if advancing_value == 0:
         return current_game
 
@@ -1086,6 +1393,8 @@ def process_advancing(advancing_value, player, current_game, allow_bonus=True):
     # grants +1 to forward movement (recoil / backward movement is not boosted)
     if allow_bonus and advancing_value > 0 and _on_home_biome(player, current_game):
         print(f'\t\t\tfaction biome bonus: +1 advancing for {player.name} (token on home biome)')
+        if log_entry is not None and log_entry.get('player') == player.name:
+            log_entry['notes'].append('faction biome bonus +1 (token on home biome)')
         advancing_value += 1
 
     # +1 to move forward, -1 to move backward (single loop handles both directions)
@@ -1105,6 +1414,8 @@ def process_advancing(advancing_value, player, current_game, allow_bonus=True):
             # player has reached the end of the earth, set game state to "game over" and declare winner
             current_game.winner = player.name
             current_game.state = "game over"
+            if log_entry is not None:
+                log_entry['notes'].append(f'🏆 {player.name} reached cell 24 — win!')
             current_game.earth[0].append(player.name)                           # put it back to start showing crossing finish line
             break
 
@@ -1115,9 +1426,9 @@ def process_advancing(advancing_value, player, current_game, allow_bonus=True):
         if 'trap' in cell:
             # apply trap effect
             current_game = apply_effect('trap', 0, 0, player, current_game)
-        if 'drop' in cell:
-            # apply drop effect
-            current_game = apply_effect('drop', 0, 0, player, current_game)
+        if _cell_has_drop(current_game, player.current_position):
+            # apply drop effect (pet_trap: consume the token(s), knockback -1 each)
+            current_game = apply_effect('drop', 0, 0, player, current_game, log_entry)
 
         current_game.earth[player.current_position].append(player.name)     # update new player position in earth
 

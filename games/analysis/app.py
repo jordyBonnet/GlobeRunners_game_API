@@ -77,15 +77,27 @@ def _effect_text(ev: dict) -> str:
     return f"Effect: {eff.replace('_', ' ')}"
 
 
-def _action_public(ev: dict | None) -> dict | None:
+# human-readable biome names (same mapping as the game UI)
+BIOME_NAMES = {"OC": "Ocean", "MO": "Mountain", "DE": "Desert", "JU": "Jungle"}
+
+
+def _action_public(ev: dict | None, biomes: list[str]) -> dict | None:
     if ev is None:
         return None
     if ev.get("error"):
         return {"error": ev["error"]}
     blocked = bool(ev.get("blocked"))
     delta = (ev.get("pos_after") or 0) - (ev.get("pos_before") or 0)
+    card = _card_ref(ev.get("card_id"))
+    # replace the card's faction by the biome where the card was at the start of
+    # the resolution of this stopover (the cell of the board it stood on)
+    if card is not None:
+        pos_before = ev.get("pos_before")
+        if isinstance(pos_before, int) and 0 <= pos_before < len(biomes):
+            code = biomes[pos_before]
+            card["faction"] = BIOME_NAMES.get(code, code)
     return {
-        "card": _card_ref(ev.get("card_id")),
+        "card": card,
         "mode": ev.get("mode"),   # "move" | "defend" -> the frontend shows the defense at 90°
         "blocked": blocked,
         "condition_met": bool(ev.get("condition_met")),
@@ -107,12 +119,15 @@ def get_analysis(game_id: str) -> dict | None:
 
     res = replay.analyze_game(state_dict)
     names = list(state_dict.get("players", {}).keys())
+    # biomes per board cell (biomes are fixed during a game) -> used to show the
+    # biome where each stopover card was at the start of its resolution
+    biomes = [cell[0] for cell in (state_dict.get("earth") or []) if cell]
 
     turns_out = []
     for t in res["turns"]:
         actions_pub = []
         for act in t["actions"]:
-            actions_pub.append({n: _action_public(act.get(n)) for n in names})
+            actions_pub.append({n: _action_public(act.get(n), biomes) for n in names})
         # turn 1: the 3 initial mana cards; later turns: the single card put to mana
         mana_puts = {n: [_card_ref(c) for c in (cids or [])] for n, cids in (t.get("mana_puts") or {}).items()}
         hands_start = {}
