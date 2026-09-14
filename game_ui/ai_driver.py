@@ -15,6 +15,7 @@ import asyncio
 import json
 import random
 import re
+from pathlib import Path
 
 import polars as pl
 
@@ -24,9 +25,33 @@ from player_ai.playerai import PlayerAI
 # "turn N - waiting for first/second player (NAME) to play"
 PLAY_TURN_RE = re.compile(r"turn \d+ - waiting for (first|second) player \((.+?)\) to play")
 
+# "turn N - waiting for NAME to discard K card(s)" (discard selection, engine_version 13)
+DISCARD_RE = re.compile(r"turn \d+ - waiting for (.+?) to discard (\d+) card\(s\)")
 
-def random_ai_deck(n: int = 30) -> list[str]:
-    """Starting deck for the robot: one random faction, n distinct cards (30 by default).
+# support faction pool (engineers / mages / doctors): 5 cards each, the deck is
+# 2 copies of each (10 total) — mixed into the main deck, like a human's (20 + 10 = 30)
+SUPPORT_CARDS_PATH = Path(__file__).resolve().parent.parent / "cards" / "support_factions.parquet"
+
+
+def random_support_deck() -> list[str]:
+    """A random support faction deck: 2 copies of each of its 5 cards (10 total), shuffled.
+    Empty list if the support data file is missing (the deck stays main-only)."""
+    if not SUPPORT_CARDS_PATH.exists():
+        return []
+    sup = pl.read_parquet(SUPPORT_CARDS_PATH)
+    if sup.is_empty():
+        return []
+    fac = random.choice(sup["support_faction_name"].unique().to_list())
+    cards = sup.filter(pl.col("support_faction_name") == fac)["card_name"].to_list()
+    deck = [c for c in cards for _ in range(2)]   # 2 copies of each card
+    random.shuffle(deck)
+    return deck
+
+
+def random_ai_deck(n: int = 20) -> list[str]:
+    """Starting deck for the robot: n main-faction cards (20 by default) + a random
+    support faction deck (10 cards) -> 30 total, the same composition as a human's
+    deck (20 main + 10 support, shuffled together).
 
     Same logic as the frontend starter deck (`buildStarterDeck`): we only draw from a
     single faction (no mixing), and rare cards are less frequent (weighting rare x1 /
@@ -47,6 +72,10 @@ def random_ai_deck(n: int = 30) -> list[str]:
         bag.remove(card)
         if card not in deck:
             deck.append(card)
+
+    # mix in a random support faction deck (10 cards) -> 30 total, like a human's
+    deck += random_support_deck()
+    random.shuffle(deck)
     return deck
 
 
@@ -91,6 +120,15 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
         if not (me.hand or []):
             return {"cards": [], "to": "", "mode": "pass", "pendings": []}
         return ai.put_mana(1, in_turn=True)
+
+    # 2.5 Discard selection (rule of engine_version 13): the trip chain is PAUSED
+    #     waiting for the discarding player's choice -> pick the least valuable
+    #     card(s) from the hand (to: 'discard_pile'). Deliberately NOT gated on
+    #     st['acted']: the same state string can recur in a turn (two discard
+    #     effects) and the robot must answer every pause.
+    md = DISCARD_RE.match(state)
+    if md and md.group(1) == ai_name:
+        return ai.choose_discard(int(md.group(2)))
 
     # 3. Play phase: play an affordable card (or pass)
     m = PLAY_TURN_RE.match(state)

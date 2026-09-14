@@ -56,7 +56,11 @@ state_json = ge.handle_websocket_message(game_id, player)  # 1 action -> JSON st
   3. *"waiting for both players to mana or pass"* — each puts 1 card in mana
      or passes.
   4. When both have acted → `process_trip_chain`: **step by step** resolution of
-     the two chains (p1 action 1, p2 action 1, p1 action 2, …).
+     the two chains (p1 action 1, p2 action 1, p1 action 2, …). A `discard` / `discard_oppo`
+     effect can **pause** the chain: the state becomes
+     *"turn N - waiting for NAME to discard K card(s)"*, the discarding player sends
+     `{"cards": […K…], "to": "discard_pile", "mode": ""}` to choose which cards, and the
+     chain resumes (engine_version ≥ 13; older games auto-discard the last K cards).
   5. End of turn: play order reversed, day ↔ night, draw of 3 cards (re-shuffle
      of the discard pile if the deck is empty), back to phase 2.
 - **Main functions**:
@@ -157,7 +161,7 @@ immediately and plays in an asyncio task), `GET /api/state/{gid}/{player}`
 opponent's actions, without ever exposing hidden information).
 
 **Note**: the art and assets folders are **hard-coded external paths**
-(pointing to `GenAI_TCG/lib/artdesign/…`); if they are missing, the app works
+(pointing to `GlobeRunners_card_system/lib/artdesign/…`); if they are missing, the app works
 with a SVG placeholder and neutral backgrounds.
 
 ## `player_ai/` — decision core of the Robot

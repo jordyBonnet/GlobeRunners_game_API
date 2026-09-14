@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>engineers preview</title>
+<link rel="stylesheet" href="/static/style.css?v=11">
+<style>
+  body { background:#0d1117; margin:0; padding:16px; display:flex; flex-direction:column; align-items:center; gap:16px; }
+  #board-stage { position: relative; width: 430px; aspect-ratio: 1; }
+  .panel-cards { display:flex; gap:4px; align-items:flex-end; }
+  .panel-cards .card { width:46px; aspect-ratio:180/260; border-radius:5px; overflow:hidden; box-shadow:0 3px 8px rgba(0,0,0,.5); }
+  .panel-cards .card img { width:100%; height:100%; object-fit:cover; display:block; }
+  .demo-row { display:flex; gap:16px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .box { border:1px solid #2d3a5f; border-radius:10px; padding:10px 14px; background:#131a2e; }
+  .lbl { font-size:.75rem; color:#8b9ac7; margin-bottom:6px; }
+  .tap-btn { background:linear-gradient(180deg,#3a2f6b,#241a4d); color:#d9c9ff; border:1px solid #8b6bff; border-radius:8px; padding:8px 16px; font-size:.85rem; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="demo-row">
+  <div class="box">
+    <div class="lbl">DWELLING (refinery) — untapped</div>
+    <div class="panel-cards" id="dw-untapped"></div>
+  </div>
+  <div class="box">
+    <div class="lbl">DWELLING (refinery) — tapped (dimmed)</div>
+    <div class="panel-cards" id="dw-tapped"></div>
+  </div>
+  <div class="box">
+    <div class="lbl">BANNERS</div>
+    <span class="landmine-badge" style="display:inline-block">💣 blocked</span>
+    <span style="margin-left:12px" class="tap-btn">⚗ Tap dwelling</span>
+  </div>
+</div>
+
+<div id="board-stage">
+  <img src="/assets/earth_background_playmat.png" alt="" id="board-bg">
+  <div id="markers-layer"></div>
+  <div id="cell-targets"></div>
+</div>
+
+<div class="demo-row">
+  <button id="toggle-cells" class="tap-btn">Toggle cell-selection mode</button>
+  <button id="clear-drops" class="tap-btn">Toggle engineer drops</button>
+</div>
+
+<script>
+const N_CELLS = 24;
+const POS_RADIUS = 49;
+function polar(deg, r){ const a=deg*Math.PI/180; return { x:50+r*Math.cos(a), y:50+r*Math.sin(a) }; }
+const POS24=[]; for (let i=0;i<N_CELLS;i++) POS24[i]=polar(-90+(i+0.5)*(360/N_CELLS), POS_RADIUS);
+
+const ENGINEER_DROPS = {
+  boost:      { img: "/assets/supfac_eng_boost.png",      label: "boost +2" },
+  trampoline: { img: "/assets/supfac_eng_trampoline.png", label: "trampoline +2" },
+  gluetrap:   { img: "/assets/supfac_eng_slowingtrap.png",label: "gluetrap −1" },
+  landmine:   { img: "/assets/supfac_eng_mine.png",       label: "landmine" },
+};
+const MAX_FAN=6, FAN_STEP_PX=5;
+const layer=document.getElementById("markers-layer");
+const targets=document.getElementById("cell-targets");
+
+// player markers
+for (const [name,pos] of [["me",7],["oppo",8]]) {
+  const el=document.createElement("div");
+  el.className="marker "+name; el.textContent=name[0].toUpperCase();
+  el.style.left=POS24[pos].x+"%"; el.style.top=POS24[pos].y+"%";
+  layer.appendChild(el);
+}
+
+// engineer drops (one of each kind on 4 different cells + a 3-stack on one cell)
+let dropsOn = true;
+function renderDrops(){
+  layer.querySelectorAll(".eng-drop").forEach(e=>e.remove());
+  if (!dropsOn) return;
+  const bdrops=[
+    {cell:2, kind:"boost", owner:"A"},
+    {cell:5, kind:"trampoline", owner:"A"},
+    {cell:9, kind:"gluetrap", owner:"B"},
+    {cell:13, kind:"landmine", owner:"B"},
+    {cell:17, kind:"boost", owner:"A"},
+    {cell:17, kind:"gluetrap", owner:"B"},
+    {cell:17, kind:"landmine", owner:"A"},   // 3 stacked on cell 17
+  ];
+  const byCell={}; for (const d of bdrops) (byCell[d.cell]=byCell[d.cell]||[]).push(d);
+  for (const [cs,list] of Object.entries(byCell)) {
+    const pos=Math.min(parseInt(cs,10),N_CELLS-1); const pt=POS24[pos];
+    const n=Math.min(list.length,MAX_FAN);
+    for (let k=0;k<n;k++){
+      const d=list[k]; const info=ENGINEER_DROPS[d.kind];
+      const el=document.createElement("div");
+      el.className="drop-token eng-drop";
+      el.title=`${d.kind} on cell ${pos} (${info.label})`;
+      el.innerHTML=`<img src="${info.img}" alt="${d.kind}" onerror="this.onerror=null;this.src='/placeholder.svg'">`+(k===n-1&&list.length>1?`<b>${list.length}</b>`:"");
+      el.style.left=`calc(${pt.x}% + ${k*FAN_STEP_PX}px)`;
+      el.style.top=`calc(${pt.y}% - ${k*FAN_STEP_PX}px)`;
+      el.style.zIndex=5+k;
+      layer.appendChild(el);
+    }
+  }
+}
+
+// cell targets (the 24 clickable circles, shown in cell-selection mode)
+for (let i=0;i<N_CELLS;i++){
+  const pt=POS24[i];
+  const el=document.createElement("div");
+  el.className="cell-target"; el.dataset.cell=i; el.title="Cell "+i;
+  el.style.left=pt.x+"%"; el.style.top=pt.y+"%";
+  el.addEventListener("click",()=>console.log("cell",i));
+  targets.appendChild(el);
+}
+
+// dwelling cards
+function dwCard(tapped){
+  const c=document.createElement("div"); c.className="card"+(tapped?" dwelling-tapped":"");
+  c.innerHTML=`<img src="/art/Eng_refinery.png" alt="refinery" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+  return c;
+}
+document.getElementById("dw-untapped").appendChild(dwCard(false));
+document.getElementById("dw-tapped").appendChild(dwCard(true));
+
+document.getElementById("toggle-cells").onclick=()=>document.body.classList.toggle("cell-selecting");
+document.getElementById("clear-drops").onclick=()=>{ dropsOn=!dropsOn; renderDrops(); };
+renderDrops();
+// start in cell-selection mode so the screenshot shows the targets
+document.body.classList.add("cell-selecting");
+document.title="rendered OK";
+</script>
+</body>
+</html>

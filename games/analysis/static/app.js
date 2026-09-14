@@ -56,12 +56,16 @@ function actionCellHtml(name, act, players) {
     : "";
   const condTag = act.blocked
     ? `<span class="cond-tag cond-blocked" title="blocked by the opponent's defense card(s) on the same stopover">🛡 blocked</span>`
-    : met
-      ? `<span class="cond-tag cond-met" title="condition met">✓ condition</span>`
-      : `<span class="cond-tag cond-notmet" title="condition not met">✗ condition</span>`;
+    : act.cancelled
+      ? `<span class="cond-tag cond-blocked" title="canceled (a landmine block, or the opponent's effect_canceled card)">⚡ canceled</span>`
+      : met
+        ? `<span class="cond-tag cond-met" title="condition met">✓ condition</span>`
+        : `<span class="cond-tag cond-notmet" title="condition not met">✗ condition</span>`;
   const posLine = act.blocked
     ? `blocked at cell ${act.pos_before ?? "?"} — no effect, no advancing`
-    : `cell ${act.pos_before ?? "?"} → <b>${act.pos_after ?? "?"}</b>`;
+    : act.cancelled
+      ? `canceled at cell ${act.pos_before ?? "?"} — no effect, no advancing`
+      : `cell ${act.pos_before ?? "?"} → <b>${act.pos_after ?? "?"}</b>`;
   // defense card: image (card + frame) engaged at 90° in a landscape box
   const imgHtml = isDefend
     ? `<span class="card-defend-wrap" title="Card played in defense (90°)">${cardImg(act.card, "card-defend")}</span>`
@@ -120,6 +124,25 @@ function renderTurn(t, players) {
     </div>`;
   }
 
+  // board / dwelling events (engineers drops, dwelling place / tap) - play-time
+  // actions that are NOT part of the trip chain
+  const evs = t.events || [];
+  let eventsHtml = "";
+  if (evs.length) {
+    const EV_LABEL = {
+      drop_place: (e) => `dropped a ${e.card && e.card.name ? e.card.name : "?"} token on cell ${e.cell ?? "?"}`,
+      dwelling_place: (e) => `placed the ${e.card && e.card.name ? e.card.name : "?"} dwelling on the board`,
+      dwelling_tap: (e) => `tapped the ${e.card && e.card.name ? e.card.name : "?"} (drew a card)`,
+    };
+    eventsHtml = `<div class="events-row">` + evs.map((e) => {
+      const label = (EV_LABEL[e.type] || (() => e.type))(e);
+      const art = e.card && e.card.img
+        ? `<img class="event-card" src="${esc(e.card.img)}" alt="${esc(e.card.name || "")}" onerror="this.style.display='none'">`
+        : "";
+      return `<span class="event-chip"><span class="dot" style="background:${playerColor(players, e.player)}"></span>${art}${esc(e.player)} ${esc(label)}</span>`;
+    }).join("") + `</div>`;
+  }
+
   // parallel actions (index by index)
   const rows = (t.actions || []).map((act) => `
     <div class="action-row">
@@ -145,6 +168,7 @@ function renderTurn(t, players) {
       <div class="turn-body">
         ${manaHtml}
         ${handsHtml}
+        ${eventsHtml}
         ${rows || `<div style="color:var(--muted);font-size:13px">No card played this turn.</div>`}
         <div class="final-pos">
           <span class="p"><span class="dot" style="background:${c1}"></span>${esc(n1)}: cell <b>${pa[n1] ?? "?"}</b> ${posTrack(pa[n1] ?? 0, c1)}</span>
@@ -208,7 +232,12 @@ async function loadGames() {
       content.innerHTML = `<p class="error">No game found in games.db</p>`;
       return;
     }
-    await selectGame(games[0].id);
+    // deep-link: ?game=<id> (or #<id>) selects a specific game, else the first one
+    const params = new URLSearchParams(location.search);
+    const wanted = params.get("game") || location.hash.replace("#", "");
+    const target = (wanted && games.some((g) => g.id === wanted)) ? wanted : games[0].id;
+    gameSelect.value = target;
+    await selectGame(target);
   } catch (e) {
     content.innerHTML = `<p class="error">Loading error: ${esc(e.message)}</p>`;
   }
@@ -221,6 +250,12 @@ async function selectGame(id) {
     if (!res.ok) throw new Error(res.status);
     const g = await res.json();
     content.innerHTML = renderGame(g);
+    if (new URLSearchParams(location.search).has("expand")) {
+      document.querySelectorAll("details.turn").forEach((d) => (d.open = true));
+    }
+    if (location.search !== `?game=${encodeURIComponent(id)}`) {
+      history.replaceState(null, "", `?game=${encodeURIComponent(id)}`);
+    }
   } catch (e) {
     content.innerHTML = `<p class="error">Error: ${esc(e.message)}</p>`;
   }

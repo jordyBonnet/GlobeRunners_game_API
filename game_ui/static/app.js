@@ -21,11 +21,11 @@ function toast(msg, ms = 2600) {
 function checkMana(id) {
   const st = game.state;
   const me = (st && st.players) ? st.players[game.me] : null;
-  const c = CARDPOOL[id];
-  if (!me || !c || c.mana == null) return true;
+  if (!me) return true;
+  const cost = cardCost(id);
   const avail = (me.mana || []).length - (me.mana_spend || 0);
-  if (c.mana > avail) {
-    toast(`Not enough mana: ${c.name} costs ${c.mana}, only ${avail} left`, 5000);
+  if (cost > avail) {
+    toast(`Not enough mana: ${cardName(id)} costs ${cost}, only ${avail} left`, 5000);
     return false;
   }
   return true;
@@ -50,10 +50,54 @@ async function loadCardpool() {
   cardpoolLoaded = true;
 }
 
+// card data: main faction cards (from /cardpool) or support faction cards (from /support_factions)
+function cardInfo(id) {
+  return (CARDPOOL && CARDPOOL[id]) || SUPPORT[id] || null;
+}
+
+// readable title for a card (main or support)
+function cardTitle(id) {
+  const c = cardInfo(id);
+  if (!c) return id;
+  if (c.card_name) return `${c.card_name} (\u2699 ${c.support_faction_name}) — ${c.description}`;   // support card
+  return `${c.name} — ${c.faction}`;                                                               // main card
+}
+
 function cardImg(id) {
-  // art is served by /art/<id>.png; if the file doesn't exist, the onerror handler falls back to the placeholder
+  // art is served by /art/<...>.png; if the file doesn't exist, the onerror handler falls back to the placeholder.
+  // support cards use their `card_path` (e.g. Mag_black_hole.png); main cards use <card_id>.png
+  const s = SUPPORT[id];
+  if (s) return `/art/${encodeURIComponent(s.card_path)}`;
   return `/art/${encodeURIComponent(id)}.png`;
 }
+
+// card cost: main cards use `mana`; support cards (engine_version 12+) use `mana_cost`
+function cardCost(id) {
+  const main = CARDPOOL[id];
+  if (main && main.mana != null) return main.mana;
+  const sup = SUPPORT[id];
+  if (sup && sup.mana_cost != null) return sup.mana_cost;
+  return 0;
+}
+function cardName(id) {
+  if (CARDPOOL[id]) return CARDPOOL[id].name;
+  if (SUPPORT[id]) return SUPPORT[id].card_name;
+  return id;
+}
+
+/* ------------------------- Engineers support faction (engine_version 12) ------------------------- */
+// 4 drop cards (played in MOVE mode onto a chosen earth cell -> instant token) + 1 dwelling card.
+// kind -> board token image (served at /assets/). UI-level constants; the engine is authoritative.
+const ENGINEER_DROPS = {
+  boost:      { img: "/assets/supfac_eng_boost.png",      label: "boost — +2 advancing" },
+  trampoline: { img: "/assets/supfac_eng_trampoline.png", label: "trampoline — +2 jump" },
+  gluetrap:   { img: "/assets/supfac_eng_slowingtrap.png",label: "gluetrap — −1 knockback" },
+  landmine:   { img: "/assets/supfac_eng_mine.png",       label: "landmine — blocks the arriving player for the turn" },
+};
+const ENGINEER_DWELLING = "refinery";   // tap once/turn -> draw 1
+const isEngineerDrop    = (id) => !!ENGINEER_DROPS[id];
+const isEngineerDwelling= (id) => id === ENGINEER_DWELLING;
+const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id);
 
 const FACTIONS = [
   { key: "Dwa", name: "Dwarves", logo: "/assets/logo_dwarves.png" },
@@ -63,9 +107,46 @@ const FACTIONS = [
   { key: "Orc", name: "Orcs",    logo: "/assets/logo_orcs.png" },
   { key: "Mum", name: "Mummies", logo: "/assets/logo_mummies.png" },
 ];
+// faction full name → short key ("Dwarves" → "Dwa")
+function getFactionKey(factionName) {
+  const f = FACTIONS.find(f => f.name === factionName);
+  return f ? f.key : null;
+}
+// placeholder image for the dwelling card (served from /cards_ex/)
+function dwellingPlaceholderSrc(factionName) {
+  const key = getFactionKey(factionName);
+  return key ? `/cards_ex/placeholder_${key}.png` : '/placeholder.svg';
+}
+
+/* ------------------------- support factions (engineers / mages / doctors) ------------------------- */
+const SUPPORT = {};              // support card_name -> row (from /support_factions)
+let supportLoaded = false;
+
+async function loadSupportCards() {
+  if (supportLoaded) return;
+  const rows = await api("/support_factions");
+  for (const r of rows) SUPPORT[r.card_name] = r;
+  supportLoaded = true;
+}
+
+const SUPPORT_FACS = [
+  { key: "engineers", name: "Engineers", banner: "/assets/supfac_eng_banner.png" },
+  { key: "mages",     name: "Mages",     banner: "/assets/supfac_mag_banner.png" },
+  { key: "doctors",   name: "Doctors",   banner: "/assets/supfac_doc_banner.png" },
+];
+
+function buildSupportDeck(key) {
+  // 2 copies of each of the 5 cards of the support faction (10 total)
+  const cards = Object.values(SUPPORT).filter((r) => r.support_faction_name === key);
+  const deck = [];
+  for (const c of cards) deck.push(c.card_name, c.card_name);
+  return deck;
+}
 
 /* ------------------------------------------------------------------ deck building */
-const DECK_SIZE = 30;           // standard deck size (3 initial mana + 6 in hand + the rest in deck)
+const MAIN_DECK_SIZE = 20;      // main faction starter deck (20 cards)
+const SUPPORT_DECK_SIZE = 10;   // support faction deck (2 x 5 unique cards)
+const DECK_SIZE = MAIN_DECK_SIZE + SUPPORT_DECK_SIZE;   // 30 total: 20 main + 10 support, mixed
 
 function buildStarterDeck(factionKey, seedStr) {
   const pool = Object.values(CARDPOOL).filter((c) => c.faction && c.faction.startsWith(factionKey));
@@ -84,7 +165,7 @@ function buildStarterDeck(factionKey, seedStr) {
   // weighted draw without replacement
   const deck = [];
   const bag = [...weighted];
-  while (deck.length < DECK_SIZE && bag.length) {
+  while (deck.length < MAIN_DECK_SIZE && bag.length) {
     const idx = Math.floor(rand() * bag.length);
     const card = bag.splice(idx, 1)[0];
     if (!deck.includes(card.card_id)) deck.push(card.card_id);
@@ -112,8 +193,10 @@ function parseCsv(text) {
 
 /* ------------------------------------------------------------------ SETUP page */
 const setup = {
-  deck: [],            // list of card_id
+  deck: [],            // list of main card_ids (20)
   faction: null,       // starter faction key
+  support: null,       // support faction key ('engineers' | 'mages' | 'doctors')
+  supportDeck: [],     // list of support card_names (10)
   name: "",
   mode: "create",      // 'create' | 'ai' | 'join'
   gameId: null,        // set after create (or typed for join)
@@ -148,7 +231,47 @@ function renderDeckPreview() {
     const el = document.createElement("div");
     el.className = "card";
     el.style.cursor = "default";
-    el.title = CARDPOOL[id] ? `${CARDPOOL[id].name} — ${CARDPOOL[id].faction}` : id;
+    el.title = cardTitle(id);
+    el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+    box.appendChild(el);
+  }
+}
+
+function renderSupportFactions() {
+  const grid = $("#support-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  for (const f of SUPPORT_FACS) {
+    const btn = document.createElement("button");
+    btn.className = "supfac-btn" + (setup.support === f.key ? " selected" : "");
+    btn.innerHTML = `<img src="${f.banner}" alt="${f.name}"> <span>${f.name}</span>`;
+    btn.onclick = () => {
+      setup.support = f.key;
+      setup.supportDeck = buildSupportDeck(f.key);
+      renderSupportFactions();
+      renderSupportPreview();
+      updateLaunchBtn();
+    };
+    grid.appendChild(btn);
+  }
+}
+
+function renderSupportPreview() {
+  const box = $("#support-preview");
+  const title = $("#support-preview-title");
+  if (!box || !setup.supportDeck.length) {
+    if (box) box.classList.add("hidden");
+    if (title) title.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden"); title.classList.remove("hidden");
+  $("#support-count").textContent = setup.supportDeck.length;
+  box.innerHTML = "";
+  for (const id of setup.supportDeck) {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.style.cursor = "default";
+    el.title = cardTitle(id);
     el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
     box.appendChild(el);
   }
@@ -156,9 +279,10 @@ function renderDeckPreview() {
 
 function updateLaunchBtn() {
   const okName = setup.name.trim().length >= 2;
-  const okDeck = setup.deck.length === DECK_SIZE;
+  const okMain = setup.deck.length === MAIN_DECK_SIZE;
+  const okSupport = setup.supportDeck.length === SUPPORT_DECK_SIZE;
   const okGame = setup.mode === "join" ? $("#join-game-id").value.trim().length > 0 : true;
-  $("#btn-launch").disabled = !(okName && okDeck && okGame);
+  $("#btn-launch").disabled = !(okName && okMain && okSupport && okGame);
 }
 
 function initSetup() {
@@ -198,9 +322,12 @@ function initSetup() {
       const text = await file.text();
       const ids = parseCsv(text);
       const unknown = ids.filter((id) => !CARDPOOL[id]);
-      $("#csv-filename").textContent = `${file.name} — ${ids.length} card(s)` + (unknown.length ? `, ${unknown.length} unknown: ${unknown.slice(0, 3).join(", ")}` : "");
+      const picked = ids.slice(0, MAIN_DECK_SIZE);
+      const dupes = picked.filter((id, i, arr) => arr.indexOf(id) !== i);
+      $("#csv-filename").textContent = `${file.name} — ${ids.length} card(s)` + (unknown.length ? `, ${unknown.length} unknown: ${unknown.slice(0, 3).join(", ")}` : "") + (dupes.length ? `, DUPLICATES: ${[...new Set(dupes)].slice(0, 3).join(", ")}` : "");
       if (!ids.length) { toast("No card found in this CSV"); return; }
-      setup.deck = ids.slice(0, DECK_SIZE);
+      if (dupes.length) { toast(`CSV contains duplicate card(s) — a card can only appear once: ${[...new Set(dupes)].join(", ")}`); return; }
+      setup.deck = picked;
       renderDeckPreview();
       updateLaunchBtn();
     } catch (err) {
@@ -229,6 +356,16 @@ function initSetup() {
   $("#btn-launch").onclick = launch;
 
   renderFactions();
+  renderSupportFactions();
+}
+
+// Fisher-Yates: the 20 main cards + 10 support cards are mixed into one 30-card deck
+function shuffleDeck(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 async function launch() {
@@ -236,7 +373,10 @@ async function launch() {
   errEl.textContent = "";
   const name = setup.name.trim();
   if (name.length < 2) { errEl.textContent = "Pick a nickname (2 characters min)."; return; }
-  if (setup.deck.length !== DECK_SIZE) { errEl.textContent = `The deck must contain exactly ${DECK_SIZE} cards.`; return; }
+  if (setup.deck.length !== MAIN_DECK_SIZE) { errEl.textContent = `The main deck must contain exactly ${MAIN_DECK_SIZE} cards.`; return; }
+  if (setup.supportDeck.length !== SUPPORT_DECK_SIZE) { errEl.textContent = "Pick a support faction (its 10 cards are mixed into your main deck)."; return; }
+  // the 20 main cards + 10 support cards are mixed (shuffled) into one 30-card deck
+  const deck = shuffleDeck([...setup.deck, ...setup.supportDeck]);
 
   const btn = $("#btn-launch");
   btn.disabled = true; btn.textContent = "Lancement…";
@@ -246,7 +386,7 @@ async function launch() {
       // game vs AI: the robot joins immediately, we go straight into the game
       const res = await api("/create_game_ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, deck: setup.deck }),
+        body: JSON.stringify({ name, deck }),
       });
       setup.gameId = res.game_id;
       toast(`Game started against ${res.opponent}!`);
@@ -254,7 +394,7 @@ async function launch() {
     } else if (setup.mode === "create") {
       const res = await api("/create_game", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, deck: setup.deck }),
+        body: JSON.stringify({ name, deck }),
       });
       setup.gameId = res.game_id;
       $("#created-game-id").textContent = res.game_id;
@@ -269,7 +409,7 @@ async function launch() {
       try {
         await api(`/join_game/${encodeURIComponent(gid)}`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, deck: setup.deck }),
+          body: JSON.stringify({ name, deck }),
         });
       } catch (e) {
         // 409: the player is already in the game -> simply resume (page reload)
@@ -322,6 +462,50 @@ const game = {
   logTurnsRendered: 0,   // how many turns of state.log are already in the DOM (incremental render)
 };
 
+/* ---------------- cell-selection mode (engineer drop placement, engine_version 12) ---------------- */
+// When an engineer drop card is being played, the player must choose the earth cell the
+// token lands on. The 24 cells are not DOM elements (the Earth is one image + positioned
+// markers), so we overlay 24 invisible circular targets at the POS24 points, shown only
+// while in this mode. Clicking one places the drop on that cell.
+const cellSelect = { active: false, cardId: null };
+
+function enterCellSelect(cardId) {
+  if (!isEngineerDrop(cardId)) return;
+  cellSelect.active = true;
+  cellSelect.cardId = cardId;
+  document.body.classList.add("cell-selecting");   // CSS shows the 24 cell targets
+  const info = ENGINEER_DROPS[cardId];
+  toast(`Choose a cell on the Earth for the ${cardId} (${info ? info.label : ""})`, 4200);
+}
+
+function exitCellSelect() {
+  if (!cellSelect.active) return;
+  cellSelect.active = false;
+  cellSelect.cardId = null;
+  document.body.classList.remove("cell-selecting");
+}
+
+// lightweight reset (used on state change, without a re-render)
+function _resetCellSelect() {
+  if (cellSelect.active) {
+    cellSelect.active = false;
+    cellSelect.cardId = null;
+    document.body.classList.remove("cell-selecting");
+  }
+}
+
+function confirmCell(cellIndex) {
+  const id = cellSelect.cardId;
+  if (!id) return;
+  exitCellSelect();
+  const st = game.state;
+  if (playedCount(st, game.me) >= N_STOPOVERS) { toast(orderHint()); return; }
+  if (!checkMana(id)) return;
+  // the drop occupies the next stopover slot (move mode) + carries its target cell
+  sendAction([id], `stopover_${nextSlotCol(st, game.me)}`, "move", [], cellIndex);
+  game.selected = new Set();
+}
+
 function enterGame() {
   $("#view-setup").classList.add("hidden");
   $("#view-game").classList.remove("hidden");
@@ -361,9 +545,10 @@ function connectWs() {
   ws.onclose = () => setConn(false);
 }
 
-function sendAction(cards, to, mode, pendings = []) {
+function sendAction(cards, to, mode, pendings = [], cell = null) {
   /* sends an action and resolves with the server's reply (state or rejection).
-     Sends are serialized: one WS message at a time. */
+     Sends are serialized: one WS message at a time.
+     `cell` (0-23): target earth cell for an engineer drop placement (engine_version 12). */
   return new Promise((resolve) => {
     const doSend = () => {
       if (!game.ws || game.ws.readyState !== WebSocket.OPEN) {
@@ -373,7 +558,9 @@ function sendAction(cards, to, mode, pendings = []) {
         return;
       }
       pendingResolvers.push(resolve);
-      game.ws.send(JSON.stringify({ cards: cards || [], to: to || "", mode: mode || "", pendings }));
+      const msg = { cards: cards || [], to: to || "", mode: mode || "", pendings };
+      if (cell != null) msg.cell = cell;
+      game.ws.send(JSON.stringify(msg));
     };
     doSend();
   });
@@ -410,6 +597,11 @@ function detectPhase(st) {
   if (s.includes("waiting for both players to put")) return "init-mana";
   if (s.includes("waiting for both players to mana or pass")) return "mana-pass";
 
+  // discard selection (engine_version 13): the trip chain paused so the discarding
+  // player can choose which cards to discard — "turn N - waiting for NAME to discard K card(s)"
+  const md = s.match(/turn (\d+) - waiting for (.+?) to discard (\d+) card\(s\)/);
+  if (md) return { kind: "discard", turn: +md[1], actor: md[2], n: +md[3] };
+
   // play phase: "turn N - waiting for first/second player (NAME) to play"
   const m = s.match(/turn (\d+) - waiting for (first|second) player \((.+?)\) to play/);
   if (m) {
@@ -428,8 +620,10 @@ function myTurn(st) {
 }
 
 /* ---------------- state application & rendering ---------------- */
+
 function applyState(st, fromPolling) {
   const wasOver = game.state && detectPhase(game.state) === "over";
+  _resetCellSelect();   // any new state ends cell-selection mode (a placement / opponent move happened)
   game.state = st;
   renderAll();
   if (st && st.message && typeof st.message === "object") {
@@ -479,6 +673,16 @@ function renderAll() {
     phaseText = `Turn ${ph.turn} — ${ph.actor}'s turn`;
     canAct = myTurn(st);
     hint = canAct ? "Put your card on the next stopover cell (in order 1→5), or “Pass”." : "Waiting for the opponent…";
+  } else if (ph && ph.kind === "discard") {
+    // discard selection (engine_version 13): the trip chain is paused
+    if (ph.actor === game.me) {
+      phaseText = `Discard selection — choose ${ph.n} card(s) to discard`;
+      canAct = true;
+      hint = `Click ${ph.n} card(s) in your hand, then press the red DISCARD button.`;
+    } else {
+      phaseText = `Waiting for ${ph.actor} to discard ${ph.n} card(s)…`;
+      hint = "";
+    }
   } else if (ph === "over") {
     phaseText = "Game over";
   } else {
@@ -487,27 +691,53 @@ function renderAll() {
   $("#phase-label").textContent = phaseText;
   $("#action-hint").textContent = hint;
 
-  const btnPlay = $("#btn-play"), btnDefend = $("#btn-defend"), btnPass = $("#btn-pass");
-  const canDefend = canAct && ph && ph.kind === "play" && game.selected.size === 1;
+  const btnPlay = $("#btn-play"), btnDefend = $("#btn-defend"), btnPass = $("#btn-pass"), btnTap = $("#btn-tap"), btnDiscard = $("#btn-discard");
+  const selCard = (game.selected.size === 1) ? [...game.selected][0] : null;
+  const selIsDrop = selCard && isEngineerDrop(selCard);
+  const selIsDwelling = selCard && isEngineerDwelling(selCard);
+  const canDefend = canAct && ph && ph.kind === "play" && !!selCard && !isSupportPlay(selCard);
+  // dwelling tap: I have a dwelling card, it's untapped, and it's my play turn
+  const canTap = canAct && ph && ph.kind === "play" && !!me.dwelling && !me.dwelling_tapped;
   if (ph === "init-mana") {
     btnPlay.textContent = "Poser en mana";
     btnPlay.disabled = !canAct || game.selected.size === 0;
     btnPass.classList.add("hidden");
     btnDefend.classList.add("hidden");
+    btnTap.classList.add("hidden");
+    btnDiscard.classList.add("hidden");
+  } else if (ph && ph.kind === "discard") {
+    // discard selection (engine_version 13): the red DISCARD button is the only action
+    btnPlay.classList.add("hidden");
+    btnDefend.classList.add("hidden");
+    btnPass.classList.add("hidden");
+    btnTap.classList.add("hidden");
+    if (ph.actor === game.me) {
+      btnDiscard.classList.remove("hidden");
+      btnDiscard.disabled = game.selected.size !== ph.n;
+    } else {
+      btnDiscard.classList.add("hidden");
+    }
   } else if (ph === "mana-pass" || ph.kind === "play") {
-    btnPlay.textContent = "Play the card";
+    if (selIsDrop) btnPlay.textContent = "📍 Place drop (pick a cell)";
+    else if (selIsDwelling) btnPlay.textContent = "🏠 Place dwelling";
+    else btnPlay.textContent = "Play the card";
     btnPlay.disabled = !canAct || game.selected.size !== 1;
     btnDefend.classList.remove("hidden");
     btnDefend.disabled = !canDefend;
     btnPass.classList.remove("hidden");
     btnPass.disabled = !canAct;
+    btnTap.classList.toggle("hidden", !canTap);
+    if (btnTap) btnTap.disabled = !canTap;
   } else {
     btnPlay.disabled = true;
     btnDefend.disabled = true;
     btnPass.disabled = true;
+    btnTap.classList.add("hidden");
+    btnDiscard.classList.add("hidden");
   }
 
-  const interactive = canAct && (ph === "init-mana" || ph === "mana-pass" || (ph && ph.kind === "play"));
+  const interactive = canAct && (ph === "init-mana" || ph === "mana-pass"
+    || (ph && ph.kind === "play") || (ph && ph.kind === "discard" && ph.actor === game.me));
 
   if (oppo) renderOppZone(oppo);
   renderMyZone(me, interactive);
@@ -530,6 +760,7 @@ function renderOppZone(oppo) {
   const manaSpent = oppo.mana_spend || 0;
   const manaAvail = Math.max(manaN - manaSpent, 0);
   $("#oppo-counts").innerHTML =
+    (oppo.landmine_blocked ? `<span class="landmine-badge" title="Blocked by a landmine — move cards are canceled until the end of the turn">💣 blocked</span>` : "") +
     `<span>📍 case ${oppo.current_position ?? 0}</span>` +
     `<span>🂠 main : ${handN}</span>` +
     `<span>⚡ mana : ${manaAvail}/${manaN}</span>` +
@@ -564,6 +795,7 @@ function renderMyZone(me, interactive) {
   $("#my-name").textContent = me.name;
   const manaAvail = (me.mana || []).length - (me.mana_spend || 0);
   $("#mana-info").innerHTML =
+    (me.landmine_blocked ? `<span class="landmine-badge" title="Blocked by a landmine — move cards are canceled until the end of the turn">💣 blocked</span>` : "") +
     `<span>⚡ mana ${manaAvail}/${(me.mana || []).length}</span>` +
     `<span>🂠 main ${(me.hand || []).length}</span>`;
 
@@ -630,11 +862,46 @@ function renderMyZone(me, interactive) {
     } else if (ph2 && ph2.kind === "play") {
       const id = [...game.selected][0];
       if (!id) return;
+      // engineer drop: pick a target cell on the Earth, then place it
+      if (isEngineerDrop(id)) { enterCellSelect(id); return; }
+      // engineer dwelling (refinery): place it in the dwelling zone
+      if (isEngineerDwelling(id)) {
+        const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
+        if (meNow.dwelling) { toast("You already have a dwelling — the slot is full"); return; }
+        if (playedCount(game.state, game.me) >= N_STOPOVERS) { toast(orderHint()); return; }
+        if (!checkMana(id)) return;
+        sendAction([id], "dwelling", "");
+        game.selected = new Set();
+        return;
+      }
       if (playedCount(game.state, game.me) >= N_STOPOVERS) { toast(orderHint()); return; }
       if (!checkMana(id)) return;
       // ordering rule: the card always goes to the next slot (1, 2, 3, 4, 5)
       sendAction([id], `stopover_${nextSlotCol(game.state, game.me)}`, "move");
     }
+  };
+
+  // tap the dwelling (refinery): draw 1 card, once per turn (free action, play phase)
+  const btnTap = $("#btn-tap");   // NOTE: local here - the one in renderAll is NOT in scope
+  if (btnTap) btnTap.onclick = () => {
+    if (!myTurn(game.state)) return;
+    const ph3 = detectPhase(game.state);
+    if (!ph3 || ph3.kind !== "play") return;
+    const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
+    if (!meNow.dwelling || meNow.dwelling_tapped) return;
+    sendAction([], "dwelling", "dwelling_activation");
+  };
+
+  // discard selection (engine_version 13): the trip chain is paused on
+  // "turn N - waiting for NAME to discard K card(s)" — send the chosen cards
+  const btnDiscard = $("#btn-discard");
+  if (btnDiscard) btnDiscard.onclick = async () => {
+    const ph2 = detectPhase(game.state);
+    if (!ph2 || ph2.kind !== "discard" || ph2.actor !== game.me) return;
+    if (game.selected.size !== ph2.n) { toast(`Select exactly ${ph2.n} card(s) to discard`); return; }
+    const resp = await sendAction([...game.selected], "discard_pile", "");
+    if (resp && resp.success === false) return;   // rejected: keep the selection
+    game.selected = new Set();
   };
 
   // defend button: the selected card is engaged at 90° on the next slot,
@@ -650,20 +917,26 @@ function renderMyZone(me, interactive) {
   };
 
   $("#btn-pass").onclick = () => {
-    if (!myTurn(game.state)) return;
     const ph3 = detectPhase(game.state);
+    // mana phase: pass is always allowed (the engine decides whose pass it is)
     if (ph3 === "mana-pass") sendAction([], "", "pass");
-    else if (ph3 && ph3.kind === "play") sendAction([], "", "pass");
+    // play phase: only when it is MY action (myTurn() is false in the mana phase —
+    // detectPhase returns the string "mana-pass" there, so it must NOT gate the pass)
+    else if (ph3 && ph3.kind === "play" && myTurn(game.state)) sendAction([], "", "pass");
   };
 }
 
 /* ---------------- side rows: dwelling / pending / deck / discard ---------------- */
 function renderSideRows(me, oppo) {
   const side = (p, pref) => {
-    // dwelling: 1 card (when implemented)
+    // dwelling: 1 card (engine_version 12: the engineers' refinery — tap 1x/turn to draw 1)
     const dw = $(`#${pref}-dwelling`);
     dw.innerHTML = "";
-    if (p.dwelling) dw.appendChild(makeStaticCard(p.dwelling, p.name));
+    if (p.dwelling) {
+      const card = makeStaticCard(p.dwelling, p.name);
+      if (p.dwelling_tapped) card.classList.add("dwelling-tapped");   // dimmed while tapped this turn
+      dw.appendChild(card);
+    }
     // pending: small cards
     const pe = $(`#${pref}-pendings`);
     pe.innerHTML = "";
@@ -687,8 +960,7 @@ function makeStaticCard(id, owner) {
   const el = document.createElement("div");
   el.className = "card";
   el.dataset.hoverId = id;
-  const c = CARDPOOL[id];
-  el.title = c ? `${c.name} — ${c.faction}` : id;
+  el.title = cardTitle(id);
   el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
   return el;
 }
@@ -703,6 +975,11 @@ function renderEnv(st) {
 function highlightValidCells() {
   const st = game.state;
   if (!st || slotEls.me.length === 0) return;
+  // in cell-selection mode the engineer drop targets are the Earth cells, not the stopovers
+  if (cellSelect.active) {
+    for (let i = 0; i < N_STOPOVERS; i++) slotEls.me[i].classList.remove("slot-valid");
+    return;
+  }
   const me = st.players[game.me];
   // only highlight if the selected card is still in hand (avoids a stale state)
   const sel = [...(game.selected || [])].filter((id) => (me.hand || []).includes(id));
@@ -778,6 +1055,25 @@ function buildBoard() {
   for (let i = 0; i < N_CELLS; i++) {
     POS24[i] = polar(-90 + (i + 0.5) * (360 / N_CELLS), POS_RADIUS);   // position 0 at the top, clockwise
   }
+
+  // 24 invisible click targets on the Earth (shown only in cell-selection mode):
+  // engineer drop placement picks a cell. Sized to the token ring, centered on POS24.
+  const targets = document.getElementById("cell-targets");
+  if (targets) {
+    targets.innerHTML = "";
+    for (let i = 0; i < N_CELLS; i++) {
+      const pt = POS24[i];
+      if (!pt) continue;
+      const el = document.createElement("div");
+      el.className = "cell-target";
+      el.dataset.cell = i;
+      el.title = `Cell ${i}`;
+      el.style.left = pt.x + "%";
+      el.style.top = pt.y + "%";
+      el.addEventListener("click", () => { if (cellSelect.active) confirmCell(i); });
+      targets.appendChild(el);
+    }
+  }
 }
 
 /* -------- ordering rule: stopovers are filled in the order 1, 2, 3, 4, 5 -------- */
@@ -809,6 +1105,15 @@ function canDropOnStopover(cardId, col) {
 
 function playCardToStopover(cardId, col) {
   game.selected = new Set([cardId]);
+  // engineer drop: needs a target cell -> cell-selection mode
+  if (isEngineerDrop(cardId)) { enterCellSelect(cardId); return; }
+  // engineer dwelling (refinery): goes to the dwelling zone, not a stopover
+  if (isEngineerDwelling(cardId)) {
+    if (!checkMana(cardId)) return;
+    sendAction([cardId], "dwelling", "");
+    game.selected = new Set();
+    return;
+  }
   if (!checkMana(cardId)) return;
   sendAction([cardId], `stopover_${col}`, "move");
 }
@@ -873,6 +1178,36 @@ function renderBoard(st, me, oppoName) {
     }
   }
 
+  // engineer drop tokens on the Earth (public board info: [{cell, kind, owner}];
+  //  each fires ONCE when any token arrives on its cell, then is consumed).
+  //  Multiple drops on the same cell fan out up-right (same pattern as pet traps).
+  const bdrops = st.board_drops || [];
+  const byCell = {};
+  for (const d of bdrops) {
+    const c = (d && d.cell != null) ? d.cell : -1;
+    (byCell[c] = byCell[c] || []).push(d);
+  }
+  for (const [cellStr, list] of Object.entries(byCell)) {
+    const pos = Math.min(parseInt(cellStr, 10) || 0, N_CELLS - 1);
+    const pt = POS24[pos];
+    if (!pt) continue;
+    const n = Math.min(list.length, MAX_FAN);
+    for (let k = 0; k < n; k++) {
+      const d = list[k];
+      const info = ENGINEER_DROPS[d.kind];
+      if (!info) continue;
+      const el = document.createElement("div");
+      el.className = "drop-token eng-drop";
+      el.title = `${d.kind} (${info.label}) on cell ${pos}, placed by ${d.owner} — fires when any token arrives`;
+      el.innerHTML = `<img src="${info.img}" alt="${d.kind}" onerror="this.onerror=null;this.src='/placeholder.svg'">`
+        + (k === n - 1 && list.length > 1 ? `<b>${list.length}</b>` : "");
+      el.style.left = `calc(${pt.x}% + ${k * FAN_STEP_PX}px)`;
+      el.style.top = `calc(${pt.y}% - ${k * FAN_STEP_PX}px)`;
+      el.style.zIndex = 5 + k;
+      layer.appendChild(el);
+    }
+  }
+
   // cards played by each player, placed in THEIR OWN stopover row
   // (retrieved from the turn's action_chain: to = "stopover_X")
   const slotFill = {};   // row:col -> cards already placed there (offsets overlaps)
@@ -905,12 +1240,27 @@ function renderBoard(st, me, oppoName) {
         slotEls[row][col].appendChild(el);
       }
     }
+    // dwelling placeholder: a faction-specific placeholder image in the stopover
+    // slot that the refinery would have occupied (set at placement time, stored in
+    // p.dwelling_slot) — purely visual, fills the slot to show the dwelling card
+    // is on the board (engine_version 12+)
+    if (p.dwelling) {
+      const phCol = (p.dwelling_slot !== null && p.dwelling_slot !== undefined) ? p.dwelling_slot : 0;
+      // remove any stale placeholder from other slots
+      slotEls[row].forEach(s => s.querySelectorAll(".dwelling-placeholder").forEach(e => e.remove()));
+      const slot = slotEls[row][phCol];
+      const el = document.createElement("div");
+      el.className = "card dwelling-placeholder";
+      el.title = `⚗ Dwelling: ${p.dwelling} (${name})`;
+      el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+      slot.appendChild(el);
+    }
     // visual states: filled slots / next slot (order 1->5) / not-yet-accessible slots
     const n = Math.min(playedCount(st, name), N_STOPOVERS);
     const next = n < N_STOPOVERS ? N_STOPOVERS - 1 - n : -1;
     for (let col = 0; col < N_STOPOVERS; col++) {
       const slot = slotEls[row][col];
-      slot.classList.toggle("filled", slot.querySelector(".played") !== null);
+      slot.classList.toggle("filled", slot.querySelector(".played") !== null || slot.querySelector(".dwelling-placeholder") !== null);
       slot.classList.toggle("slot-next", row === "me" && col === next);
     }
   }
@@ -1100,24 +1450,31 @@ function makeHandCard(id, interactive, me) {
   const el = document.createElement("div");
   el.className = "card" + (game.selected.has(id) ? " selected" : "") + (!interactive ? " disabled" : "");
   el.dataset.hoverId = id;
-  const c = CARDPOOL[id];
-  // playable card: mana cost ≤ available mana this turn -> green/blue outline
-  const cost = (c && c.mana != null) ? c.mana : 0;
+  const c = cardInfo(id);
+  // playable card: cost ≤ available mana this turn -> green/blue outline
+  const cost = cardCost(id);
   const avail = (me && (me.mana || []).length) - ((me && me.mana_spend) || 0);
   if (interactive && cost <= avail) el.classList.add("playable");
-  el.title = c ? `${c.name} — ${c.faction} (mana cost: ${cost})` : id;
+  let title;
+  if (c && c.card_name) title = cardTitle(id) + ` (mana cost: ${cost})`;
+  else if (c && c.name) title = `${c.name} — ${c.faction} (mana cost: ${cost})`;
+  else title = id;
+  el.title = title;
   el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
 
-  // click: selection (1 card for play/mana-pass, up to 3 in init)
+  // click: selection (1 card for play/mana-pass, up to 3 in init, exactly N in discard selection)
   if (interactive) {
     el.onclick = () => {
       const ph = detectPhase(game.state);
       const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
-      const maxSel = ph === "init-mana" ? START_MANA_N - ((meNow.mana || []).length) : 1;
+      const isDiscardSel = ph && ph.kind === "discard" && ph.actor === game.me;
+      const maxSel = ph === "init-mana" ? START_MANA_N - ((meNow.mana || []).length)
+                   : isDiscardSel ? ph.n : 1;
       if (game.selected.has(id)) game.selected.delete(id);
       else {
-        if (ph !== "init-mana") game.selected.clear();
+        if (ph !== "init-mana" && !isDiscardSel) game.selected.clear();
         if (game.selected.size < maxSel) game.selected.add(id);
+        else if (isDiscardSel) toast(`Select exactly ${maxSel} card(s) to discard`);
       }
       renderAll();
     };
@@ -1218,5 +1575,9 @@ $("#btn-leave").onclick = () => {
 /* ------------------------------------------------------------------ boot */
 (async function boot() {
   initSetup();
-  try { await loadCardpool(); } catch (e) { toast(`Cannot load the cards: ${e.message}`); }
+  const results = await Promise.allSettled([loadCardpool(), loadSupportCards()]);
+  for (const r of results) if (r.status === "rejected") toast(`Cannot load the cards: ${r.reason.message}`);
+  // re-render the support section now that the card data is available
+  renderSupportFactions();
+  if (setup.support) renderSupportPreview();
 })();

@@ -29,10 +29,13 @@ Then open http://127.0.0.1:8017/ in the browser.
 ## Data sources
 
 - **Games**: `games/games.db` — table `games(game_id, state_json)` (final state only).
-- **Cards**: `cards/cardpool.parquet` (names, factions, costs, effects).
+- **Cards**: `cards/cardpool.parquet` (names, factions, costs, effects) and
+  `cards/support_factions.parquet` (the 15 support cards — engineers / mages /
+  doctors — identified by `card_name`, art in `card_path`).
 - **Card art**: external folder
-  `C:\Users\jordy\Documents\python\projects\GenAI_TCG\lib\artdesign\cards_framed_0.6`
-  (`<card_id>.png`). If an art is missing, the card is shown dimmed.
+  `C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_framed_0.6`
+  (main cards as `<card_id>.png`, support cards as `card_path`, e.g. `Eng_boost.png`).
+  If an art is missing, the card is shown dimmed.
 
 ## Hand reconstruction
 
@@ -58,6 +61,29 @@ Compatibility workarounds for older engine versions:
   they are reconstructed in the discard pile, as the current engine would do;
 - a starting hand may contain more than 3 cards (played on turn 1); the
   overflow goes to the discard pile at the end of turn 1.
+
+## Support factions (engineers / mages / doctors)
+
+Since `engine_version` 12 a player's deck mixes main-faction cards with 10
+support cards. The analysis handles them:
+
+- **Cards**: support cards resolve their real art (`card_path`, e.g.
+  `Eng_boost.png`), name and support faction (shown in place of the biome — it
+  identifies them as engineers / mages / doctors). A main card's faction label is
+  replaced by the **biome** it stood on at the start of the resolution, but a
+  support card keeps its support faction.
+- **Engineers (implemented, v12)**: the 4 drop cards (boost / trampoline /
+  gluetrap / landmine) and the refinery dwelling are described in place of a
+  generic effect, and their **play-time actions** are shown as event chips in
+  the turn: *dropped a … token on cell N*, *placed the refinery dwelling*,
+  *tapped the refinery (drew a card)*. A **landmine** that blocks the arriving
+  player is surfaced too: the affected card is tagged *⚡ canceled* and reads
+  *Blocked by a landmine — no effect, no advancing*.
+- **Mages / Doctors (not implemented yet)**: the card is shown (art + name +
+  faction) with its pool description; the effect is a no-op in the engine.
+- **Replay + verification**: the replay runs the real engine (drop placement,
+  dwelling place/tap, landmine block, support-card cost) and the verification
+  also compares the final **board drops** and **dwelling** to the stored state.
 
 ## Replay reliability badge
 

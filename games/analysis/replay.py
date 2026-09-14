@@ -104,7 +104,27 @@ def _card_row(card_id: str | None) -> dict | None:
         return None
     if card_id not in _CARD_ROWS:
         df = CARDS_DB.filter(pl.col("card_id") == card_id)
-        _CARD_ROWS[card_id] = df.row(0, named=True) if not df.is_empty() else None
+        if not df.is_empty():
+            _CARD_ROWS[card_id] = df.row(0, named=True)
+        elif card_id in ge.SUPPORT_DB:
+            # support card (not in the main pool): a synthesized row. The engine
+            # resolves it as a no-op (ge.process_card: rows.is_empty() -> continue);
+            # the replay uses the row for identity/cost bookkeeping only.
+            s = ge.SUPPORT_DB[card_id]
+            _CARD_ROWS[card_id] = {
+                'card_id': card_id,
+                'name': card_id,
+                'faction': s.get('support_faction_name') or '',
+                'mana': int(s.get('mana_cost') or 0),
+                'advancing': 0,
+                'shield': 0,
+                'condition': 'no_condition',
+                'effect': 'support',   # marker: no-op effect (support mechanics live outside the pool)
+                'effect_number': 0,
+                'rare': False,
+            }
+        else:
+            _CARD_ROWS[card_id] = None
     return _CARD_ROWS[card_id]
 
 
@@ -187,6 +207,11 @@ def _recon_ctx(stored: dict, seg: dict) -> dict:
                 needs.append((ti, c))
         for m in t["moves"]:
             if m.get("mode") == "pass":
+                continue
+            # discard selection (engine_version 13): the CHOICE message (to
+            # 'discard_pile') is not a play - its cards were in the hand and are
+            # removed by the discard effect (already counted in discard_capacity).
+            if m.get("to") == "discard_pile":
                 continue
             cids = m.get("cards") or []
             if len(cids) != 1:
@@ -347,8 +372,13 @@ def _pick_ramp(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
     return chosen
 
 
-def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
-    """Choose which n cards of the hand the discard effect will remove."""
+def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int, arrange: bool = True) -> list[str]:
+    """Choose which n cards of the hand the discard effect will remove.
+
+    arrange (default True, engine_version < 13): move the chosen cards to the
+    END of the hand so the engine's auto-discard (hand[-n:]) removes exactly
+    those. For v13 (discard selection) the engine PAUSES (pending_discard) and
+    the replay applies the choice itself, so arrange=False (no reordering)."""
     hand = list(p.hand or [])
     n = min(n, len(hand))
     if n <= 0:
@@ -358,9 +388,23 @@ def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]
     chosen += [c for c in hand if c not in chosen and c not in needed_later]
     chosen += [c for c in hand if c not in chosen]
     chosen = chosen[:n]
-    _arrange_tail(p, chosen, "hand")
+    if arrange:
+        _arrange_tail(p, chosen, "hand")
     ctx["discard_capacity"] = max(0, ctx["discard_capacity"] - n)
     return chosen
+
+
+def _apply_discard_choice(game: GameState, target: PlayerState, chosen: list[str]) -> None:
+    """ discard selection (engine_version 13): the engine PAUSED on
+     pending_discard instead of discarding (the real player's choice arrived as a
+     to:'discard_pile' message). The replay applies the identity-reconstructed
+     choice here: move the chosen cards hand -> discard and clear the pause
+     marker so the chain can continue. """
+    for c in chosen:
+        if c in (target.hand or []):
+            target.hand.remove(c)
+    target.discard = (target.discard or []) + list(chosen)
+    game.pending_discard = None
 
 
 def _pick_tax(p: PlayerState, n: int, ctx: dict) -> list[str]:
@@ -434,6 +478,8 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
         all_cards: set[str] = set()
         for z in ("hand", "deck", "discard", "mana"):
             all_cards.update(p.get(z) or [])
+        if p.get("dwelling"):   # dwelling (engine_version 12): the card sits in the dwelling slot, not a zone
+            all_cards.add(p["dwelling"])
         pool = [c for c in all_cards if c not in ctx["initial_mana"]]
         # at game start: 6 cards drawn to hand, then the initial mana put.
         # Cards played on turn 1 can ONLY come from the initial hand (no draw
@@ -554,6 +600,7 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
     # reconstruct the unknown cards the effect will move, so the real engine
     # code below moves exactly those cards (hand / deck / discard / mana)
     ev = _effect_events(row["effect"], row["effect_number"])
+    discard_choice = None   # (target, chosen) - discard selection (engine_version 13)
     if cond_met and msg.get("mode") != "defend" and ev:
         kind, n, own = ev
         target = p if own else _other_player(game, p)
@@ -564,7 +611,14 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
             elif kind == "ramp":
                 _pick_ramp(target, n, ctx, cur_turn)
             elif kind == "discard":
-                _pick_discard(target, n, ctx, cur_turn)
+                if (game.engine_version or 0) < 13:
+                    _pick_discard(target, n, ctx, cur_turn)
+                else:
+                    # discard selection (v13): the engine PAUSES (pending_discard)
+                    # instead of auto-discarding -> choose the identity-consistent
+                    # cards now (no hand arrangement) and apply them AFTER
+                    # process_card (mirroring the player's to:'discard_pile' choice)
+                    discard_choice = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
             elif kind == "tax":
                 _pick_tax(target, n, ctx)
 
@@ -572,6 +626,14 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
     effect_activated = False
     with contextlib.redirect_stdout(buf):
         _, grappling_activated, effect_activated = ge.process_card(msg, p, game)
+
+    # discard selection (v13): the engine PAUSED instead of discarding (a blocked /
+    # not-met card never sets pending_discard, so the guard is exact) -> apply the
+    # choice (hand -> discard) and clear the pause marker. NOT applied when the
+    # card's own advancing won the game (mid-chain win: the real engine clears the
+    # pending discard and the cards stay in the hand).
+    if discard_choice is not None and game.pending_discard is not None and game.state != "game over":
+        _apply_discard_choice(game, discard_choice[0], discard_choice[1])
 
     out = buf.getvalue()
     return {
@@ -585,9 +647,12 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
         # blocked = the engine's block check vetoed this move (opponent defend
         # card(s) on the same stopover with enough shields): no effect, no advancing
         "blocked": ("BLOCKED by" in out),
-        # cancelled = the opponent's valid effect_canceled card (same stopover) canceled
-        # this card's effect: it did not fire, only the basic advancing was applied
+        # cancelled = the card's effect was CANCELED: either by the opponent's valid
+        # effect_canceled card (same stopover, basic advancing still applied) or by a
+        # landmine (engine_version 12, the player is blocked for the rest of the turn)
         "cancelled": ("CANCELED by" in out),
+        "cancel_reason": ("landmine" if "landmine block" in out
+                          else ("effect_canceled" if "effect_canceled" in out else None)),
         "effect": row["effect"],
         "effect_number": int(row["effect_number"]) if row["effect_number"] is not None else 0,
         "advancing": int(row["advancing"]),
@@ -638,6 +703,38 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                         cell = game.players[nm].current_position or 0
                         game.drop_tokens[cell] = game.drop_tokens.get(cell, 0) + 1
 
+    # engineers' drops (rule of engine_version 12): the INSTANT effect fired at
+    # PLAY TIME - every drop token was placed on the cell CHOSEN by the player
+    # (message 'cell'), before the trip chain resolved. The mirror places them
+    # here, before any card has moved.
+    if (game.engine_version or 0) >= 12:
+        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+            for m in chain:
+                if (m.get('mode') or '') != 'move':
+                    continue
+                for cid in (m.get('cards') or [])[:1]:
+                    if cid in ge.ENGINEER_DROPS and m.get('cell') is not None:
+                        game.board_drops.append({'cell': int(m['cell']), 'kind': cid, 'owner': nm})
+
+    # wrecking_ball (rule of engine_version 11): the INSTANT effect fired at PLAY
+    # TIME - it removed the opponent's dwelling card (if any), sending it to the
+    # opponent's discard and clearing the dwelling slot. A no-op today (no
+    # implemented effect places a dwelling card yet), but mirrored here so the
+    # replay stays faithful when dwelling cards are added later.
+    if (game.engine_version or 0) >= 11:
+        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+            for m in chain:
+                if (m.get('mode') or '') != 'move':
+                    continue
+                for cid in (m.get('cards') or [])[:1]:
+                    row = _card_row(cid)
+                    if row and row.get('effect') == 'wrecking_ball':
+                        oppo = game.players[second_name] if nm == first_name else game.players[first_name]
+                        if oppo.dwelling:
+                            dwelling_card = oppo.dwelling
+                            oppo.discard = (oppo.discard or []) + [dwelling_card]
+                            oppo.dwelling = None
+
     try:
         actions: list[dict] = []
         i = 0
@@ -671,11 +768,13 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
             # grappling copy) - so a copy must not fire when the game ended on the
             # facing card (mirrors the game-over checks around apply_grappling_copy
             # in ge.process_trip_chain)
-            if game.state != "game over" and f and f.get("grappling_activated"):
+            if game.state != "game over" and f and f.get("grappling_activated") and \
+                    not ge._player_blocked(game.players[first_name], game):
                 s_adv = (s.get("pos_after", 0) - s.get("pos_before", 0)) if s else 0
                 ge.apply_grappling_copy(game, game.players[first_name],
                                        ge.grappling_copy_amount(game, s_adv))
-            if game.state != "game over" and s and s.get("grappling_activated"):
+            if game.state != "game over" and s and s.get("grappling_activated") and \
+                    not ge._player_blocked(game.players[second_name], game):
                 f_adv = (f.get("pos_after", 0) - f.get("pos_before", 0)) if f else 0
                 ge.apply_grappling_copy(game, game.players[second_name],
                                        ge.grappling_copy_amount(game, f_adv))
@@ -691,9 +790,13 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                 c_info, o_info = row.get(copier_nm), row.get(facing_nm)
                 if not (c_info and o_info and c_info.get("copy_activated") and o_info.get("effect_activated")):
                     continue
+                # landmine (engine_version 12): a blocked player does not copy
+                if ge._player_blocked(game.players[copier_nm], game):
+                    continue
                 # pin the cards the copy will move (the facing card's zone-moving
                 # effect, applied with the copier as the actor) before the engine pops them
                 ev = _effect_events(o_info.get("effect"), o_info.get("effect_number"))
+                copy_discard = None
                 if ev:
                     kind, n, own = ev
                     target = game.players[copier_nm] if own else _other_player(game, game.players[copier_nm])
@@ -704,11 +807,19 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                         elif kind == "ramp":
                             _pick_ramp(target, n, ctx, cur_turn)
                         elif kind == "discard":
-                            _pick_discard(target, n, ctx)
+                            if (game.engine_version or 0) < 13:
+                                _pick_discard(target, n, ctx, cur_turn)
+                            else:
+                                # discard selection (v13): the copied discard PAUSES
+                                # the engine (pending_discard) -> apply the choice
+                                # after apply_copy_effect (mirrors the real game)
+                                copy_discard = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
                         elif kind == "tax":
                             _pick_tax(target, n, ctx)
                 ge.apply_copy_effect(game, game.players[copier_nm], chains[copier_nm][i],
                                      game.players[facing_nm], chains[facing_nm][i])
+                if copy_discard is not None and game.pending_discard is not None and game.state != "game over":
+                    _apply_discard_choice(game, copy_discard[0], copy_discard[1])
 
             if over:
                 # mid-chain win: mirror the engine's flush (ge.process_trip_chain
@@ -756,6 +867,8 @@ def analyze_game(state_dict: dict) -> dict:
         final_set: set[str] = set()
         for z in ("hand", "deck", "discard", "mana"):
             final_set.update(p.get(z) or [])
+        if p.get("dwelling"):   # dwelling (engine_version 12): a card outside the four zones
+            final_set.add(p["dwelling"])
         hist = {c for m in (p.get("messages_history") or []) for c in (m.get("cards") or [])}
         missing = sorted(hist - final_set)
         p = dict(p)
@@ -816,12 +929,42 @@ def analyze_game(state_dict: dict) -> dict:
         }
 
         # --- play phase: cards leave the hand when played (as in player_play) ---
+        events: list[dict] = []   # board / dwelling actions (NOT part of the trip chain)
         chains: dict[str, list[dict]] = {}
         for n in names:
             chain = []
             p = game.players[n]
             for m in seg_t[n]["moves"]:
                 if m.get("mode") == "pass":
+                    continue
+                # discard selection (engine_version 13): the CHOICE message (to
+                # 'discard_pile') is NOT part of the trip chain - it was made DURING
+                # resolution (pause/resume) and its cards were already removed from
+                # the hand by the discard effect (applied in _replay_trip_chain).
+                if m.get("to") == "discard_pile":
+                    continue
+                # dwelling actions (engine_version 12): PLACE (1 card -> the dwelling
+                # slot) or TAP (no cards -> draw 1). They are NOT part of the trip
+                # chain - they resolved immediately at play time (mirror of ge.player_play).
+                if m.get("to") == "dwelling" and (game.engine_version or 0) >= 12:
+                    if m.get("mode") == "dwelling_activation":
+                        # tap: draw 1 card (pin the identity, then the real engine draw)
+                        _pick_draw(p, 1, ctxs[n], t)
+                        _buf_tap = io.StringIO()
+                        with contextlib.redirect_stdout(_buf_tap):
+                            ge._draw_cards(p, 1)
+                        if p.dwelling:
+                            events.append({"player": n, "type": "dwelling_tap", "card": p.dwelling})
+                    else:
+                        cids_d = m.get("cards") or []
+                        cid_d = cids_d[0] if cids_d else None
+                        if cid_d and cid_d in (p.hand or []):
+                            p.hand.remove(cid_d)
+                            p.dwelling = cid_d
+                            events.append({"player": n, "type": "dwelling_place", "card": cid_d})
+                        elif cid_d:
+                            warnings.append(f"turn {t} - {n}: dwelling card {cid_d} not found in hand (reconstruction)")
+                        p.mana_spend += _card_cost(cid_d or "")
                     continue
                 cids = m.get("cards") or []
                 if len(cids) != 1:
@@ -831,6 +974,10 @@ def analyze_game(state_dict: dict) -> dict:
                 if _card_row(cid) is None:
                     warnings.append(f"turn {t} - {n}: card unknown to the cardpool (ignored)")
                     continue
+                # engineer drop (engine_version 12): the drop token is placed INSTANTLY
+                # at play time on the message's 'cell' - record the event for the UI
+                if (game.engine_version or 0) >= 12 and cid in ge.ENGINEER_DROPS and m.get("cell") is not None:
+                    events.append({"player": n, "type": "drop_place", "card": cid, "cell": int(m["cell"])})
                 if cid in (p.hand or []):
                     p.hand.remove(cid)
                 p.mana_spend += _card_cost(cid)
@@ -843,6 +990,16 @@ def analyze_game(state_dict: dict) -> dict:
         actions = _replay_trip_chain(game, turn_order, chains, ctxs, t)
         positions_after = {n: game.players[n].current_position or 0 for n in names}
 
+        # rooted (engine_version 10): settle the rooted cards NOW (mirror of the
+        # engine's ge._process_rooted_cards, called in handle_websocket_message right
+        # after the trip chain, in ALL end-of-turn cases). The engine's process_card
+        # already granted the tokens (rooted_this_turn); this pulls the survivors out
+        # of the discard onto free stopovers (rooted_on_board) and discards last
+        # turn's rooted cards. A no-op for games with engine_version < 10.
+        _buf_rooted = io.StringIO()
+        with contextlib.redirect_stdout(_buf_rooted):
+            ge._process_rooted_cards(game)
+
         turns_out.append({
             "turn": t,
             "day_night": day_night,
@@ -850,6 +1007,7 @@ def analyze_game(state_dict: dict) -> dict:
             "mana_puts": mana_puts,
             "hands_start": hands_start,
             "actions": actions,
+            "events": events,
             "positions_before": positions_before,
             "positions_after": positions_after,
         })
@@ -911,6 +1069,41 @@ def analyze_game(state_dict: dict) -> dict:
     replayed_drops = {int(k): int(v) for k, v in (game.drop_tokens or {}).items()}
     if stored_drops != replayed_drops:
         warnings.append(f"drop tokens diverge (replayed {replayed_drops}, stored {stored_drops})")
+
+    # rooted (engine_version 10): the rooted cards sitting on the board must match
+    # the stored ones (same cards, same owners, same stopovers). Empty for games
+    # with engine_version < 10 (the rooted effect is a no-op there).
+    stored_rooted = sorted(
+        (e.get('card_id'), e.get('owner'), e.get('stopover'))
+        for e in (state_dict.get('rooted_on_board') or [])
+    )
+    replayed_rooted = sorted(
+        (e.get('card_id'), e.get('owner'), e.get('stopover'))
+        for e in (game.rooted_on_board or [])
+    )
+    if stored_rooted != replayed_rooted:
+        warnings.append(f"rooted on board diverge (replayed {replayed_rooted}, stored {stored_rooted})")
+
+    # engineers' drops (engine_version 12): the unconsumed drop tokens left on the
+    # board must match the stored ones (tokens consumed by triggers are gone from both)
+    stored_bdrops = sorted(
+        (e.get('cell'), e.get('kind'), e.get('owner'))
+        for e in (state_dict.get('board_drops') or [])
+    )
+    replayed_bdrops = sorted(
+        (e.get('cell'), e.get('kind'), e.get('owner'))
+        for e in (game.board_drops or [])
+    )
+    if stored_bdrops != replayed_bdrops:
+        warnings.append(f"engineer drops diverge (replayed {replayed_bdrops}, stored {stored_bdrops})")
+
+    # dwelling (engine_version 12): the dwelling card on the board (outside the
+    # four zones) must match the stored one for both players
+    for n in names:
+        rp_d = game.players[n].dwelling or None
+        sp_d = state_dict["players"][n].get("dwelling") or None
+        if rp_d != sp_d:
+            warnings.append(f"{n}: dwelling diverges (replayed {rp_d}, stored {sp_d})")
 
     verified = positions_ok and (state_dict.get("state") != "game over" or ended is not None)
     if not positions_ok:

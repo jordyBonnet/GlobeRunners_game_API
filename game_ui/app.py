@@ -4,9 +4,9 @@ Serves the frontend (static/) and embeds the game API defined in API.py: a singl
 server exposes everything (the API's REST + WebSocket, plus the UI routes below).
 
 Launch (from the project root):
-    python game_ui/app.py                 # -> http://127.0.0.1:8001
-or:
-    uvicorn game_ui.app:app --port 8001   (GLOBE_UI_PORT env var to change the port)
+    uv run python game_ui/app.py                 # -> http://127.0.0.1:8001
+kill all running instances of the UI:
+    Get-NetTCPConnection -LocalPort 8001 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }
 
 Routes added on top of API.py:
     GET /                          index.html (setup page: deck + create/join)
@@ -44,7 +44,7 @@ from starlette.requests import Request  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 # the API.py app (engine REST + WebSocket) — the webapp "interacts" with it by embedding it
-from API import CreateGameRequest, app as api_app  # noqa: E402
+from API import CreateGameRequest, check_deck, app as api_app  # noqa: E402
 import engine.game_engine as ge  # noqa: E402
 from models import PlayerState  # noqa: E402
 from ai_driver import random_ai_deck, run_ai_loop  # noqa: E402
@@ -52,8 +52,9 @@ from ai_driver import random_ai_deck, run_ai_loop  # noqa: E402
 STATIC_DIR = HERE / "static"
 
 # external asset folders (card art + game assets)
-ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GenAI_TCG\lib\artdesign\cards_framed_0.6")
-ASSETS_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GenAI_TCG\lib\artdesign\cards_assets")
+ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_framed_0.6")
+ASSETS_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_assets")
+CARDS_EX_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_ex")
 
 PLACEHOLDER_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="180" height="260" viewBox="0 0 180 260">
   <rect x="4" y="4" width="172" height="252" rx="14" fill="#1d2438" stroke="#4a5578" stroke-width="3"/>
@@ -83,10 +84,7 @@ async def create_game_ai(req: CreateGameRequest):
     """
     if not req.deck:
         raise HTTPException(status_code=400, detail="deck must not be empty")
-    pool_ids = set(ge.get_cardpool()['card_id'].to_list())
-    bad = [c for c in req.deck if c not in pool_ids]
-    if bad:
-        raise HTTPException(status_code=400, detail=f"unknown card id(s) in deck: {bad[:5]}")
+    check_deck(req.deck)   # main faction cards (cardpool) + support faction cards (card_name)
 
     name = req.name.strip()
     if len(name) < 2:
@@ -153,6 +151,11 @@ if ASSETS_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 else:
     print(f"[game_ui] assets dir not found, board backgrounds will be plain: {ASSETS_DIR}")
+
+if CARDS_EX_DIR.is_dir():
+    app.mount("/cards_ex", StaticFiles(directory=str(CARDS_EX_DIR)), name="cards_ex")
+else:
+    print(f"[game_ui] cards_ex dir not found, placeholder images will be unavailable: {CARDS_EX_DIR}")
 
 
 # ------------------------------------------------------------------ game API

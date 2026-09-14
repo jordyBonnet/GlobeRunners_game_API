@@ -1,9 +1,9 @@
 """FastAPI web app for analyzing stored games from games/games.db.
 
 Run (from the project root, with the venv activated):
-    uvicorn analysis.app:app --reload --port 8000
+    uvicorn analysis.app:app --reload --port 8017
 or directly:
-    python -m uvicorn games.analysis.app:app --port 8000   # see README in this folder
+    python -m uvicorn games.analysis.app:app --port 8017   # see README in this folder
 
 Endpoints:
     GET /                     -> static frontend (game selector + per-turn view)
@@ -31,7 +31,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 import replay  # noqa: E402
 
 # external folder containing <card_id>.png for every card of the pool
-ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GenAI_TCG\lib\artdesign\cards_framed_0.6")
+ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_framed_0.6")
 
 app = FastAPI(title="GlobeRunners - Analyse de parties")
 

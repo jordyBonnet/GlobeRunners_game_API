@@ -131,6 +131,15 @@ details.turn[open] .chev { transform: rotate(90deg); }
 .mana-row { display: flex; gap: 24px; margin-bottom: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .mana-item { display: inline-flex; align-items: center; gap: 8px; }
 
+/* ---- board / dwelling events (engineers drops, dwelling place / tap) ---- */
+.events-row { display: flex; gap: 10px; margin-bottom: 14px; font-size: 13px; flex-wrap: wrap; }
+.event-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 9px; border-radius: 20px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.event-card { width: 26px; height: 35px; object-fit: cover; border-radius: 3px; border: 1px solid var(--border); }
+
 /* ---- action rows (parallel by index) ---- */
 .action-row {
   display: grid;

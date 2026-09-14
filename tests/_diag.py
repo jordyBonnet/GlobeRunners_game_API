@@ -312,6 +312,23 @@ def test_oppo_movement_effects():
     print('oppo movement effects tests PASSED\n')
 
 
+def _apply_pending_discard(gs):
+    """ v13 (discard selection): process_card PAUSED on pending_discard instead of
+    auto-discarding -> apply the choice (the last n cards, like the legacy
+    auto-discard) and clear the pause marker, exactly like
+    handle_websocket_message does for a to:'discard_pile' message. """
+    pd = gs.pending_discard
+    if pd is None:
+        return
+    t = gs.players[pd['player']]
+    n = min(pd['n'], len(t.hand or []))
+    chosen = (t.hand or [])[-n:]
+    for c in chosen:
+        t.hand.remove(c)
+    t.discard = (t.discard or []) + chosen
+    gs.pending_discard = None
+
+
 def test_draw_discard_effects():
     print('=== unit tests: draw / discard effects ===')
     import polars as pl
@@ -345,6 +362,7 @@ def test_draw_discard_effects():
     hand_a1 = len(a.hand)
     msg2 = {'cards': [discard_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
     ge.process_card(msg2, a, gs)
+    _apply_pending_discard(gs)   # v13: the engine paused on the discard selection
     print(f"discard card (N={n_disc}): A hand {hand_a1} -> {len(a.hand)}, discard pile: {len(a.discard)}")
     assert len(a.hand) == hand_a1 - n_disc
     assert len(a.discard) == 2 + n_disc   # played draw card + played discard card + discarded cards
@@ -364,6 +382,7 @@ def test_draw_discard_effects():
     hand_b1 = len(b.hand)
     msg4 = {'cards': [discard_oppo_card['card_id']], 'to': 'stopover_x', 'mode': 'move', 'pendings': []}
     ge.process_card(msg4, a, gs)
+    _apply_pending_discard(gs)   # v13: the engine paused on the discard selection
     print(f"discard_oppo card: B hand {hand_b1} -> {len(b.hand)}, B discard pile: {len(b.discard)}")
     assert len(b.hand) == hand_b1 - 1
     assert len(b.discard) == 1   # only the discarded card (B never played anything)

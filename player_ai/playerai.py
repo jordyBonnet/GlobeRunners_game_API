@@ -13,28 +13,51 @@ class PlayerAI:
 		self.drops_on_board = None  # any drop/trap on the earth (set via update_player_state)
 		CARDS_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/cardpool.parquet')
 		self.CARDS_DB = pl.read_parquet(CARDS_DB_PATH)
+		# support-faction cards (engineers/mages/doctors) - NOT in cardpool. The robot
+		# may put ANY card in hand (main or support) into the mana zone (the engine
+		# accepts both; each card in the zone counts as 1 mana), so put_mana needs them.
+		SUPPORT_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/support_factions.parquet')
+		self.SUPPORT_DB = pl.read_parquet(SUPPORT_DB_PATH) if os.path.exists(SUPPORT_DB_PATH) else pl.DataFrame()
 
 	def put_mana(self, num_cards=3, in_turn=False):
-		"""Select cards with the highest mana value from hand."""
-		hand_df = self.CARDS_DB.filter(pl.col('card_id').is_in(self.player_state.hand))
-		top_mana_cards = hand_df.sort('mana', descending=True)['card_id'].to_list()[:num_cards]
-		if not top_mana_cards:  # empty hand: nothing to put in mana, pass instead
-			if in_turn:
-				return {
-					'cards': [],
-					'to': '',
-					'mode': 'pass',
-					'pendings': []
-				}
-			return top_mana_cards
+		"""Select `num_cards` from the hand to put into the mana zone.
+
+		The robot may put ANY card in hand (main OR support) - the engine accepts
+		both, and each card in the zone counts as 1 mana, so which card it is does
+		not change the mana total. We prefer support cards first (the robot never
+		plays them, so they are best used as mana tokens - zero opportunity cost),
+		then the most expensive main cards (sacrifice the ones least worth keeping
+		playable).
+
+		Returns exactly `num_cards` cards whenever the hand has that many (this is
+		what lets the init phase put its mandatory 3 in one valid message even when
+		the hand is a main+support mix). An empty hand returns [] (init) or a pass."""
+		hand = list(self.player_state.hand or [])
+		if not hand:
+			if in_turn:  # empty hand: nothing to put in mana, pass instead
+				return {'cards': [], 'to': '', 'mode': 'pass', 'pendings': []}
+			return []
+		main_ids = set(self.CARDS_DB['card_id'].to_list())
+		mana_of = {r['card_id']: int(r['mana']) for r in self.CARDS_DB.iter_rows(named=True)}
+		cost_of = {}
+		if self.SUPPORT_DB is not None and not self.SUPPORT_DB.is_empty():
+			cost_of = {r['card_name']: int(r['mana_cost']) for r in self.SUPPORT_DB.iter_rows(named=True)}
+
+		def rank(cid):
+			if cid in main_ids:
+				return (1, -mana_of.get(cid, 0))   # main: group 1, by mana desc
+			return (0, -cost_of.get(cid, 0))       # support: group 0 (preferred), by mana_cost desc
+
+		ranked = sorted(hand, key=rank)
+		top = ranked[:num_cards]
 		if in_turn:
 			return {
-			'cards': top_mana_cards,        # cards selected by user - LIST (if move mode, max 1 card, if defend mode, 1-5)
-			'to': 'mana',                   # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
-			'mode': '',                     # mode selected by user - STRING ['', move, defend, dwelling_activation, pass]
-			'pendings': []                  # cards in pendings zone that has to be added to a normal move card - LIST
-		}
-		return top_mana_cards
+				'cards': top,      # cards selected - LIST
+				'to': 'mana',      # destination - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]
+				'mode': '',        # mode - STRING ['', move, defend, dwelling_activation, pass]
+				'pendings': []     # cards in pendings zone to add to a normal move card - LIST
+			}
+		return top
 
 	def _condition_met(self, condition):
 		"""Mirror of game_engine.is_condition_met (only the conditions it can evaluate with the state it has).
@@ -133,6 +156,31 @@ class PlayerAI:
 			'pendings': []
 		}
 
+	def choose_discard(self, num_cards=1):
+		"""Discard selection (rule of engine_version 13): pick `num_cards` from the
+		hand when a discard / discard_oppo effect triggers. Heuristic: discard the
+		LEAST valuable cards first (a card whose condition is met is worth keeping,
+		then high advancing / high shield / low cost). Support cards are low
+		priority (dead weight in the robot's hand, but still usable as mana tokens).
+		Returns the standard message with to: 'discard_pile' (as many cards as the
+		hand allows - the engine caps the demand at the hand size)."""
+		hand = list(self.player_state.hand or [])
+		n = max(0, min(num_cards, len(hand)))
+		if n == 0:
+			return {'cards': [], 'to': 'discard_pile', 'mode': '', 'pendings': []}
+		main_df = self.CARDS_DB.filter(pl.col('card_id').is_in(hand))
+		main = {r['card_id']: r for r in main_df.iter_rows(named=True)}
+
+		def value(cid):
+			if cid in main:
+				r = main[cid]
+				met = 1 if self._condition_met(r['condition']) else 0
+				return (met, 2 * r['advancing'] + r['shield'] - r['mana'])
+			return (0, -0.5)   # support card: dead weight, but still a mana token
+
+		chosen = sorted(hand, key=value)[:n]
+		return {'cards': chosen, 'to': 'discard_pile', 'mode': '', 'pendings': []}
+
 	def update_player_state(self, player_state, oppo_state=None, game=None):
 		"""Update the internal player state (optionally with opponent info and global game info)."""
 		self.player_state = player_state
@@ -150,5 +198,6 @@ class PlayerAI:
 				self.drops_on_board = (
 					any(n > 0 for n in (game.drop_tokens or {}).values())
 					or any((c and ('trap' in c or 'drop' in c)) for c in (game.earth or []))
+					or any((d and d.get('cell') is not None) for d in (game.board_drops or []))   # engineers' drops (engine_version 12)
 				)
 		
