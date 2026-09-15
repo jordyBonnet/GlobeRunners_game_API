@@ -787,7 +787,6 @@ function renderOppZone(oppo) {
     mc.appendChild(c);
   }
   $("#oppo-mana-count").textContent = `${manaAvail}/${manaN}`;
-  $("#row-oppo-owner").textContent = oppo.name;
 }
 
 /* ---------------- player banner: [name] [mana on the left] [hand] [actions] ---------------- */
@@ -803,7 +802,6 @@ function renderMyZone(me, interactive) {
   const hand = $("#my-hand");
   hand.innerHTML = "";
   (me.hand || []).forEach((id) => hand.appendChild(makeHandCard(id, interactive, me)));
-  $("#row-me-owner").textContent = me.name;
 
   // mana: card backs in the drop (spent = turned 90° to the right) + available/total counter
   const manaCards = $("#my-mana-cards");
@@ -1010,7 +1008,6 @@ function buildBoard() {
   // 2 rows × 5 slots: opponent row (top) + player row (bottom), numbered 5..1
   for (const row of ["oppo", "me"]) {
     const rowEl = document.getElementById(`row-${row}`);
-    const label = rowEl.querySelector(".row-label");
     for (let col = 0; col < N_STOPOVERS; col++) {
       const el = document.createElement("div");
       el.className = "slot";
@@ -1046,7 +1043,7 @@ function buildBoard() {
           else if (myTurn(game.state) && sel[0]) toast(orderHint());
         });
       }
-      rowEl.insertBefore(el, label);
+      rowEl.appendChild(el);
       slotEls[row][col] = el;
     }
   }
@@ -1241,13 +1238,17 @@ function renderBoard(st, me, oppoName) {
       }
     }
     // dwelling placeholder: a faction-specific placeholder image in the stopover
-    // slot that the refinery would have occupied (set at placement time, stored in
-    // p.dwelling_slot) — purely visual, fills the slot to show the dwelling card
-    // is on the board (engine_version 12+)
-    if (p.dwelling) {
-      const phCol = (p.dwelling_slot !== null && p.dwelling_slot !== undefined) ? p.dwelling_slot : 0;
-      // remove any stale placeholder from other slots
-      slotEls[row].forEach(s => s.querySelectorAll(".dwelling-placeholder").forEach(e => e.remove()));
+    // slot that the refinery would have occupied (stored in p.dwelling_slot)
+    // — purely visual, fills the slot to show the dwelling card is on the board
+    // (engine_version 12+). The engine sets it at placement time and CLEARS it in
+    // the cleaning phase, so the placeholder only shows during the placement turn
+    // and must not reappear at every new turn.
+    // ALWAYS remove any stale placeholder first (it would otherwise stick in the
+    // DOM once the engine clears the slot - the slots are built once, not rebuilt
+    // on each render).
+    slotEls[row].forEach(s => s.querySelectorAll(".dwelling-placeholder").forEach(e => e.remove()));
+    if (p.dwelling && p.dwelling_slot !== null && p.dwelling_slot !== undefined) {
+      const phCol = p.dwelling_slot;
       const slot = slotEls[row][phCol];
       const el = document.createElement("div");
       el.className = "card dwelling-placeholder";

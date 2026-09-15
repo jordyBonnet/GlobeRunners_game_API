@@ -371,12 +371,7 @@ body.cell-selecting .cell-target:hover {
   background: linear-gradient(90deg, rgba(40,54,92,.35), rgba(24,33,60,.55));
   border: 1px solid rgba(255,255,255,.18);
 }
-.stopover-row { display: flex; align-items: center; gap: clamp(10px, 1.4vw, 18px); }
-.row-owner {
-  font-size: .78rem; color: var(--muted); letter-spacing: .3px;
-  max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.row-label { font-size: .8rem; color: rgba(255,255,255,.75); letter-spacing: .3px; white-space: nowrap; }
+.stopover-row { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 1.4vw, 18px); }
 .slot {
   position: relative;
   width: clamp(70px, 8vw, 98px); aspect-ratio: 180 / 260; border-radius: 10px;

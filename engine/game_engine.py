@@ -331,6 +331,10 @@ def _end_turn(current_game, message):
         p.landmine_blocked = False
         # dwelling (engine_version 12): the dwelling card can be tapped again next turn
         p.dwelling_tapped = False
+        # dwelling placeholder (engine_version 12): the placeholder image only shows
+        # during the placement turn — clear the stored slot here (cleaning phase) so it
+        # does not reappear at every new turn (the frontend renders it iff the slot is set)
+        p.dwelling_slot = None
 
         # draw the first 3 cards from deck to hand
         draw_n = min(turn_n_draw_cards, len(p.deck))
@@ -639,8 +643,9 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
     #                                  card: at most ONCE per turn, free, instant
     #                                  effect (refinery: draw 1). Untapped in the
     #                                  cleaning phase. Removed by wrecking_ball.
-    # Both are play-phase actions: they alternate with the opponent like a play
-    # (state transition below) but do NOT go into the trip chain (no resolution).
+    # Neither goes into the trip chain (no resolution). PLACE alternates with the
+    # opponent like a normal play; TAP is a QUICK ACTION — the state stays "waiting
+    # for this player to play", so they may still play a card or pass afterwards.
     if player.message['to'] == 'dwelling':
         if (current_game.engine_version or 0) < 12:
             return player, current_game, False, "dwelling actions are not available in this game (engine_version < 12)"
@@ -688,15 +693,17 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
             print(f'\t\t\tDWELLING place: {player.name} places {card_id} on the board (cost {cost})')
             message = f"{player.name} places the dwelling card {card_id} on the board"
 
-        # alternation (same as a play: control passes to the opponent unless they already passed)
-        if first_second == 'first':
-            current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
-            if current_game.second_player_passed:
-                current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
-        elif first_second == 'second':
-            current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
-            if current_game.first_player_passed:
+            # alternation (same as a play: control passes to the opponent unless they already passed)
+            if first_second == 'first':
                 current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
+                if current_game.second_player_passed:
+                    current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
+            elif first_second == 'second':
+                current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
+                if current_game.first_player_passed:
+                    current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
+        # TAP: no alternation — the state already reads "waiting for <this player>
+        # to play", so they keep the floor and may play a card or pass next.
 
         for p in current_game.players.values():
             if p.name == player.name:

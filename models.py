@@ -20,7 +20,7 @@ class PlayerState(BaseModel):
     messages_history: List[Dict] = []
     action_chain: List[Dict] = []    # a list of dict of cards send by player
     dwelling: Optional[str] = None  # dwelling (engine_version 12: card_id of the dwelling card on the board, e.g. the engineers' refinery)
-    dwelling_slot: Optional[int] = None  # dwelling (engine_version 12): the stopover column (0-4) where the placeholder renders (set at placement time based on play order)
+    dwelling_slot: Optional[int] = None  # dwelling (engine_version 12): the stopover column (0-4) where the placeholder renders (set at placement time based on play order; cleared in the cleaning phase so the placeholder only shows during the placement turn)
     dwelling_tapped: bool = False   # dwelling (engine_version 12): the dwelling card was already tapped this turn (1 tap/turn, untapped in the cleaning phase)
     landmine_blocked: bool = False  # landmine (engine_version 12): blocked by a landmine drop until the end of the current turn (move cards canceled — no effect, no advancing — except unstoppable)
     faction: Optional[str] = None  # main faction of the player (e.g. "Dwarves", "Demons", …) — derived from the deck at game creation; public info (needed for biome conditions + placeholder art)

@@ -1,4 +1,7 @@
-- placeholder card stay here after each turn → to be fixed: make sure the placeholder disapear at cleaning phase, and do not appear at every new turn
-- tapping the dwelling card is considered as a quick action, and is not considered as playing on stopover. so the user may play after tapping his card.
 - integrate support faction cards being playable for IA
-- add a visual effect to identify who is the first player every turn 
+
+Visuals
+- add a visual effect to identify who is the first player every turn
+- add cards movements animations from one place to another (deck → hand, stopover → discard, etc...)
+- add real player token iamge on the earth
+- use the real cataclysms background cards

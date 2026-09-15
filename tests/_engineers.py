@@ -12,6 +12,8 @@
 #      * placed from the hand in the dedicated zone (1 at a time, cost 3)
 #      * tapped once per turn (free) -> draw 1 card; untapped in cleaning
 #      * removed by wrecking_ball
+#      * placeholder slot (dwelling_slot): set at placement, cleared in the
+#        cleaning phase so the placeholder only shows during the placement turn
 #  - support cards cost their mana_cost when played (v12)
 #  - drop_on_board condition counts engineer drops
 #  - old games (engine_version < 12): drops are no-ops, dwelling actions rejected
@@ -151,6 +153,7 @@ def next_turn(gs):
         p.action_chain = []
         p.landmine_blocked = False
         p.dwelling_tapped = False
+        p.dwelling_slot = None   # placeholder slot cleared in the cleaning phase (mirrors _end_turn)
         draw_n = min(ge.turn_n_draw_cards, len(p.deck))
         new_cards = p.deck[:draw_n]
         p.hand.extend(new_cards)
@@ -355,6 +358,9 @@ assert okk, f"dwelling placement rejected: {msgtxt}"
 assert gs.players['A'].dwelling == 'refinery', f"refinery should be on the dwelling spot, got {gs.players['A'].dwelling}"
 assert 'refinery' not in (gs.players['A'].hand or []), "refinery should leave the hand"
 assert gs.players['A'].mana_spend == 3, f"placement should cost 3 mana, spent {gs.players['A'].mana_spend}"
+# the placeholder slot is set at placement time (the frontend renders the
+# placeholder image in that stopover column during the placement turn)
+assert gs.players['A'].dwelling_slot is not None, "dwelling_slot should be set at placement time"
 # the second placement is rejected (one dwelling card at a time)
 force_hand(gs, 'A', ['refinery'])
 gs, okk, msgtxt = dwelling(gs, 'A', 'first', cards=['refinery'])
@@ -375,6 +381,19 @@ assert gs.players['A'].mana_spend == 0, "the tap is free (no extra mana)"
 gs, okk, msgtxt = dwelling(gs, 'A', 'first', cards=None, mode='dwelling_activation')
 assert not okk and 'tapped' in msgtxt, f"2nd tap should be rejected, got ok={okk} msg={msgtxt}"
 print("11) DWELLING TAP: draw 1, once per turn -> PASS")
+ok += 1
+
+# ============================================================
+# 11b) DWELLING PLACEHOLDER SLOT: cleared in the cleaning phase (so the
+#      placeholder does not reappear at every new turn) — drives the REAL
+#      engine turn-end block (ge._end_turn), not the test mirror.
+#      (runs AFTER the tap: the tap needs a deck card to draw)
+# ============================================================
+gs, _ok, _msg = ge._end_turn(gs, 'test')
+assert gs.players['A'].dwelling_slot is None, f"dwelling_slot should be cleared in the cleaning phase, got {gs.players['A'].dwelling_slot}"
+assert gs.players['A'].dwelling == 'refinery', "the dwelling card itself must STAY on the board (only the placeholder slot is cleared)"
+assert gs.turn >= 1, "the turn should have advanced"
+print("11b) DWELLING PLACEHOLDER SLOT: set at placement, cleared in the cleaning phase, dwelling card kept -> PASS")
 ok += 1
 
 # ============================================================
