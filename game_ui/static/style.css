@@ -293,6 +293,8 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6);
   transition: left .45s cubic-bezier(.5,1.4,.5,1), top .45s cubic-bezier(.5,1.4,.5,1);
 }
+/* note: the .marker elements are PERSISTED across renders (app.js repositions them
+   instead of recreating them) so this transition animates the token sliding along the ring */
 .marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
 .marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
 
@@ -334,6 +336,31 @@ body.cell-selecting .cell-target:hover {
 }
 @keyframes cellTargetPulse { 0%,100% { background: rgba(79,209,197,.10); } 50% { background: rgba(79,209,197,.22); } }
 
+/* ---------------- card movement animation (zone transitions) ---------------- */
+/* a lightweight clone that flies from the old zone to the new zone (deck→hand,
+   hand→stopover, stopover→discard, hand→mana, …) — spawned by app.js on every
+   state change that moved cards between zones */
+.card-fly {
+  position: fixed; z-index: 80; pointer-events: none;
+  border-radius: 9px; overflow: hidden; background: #141b30;
+  box-shadow: 0 12px 28px rgba(0,0,0,.7), 0 0 0 2px rgba(79,209,197,.45);
+  transition: transform 520ms cubic-bezier(.3,.75,.4,1), opacity 520ms ease;
+  will-change: transform, opacity;
+}
+.card-fly img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* face-down variant (the opponent's hidden cards) */
+.card-fly.back::before {
+  content: ""; position: absolute; inset: 0;
+  background: url('/assets/GR_cards_back.png') center/cover no-repeat; opacity: .95;
+}
+/* a NEW board token (pet trap / engineer drop) pops into place instead of appearing */
+.drop-token.token-pop { animation: tokenPop .55s cubic-bezier(.3,1.6,.5,1); }
+@keyframes tokenPop {
+  0%   { transform: translate(-50%, -50%) scale(.2); opacity: 0; }
+  70%  { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
 /* landmine-blocked badge (player banner) */
 .landmine-badge {
   color: #ffd9a0; background: #7a1f1f; border: 1.5px solid #ffd9a0;
@@ -372,6 +399,26 @@ body.cell-selecting .cell-target:hover {
   border: 1px solid rgba(255,255,255,.18);
 }
 .stopover-row { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 1.4vw, 18px); }
+
+/* trip-chain resolution animation: when a turn just resolved, the slots pulse in
+   the exact resolution order — gold = first player of the turn, silver = second */
+.slot.chain-pulsing { animation: chain-pulse .46s ease-in-out; }
+.slot.chain-pulsing.chain-first  { --chain-glow: rgba(255, 197, 66, .95); }
+.slot.chain-pulsing.chain-second { --chain-glow: rgba(186, 205, 235, .9); }
+@keyframes chain-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.07); box-shadow: 0 0 24px 8px var(--chain-glow); border-color: var(--chain-glow); }
+  100% { transform: scale(1); }
+}
+/* glowing thread between the two facing slots of the stopover that is resolving */
+.chain-thread {
+  position: absolute; width: 4px; border-radius: 2px; pointer-events: none; z-index: 30;
+  box-shadow: 0 0 10px 2px rgba(255, 214, 120, .55);
+  animation: chain-thread .46s ease-in-out;
+}
+.chain-thread.first-top    { background: linear-gradient(180deg, rgba(255, 197, 66, .95), rgba(186, 205, 235, .9)); }
+.chain-thread.first-bottom { background: linear-gradient(180deg, rgba(186, 205, 235, .9), rgba(255, 197, 66, .95)); }
+@keyframes chain-thread { 0%, 100% { opacity: 0; } 35% { opacity: 1; } }
 .slot {
   position: relative;
   width: clamp(70px, 8vw, 98px); aspect-ratio: 180 / 260; border-radius: 10px;
