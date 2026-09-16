@@ -6,12 +6,14 @@ Run (server must be up on port 8001):
 """
 import asyncio
 import json
+import os
 import sys
 import urllib.request
 
 import websockets
 
-BASE = "http://127.0.0.1:8001"
+PORT = os.environ.get("GLOBE_E2E_PORT", "8001")
+BASE = f"http://127.0.0.1:{PORT}"
 
 
 def http_get(path):
@@ -42,7 +44,7 @@ async def main():
     st = http_get(f"/api/state/{gid}/Alice")
     assert st["players"] and len(st["players"]) == 2, f"opponent not in game: {st.get('players')}"
 
-    ws_url = f"ws://127.0.0.1:8001/ws/{gid}/Alice"
+    ws_url = f"ws://127.0.0.1:{PORT}/ws/{gid}/Alice"
     async with websockets.connect(ws_url) as ws:
         first = json.loads(await ws.recv())
         assert "players" in first

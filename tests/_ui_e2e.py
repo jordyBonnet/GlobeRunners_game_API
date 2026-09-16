@@ -1,16 +1,18 @@
 """E2E smoke test for game_ui/app.py : simulates 2 players through REST + WS.
 
-Run (server must be up on port 8001) :
+Run (server must be up on port 8001, or set GLOBE_E2E_PORT to another port) :
     python tests/_ui_e2e.py
 """
 import asyncio
 import json
+import os
 import sys
 import urllib.request
 
 import websockets
 
-BASE = "http://127.0.0.1:8001"
+PORT = os.environ.get("GLOBE_E2E_PORT", "8001")
+BASE = f"http://127.0.0.1:{PORT}"
 
 
 def http_get(path):
@@ -40,7 +42,7 @@ async def main():
     with urllib.request.urlopen(BASE + "/", timeout=15) as r:
         idx_text = r.read().decode()
     assert "GlobeRunners" in idx_text
-    for p in ("/static/style.css", "/static/app.js", "/placeholder.svg"):
+    for p in ("/static/style.css", "/static/app.mjs", "/placeholder.svg"):
         with urllib.request.urlopen(BASE + p, timeout=15) as r:
             assert r.status == 200
 
@@ -68,7 +70,7 @@ async def main():
     log = []
 
     async def player(name, faction):
-        ws_url = f"ws://127.0.0.1:8001/ws/{gid}/{name}"
+        ws_url = f"ws://127.0.0.1:{PORT}/ws/{gid}/{name}"
         async with websockets.connect(ws_url) as ws:
             first = json.loads(await ws.recv())
             assert "players" in first

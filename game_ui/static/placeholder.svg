@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="260" viewBox="0 0 180 260">
+  <rect x="4" y="4" width="172" height="252" rx="14" fill="#1d2438" stroke="#4a5578" stroke-width="3"/>
+  <circle cx="90" cy="105" r="46" fill="#2c3a5e"/>
+  <path d="M55 120 q18 -22 35 -8 q16 13 35 -6" stroke="#7f9bd4" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <text x="90" y="195" font-family="Segoe UI, Arial" font-size="17" fill="#cdd8f2" text-anchor="middle">Unknown card</text>
+  <text x="90" y="222" font-family="Segoe UI, Arial" font-size="13" fill="#6d7ba0" text-anchor="middle">(missing art)</text>
+</svg>

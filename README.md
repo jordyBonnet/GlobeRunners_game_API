@@ -15,7 +15,7 @@ in **Parquet** (polars), vanilla JS/CSS/HTML frontend.
 ├── models.py          # Shared Pydantic models (PlayerState, GameState, Card)
 ├── API.py             # REST + WebSocket API layer of the engine (standalone service)
 ├── game_ui/           # Full web UI: frontend + UI routes + "Robot" player (AI)
-│   └── static/        #   frontend (index.html, app.js, style.css)
+│   └── static/        #   frontend (index.html, style.css, ES modules — entry: app.mjs)
 ├── player_ai/         # Heuristic AI (PlayerAI) — decision core of the Robot
 ├── games/             # SQLite database of played games (games.db) + game analysis
 │   └── analysis/      #   dedicated web app for replay/analysis (see its README)
@@ -150,7 +150,7 @@ Then open `http://127.0.0.1:8001/`: setup page (deck choice) → create, join
 | File | Role |
 |---|---|
 | `app.py` | root FastAPI app: UI routes + mount of `API.py` on `/` + assets |
-| `static/` | vanilla frontend: `index.html`, `app.js`, `style.css` (dark theme, English UI) |
+| `static/` | vanilla frontend: `index.html`, `style.css`, a set of ES modules (entry: `app.mjs`, see `app-js-overview.md`) — dark theme, English UI |
 | `ai_driver.py` | background AI loop: reads the state, decides via `PlayerAI`, plays |
 
 **Added routes**: `GET /` (setup page), `GET /static/*`, `GET /art/<id>.png`

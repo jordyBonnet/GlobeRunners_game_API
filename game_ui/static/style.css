@@ -160,6 +160,10 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   justify-content: safe center;   /* hand centered; if it overflows, fall back to left + scroll */
   overflow-x: auto;
   min-height: calc(var(--card-w) * 260 / 180);
+  /* the bar height is set by the mana drop (taller than the cards) and .big-zone centers
+     its children — the hand would float in the middle with a gap below. Stretch the band
+     to the full bar height instead, so the cards (align-items: flex-end) sit at the bar bottom */
+  align-self: stretch;
 }
 .band-hand .card:hover { transform: translateY(-8px) scale(1.05); }
 
@@ -189,6 +193,15 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .mana-drop .mana-cards .card { width: clamp(26px, 3vw, 38px); aspect-ratio: 180 / 260; border-radius: 4px; transition: transform .25s ease; }
 .mana-drop .mana-cards .card.back::after { border-radius: 4px; }
+/* waiting-for-mana phase (init: put 3 / mana: put 1 or pass): the mana drop pulses
+   with a purple glow (dark -> light purple) to signal "put a card here".
+   Toggled by renderMyZone (zones.mjs) only when the phase is init-mana or mana-pass. */
+#dz-mana.mana-waiting { animation: manaPulse 1.6s ease-in-out infinite; }
+@keyframes manaPulse {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(58, 29, 143, .9)) drop-shadow(0 0 22px rgba(58, 29, 143, .55)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(185, 155, 255, .95)) drop-shadow(0 0 34px rgba(139, 107, 255, .8)); }
+}
+
 /* mana card already spent this turn ("tapped"): rotated 90° to the right */
 .mana-drop .mana-cards .card.tapped { transform: rotate(90deg); filter: saturate(.75) brightness(.92); }
 .drop-count {
@@ -293,7 +306,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6);
   transition: left .45s cubic-bezier(.5,1.4,.5,1), top .45s cubic-bezier(.5,1.4,.5,1);
 }
-/* note: the .marker elements are PERSISTED across renders (app.js repositions them
+/* note: the .marker elements are PERSISTED across renders (board.mjs repositions them
    instead of recreating them) so this transition animates the token sliding along the ring */
 .marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
 .marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
@@ -338,7 +351,7 @@ body.cell-selecting .cell-target:hover {
 
 /* ---------------- card movement animation (zone transitions) ---------------- */
 /* a lightweight clone that flies from the old zone to the new zone (deck→hand,
-   hand→stopover, stopover→discard, hand→mana, …) — spawned by app.js on every
+   hand→stopover, stopover→discard, hand→mana, …) — spawned by anim.mjs on every
    state change that moved cards between zones */
 .card-fly {
   position: fixed; z-index: 80; pointer-events: none;
@@ -530,7 +543,7 @@ body.cell-selecting .cell-target:hover {
   padding-left: 14px; border-left: 1px solid rgba(255,255,255,.22); max-width: 42%;
 }
 #action-bar .primary-btn, #action-bar .ghost-btn { white-space: nowrap; }
-#action-hint { color: var(--muted); font-size: .72rem; text-align: right; max-width: 300px; line-height: 1.3; }
+#action-hint { color: var(--muted); font-size: .8rem; text-align: right; max-width: 300px; line-height: 1.3; }
 .primary-btn {
   padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: .95rem; font-weight: 600;
   background: linear-gradient(135deg, #2c7a7b, var(--accent)); color: #04211f; border: none;
@@ -545,8 +558,6 @@ body.cell-selecting .cell-target:hover {
 .ghost-btn:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2); }
 .ghost-btn:disabled { opacity: .4; cursor: not-allowed; }
 .small-btn { padding: 8px 16px; font-size: .85rem; }
-
-#action-hint { color: var(--muted); font-size: .8rem; }
 
 /* message bar */
 #msg-bar {

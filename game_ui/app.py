@@ -5,14 +5,15 @@ server exposes everything (the API's REST + WebSocket, plus the UI routes below)
 
 Launch (from the project root):
     uv run python game_ui/app.py                 # -> http://127.0.0.1:8001
-kill all running instances of the UI:
+kill all running instances of the UI (PowerShell):
     Get-NetTCPConnection -LocalPort 8001 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }
 
 Routes added on top of API.py:
     GET /                          index.html (setup page: deck + create/join)
-    GET /static/*                  frontend css / js
+    GET /static/*                  frontend css / js (the app is a set of ES modules, entry: app.mjs)
     GET /art/<card_id>.png         card art (external folder, placeholder if absent)
     GET /assets/*                  game assets (biomes, markers, logos...)
+    GET /cards_ex/*                faction placeholder art (dwelling card)
     GET /placeholder.svg           fallback image for cards without art
     GET /api/state/{gid}/{player}  personalized state on demand (polling) — the
                                    opponent's hidden info stays masked (unlike
@@ -34,13 +35,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
-from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
-from starlette.requests import Request  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 # the API.py app (engine REST + WebSocket) — the webapp "interacts" with it by embedding it
@@ -51,18 +48,15 @@ from ai_driver import random_ai_deck, run_ai_loop  # noqa: E402
 
 STATIC_DIR = HERE / "static"
 
-# external asset folders (card art + game assets)
-ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_framed_0.6")
-ASSETS_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_assets")
-CARDS_EX_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_ex")
-
-PLACEHOLDER_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="180" height="260" viewBox="0 0 180 260">
-  <rect x="4" y="4" width="172" height="252" rx="14" fill="#1d2438" stroke="#4a5578" stroke-width="3"/>
-  <circle cx="90" cy="105" r="46" fill="#2c3a5e"/>
-  <path d="M55 120 q18 -22 35 -8 q16 13 35 -6" stroke="#7f9bd4" stroke-width="5" fill="none" stroke-linecap="round"/>
-  <text x="90" y="195" font-family="Segoe UI, Arial" font-size="17" fill="#cdd8f2" text-anchor="middle">Unknown card</text>
-  <text x="90" y="222" font-family="Segoe UI, Arial" font-size="13" fill="#6d7ba0" text-anchor="middle">(missing art)</text>
-</svg>"""
+# external asset folders (card art + game assets + faction placeholders),
+# all under the same art root: (mount path, directory, note if missing)
+_ART_ROOT = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign")
+STATIC_MOUNTS = [
+    ("/static", STATIC_DIR, "the frontend static folder is missing!"),
+    ("/art", _ART_ROOT / "cards_framed_0.6", "card images will use the placeholder"),
+    ("/assets", _ART_ROOT / "cards_assets", "board backgrounds will be plain"),
+    ("/cards_ex", _ART_ROOT / "cards_ex", "faction placeholder images will be unavailable"),
+]
 
 app = FastAPI(title="GlobeRunners - Web UI")
 
@@ -71,6 +65,11 @@ app = FastAPI(title="GlobeRunners - Web UI")
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/placeholder.svg")
+def placeholder():
+    return FileResponse(STATIC_DIR / "placeholder.svg", media_type="image/svg+xml")
 
 
 @app.post("/create_game_ai")
@@ -103,11 +102,6 @@ async def create_game_ai(req: CreateGameRequest):
     return {"success": True, "game_id": game_id, "player_id": name, "opponent": ai_name}
 
 
-@app.get("/placeholder.svg")
-def placeholder():
-    return Response(PLACEHOLDER_SVG, media_type="image/svg+xml")
-
-
 @app.get("/api/state/{game_id}/{player_name}")
 def personalized_state(game_id: str, player_name: str):
     """Personalized game state for one player (opponent's hand/mana/deck masked).
@@ -131,31 +125,38 @@ def personalized_state(game_id: str, player_name: str):
 
 
 # ------------------------------------------------------------------ statiques
-# no-cache on /static: the layout evolves fast, avoid the browser serving stale css/js
-class NoCacheStatic(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        if request.url.path.startswith("/static/"):
-            response.headers["Cache-Control"] = "no-cache, must-revalidate"
-        return response
+# no-cache on /static: the layout evolves fast, avoid the browser serving stale css/js.
+# Pure ASGI middleware (cheaper than BaseHTTPMiddleware: no task-per-request).
+class NoCacheStatic:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope["path"].startswith("/static/"):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_no_cache(message):
+            if message["type"] == "http.response.start":
+                message = {
+                    **message,
+                    "headers": [
+                        *message.get("headers", []),
+                        (b"cache-control", b"no-cache, must-revalidate"),
+                    ],
+                }
+            await send(message)
+
+        await self.app(scope, receive, send_no_cache)
+
 
 app.add_middleware(NoCacheStatic)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-if ART_DIR.is_dir():
-    app.mount("/art", StaticFiles(directory=str(ART_DIR)), name="art")
-else:
-    print(f"[game_ui] art dir not found, card images will use the placeholder: {ART_DIR}")
-
-if ASSETS_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
-else:
-    print(f"[game_ui] assets dir not found, board backgrounds will be plain: {ASSETS_DIR}")
-
-if CARDS_EX_DIR.is_dir():
-    app.mount("/cards_ex", StaticFiles(directory=str(CARDS_EX_DIR)), name="cards_ex")
-else:
-    print(f"[game_ui] cards_ex dir not found, placeholder images will be unavailable: {CARDS_EX_DIR}")
+for path, directory, note in STATIC_MOUNTS:
+    if directory.is_dir():
+        app.mount(path, StaticFiles(directory=str(directory)), name=path.strip("/"))
+    else:
+        print(f"[game_ui] {directory} not found: {note}")
 
 
 # ------------------------------------------------------------------ game API
