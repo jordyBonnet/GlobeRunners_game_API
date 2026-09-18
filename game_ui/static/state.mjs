@@ -61,7 +61,8 @@ export function renderAll() {
   const oppo = oppoName ? st.players[oppoName] : null;
 
   // topbar
-  $("#turn-number").textContent = `Tour ${st.turn || "?"}`;
+  const firstName = (st.turn_order && st.turn_order.length) ? st.turn_order[0] : null;
+  $("#turn-number").textContent = firstName ? `Turn ${st.turn || "?"} (first player: ${firstName})` : `Turn ${st.turn || "?"}`;
   $("#temp-badge").textContent = st.temperature != null ? `🌡️ ${st.temperature}` : "🌡️ ?";
   const dn = st.day_night === "night" ? "🌙 Nuit" : "☀️ Jour";
   $("#daynight-badge").textContent = dn;

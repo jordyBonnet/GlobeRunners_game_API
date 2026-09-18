@@ -161,22 +161,22 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
                     1 for a in (me.action_chain or [])
                     if a and a.get("mode") in ("move", "defend") and a.get("cards")
                 )
-                defend["to"] = f"stopover_{4 - min(played, 4)}"
+                defend["to"] = ge._player_stopover(game, me.name, played)
                 return defend
 
         # 3.b MAIN: play a card (move) — the robot advances every turn (original behavior).
         msg = ai.play_card()
-        # ordering rule (same as the frontend's nextSlotCol): the k-th card of the
-        # turn — move OR defend — goes to stopover k -> columns 4, 3, 2, 1, 0
-        # (stopover 1 = right-most column). BOTH modes consume a slot, so no two
-        # cards ever land on the same stopover, and the robot's k-th defend sits
-        # on the same stopover as the opponent's k-th card (which it blocks).
+        # ordering rule (same as the frontend's freeCols/nextSlotCol): the k-th card of
+        # the turn — move OR defend — goes to the k-th FREE stopover (columns 4,3,2,1,0),
+        # SKIPPING any stopover reserved by board furniture (rooted-on-board card or a
+        # dwelling placeholder). BOTH modes consume a slot, and the robot's k-th card sits
+        # on the same column as the opponent's k-th card (which it blocks).
         if msg.get("mode") == "move" and msg.get("cards"):
             played = sum(
                 1 for a in (me.action_chain or [])
                 if a and a.get("mode") in ("move", "defend") and a.get("cards")
             )
-            msg["to"] = f"stopover_{4 - min(played, 4)}"
+            msg["to"] = ge._player_stopover(game, me.name, played)
         return msg
 
     return None

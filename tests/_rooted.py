@@ -175,7 +175,9 @@ print(f"4b) COOLDOWN EXPIRES: card rooted 2 turns ago can earn a token again -> 
 ok += 1
 
 # ============================================================
-# 5) NO STACKING: multiple rooted cards get distinct stopovers (play order)
+# 5) NO STACKING (per-player, engine_version 15): a player's OWN rooted cards
+#    get DISTINCT positions (no stacking) — but the two players are INDEPENDENT,
+#    so B's rooted card may legitimately share A's stopover_4 (per-player slots).
 # ============================================================
 gs4 = new_game([rooted1, rooted2], [adv1])
 set_biomes(gs4, 'OC')
@@ -191,14 +193,20 @@ if rooted2 != rooted1:
     assert rooted2 in ids_this_turn, f"rooted2 should be in rooted_this_turn, got {ids_this_turn}"
 # place them
 gs4 = ge._process_rooted_cards(gs4)
-# the cards should be on DISTINCT stopovers (no stacking)
-stopovers = [e['stopover'] for e in gs4.rooted_on_board]
-assert len(set(stopovers)) == len(stopovers), f"stopovers should be distinct, got {stopovers}"
-# the first rooted card should be on stopover_4, the second on stopover_3
-assert stopovers[0] == 'stopover_4', f"first card should be on stopover_4, got {stopovers}"
+# PER-PLAYER no stacking: a player's OWN rooted cards occupy distinct positions.
+a_stops = [e['stopover'] for e in gs4.rooted_on_board if e['owner'] == 'A']
+b_stops = [e['stopover'] for e in gs4.rooted_on_board if e['owner'] == 'B']
 if rooted2 != rooted1:
-    assert stopovers[1] == 'stopover_3', f"second card should be on stopover_3, got {stopovers}"
-print(f"5) NO STACKING: cards on distinct stopovers {stopovers} -> PASS")
+    assert len(set(a_stops)) == len(a_stops) and len(a_stops) == 2, \
+        f"A's rooted cards should occupy 2 distinct positions, got {a_stops}"
+assert a_stops[0] == 'stopover_4', f"A's first card should be at position 1 (stopover_4), got {a_stops}"
+if rooted2 != rooted1:
+    assert a_stops[1] == 'stopover_3', f"A's second card should be at position 2 (stopover_3), got {a_stops}"
+assert b_stops == ['stopover_4'], f"B's card should be at B's position 1 (stopover_4), got {b_stops}"
+# NOTE: B's card shares stopover_4 with A's first card — that is CORRECT in the
+# per-player model (each player has their OWN 5 slots). The OLD shared model
+# (engine_version < 15) would have forced a distinct column.
+print(f"5) NO STACKING (per-player): A={a_stops} B={b_stops} -> PASS")
 ok += 1
 
 # ============================================================

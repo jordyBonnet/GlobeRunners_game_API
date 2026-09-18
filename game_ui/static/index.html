@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
-<link rel="stylesheet" href="/static/style.css?v=14">
+<link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
 
@@ -12,7 +12,7 @@
 <div id="view-setup" class="setup-wrap">
   <header class="setup-header">
     <img src="/assets/GlobeRunners_large_logo.png" alt="GlobeRunners" class="logo">
-    <p class="tagline">Race around the Earth — first player to reach cell 24 wins.</p>
+    <p class="tagline">Claim the Globe</p>
   </header>
 
   <div class="setup-grid">
@@ -168,8 +168,8 @@
           <img src="/assets/envcard_temperature_fc.png" alt="Temperature">
           <span class="temp-value" id="env-temp-val">?</span>
         </div>
-        <div class="env-card env-cata" title="Cataclysm deck (4 cards) — not implemented yet">
-          <div class="cata-stack"><i></i><i></i><i></i><i></i></div>
+        <div class="env-card env-cata" title="Cataclysm deck (4 cards, one per biome) — the top card names the biome that gets struck">
+          <img src="/assets/envcard_cata_back.png" alt="Cataclysm deck" onerror="this.onerror=null;this.src='/placeholder.svg'">
         </div>
       </div>
 
@@ -265,6 +265,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/app.mjs?v=14"></script>
+<script type="module" src="/static/app.mjs?v=22"></script>
 </body>
 </html>

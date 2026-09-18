@@ -1,0 +1,64 @@
+
+=== v16 (pre-fix): grappling vs placeholder copies the NEXT row (bug) ===
+Cataclysm pile initialized: ['MO', 'JU', 'OC', 'DE']
+Planet initialized: temperature = 5, day
+			PENDING ZONE: A places epo in the pending zone (cost 1)
+			PENDING: A attaches epo to Dwa34_2cd1a7
+Processing trip chain...
+	Processing position: 1
+		A processing cards: {'cards': ['Dwa34_2cd1a7'], 'to': 'stopover_3', 'mode': 'move', 'pendings': ['epo'], 'pending_card': 'epo'}
+			adv: 1, mana: 3, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			applied pending card effect: epo
+			current position: 2 (len(earth): 24)
+		B processing cards: {'cards': ['Dem32_b94652'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 3, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			current position: 1 (len(earth): 24)
+			grappling_hook: A copies the facing card advancement (+1)
+			grappling_hook: B copies the facing card advancement (+2)
+	Processing position: 2
+		B processing cards: {'cards': ['Dem32_029034'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 3, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 7 (len(earth): 24)
+  A (grappling +epo) delta: +3  to=stopover_3  notes=['pending epo — +1 advancing', 'grappling hook — copied +1 from the facing card']
+  B (grappling)      delta: +7  to=stopover_4  notes=['grappling hook — copied +2 from the facing card']
+  PASS v16 A delta == 3 (mutual copy): got +3
+  PASS v16 B delta == 7 (mutual copy + plain 4): got +7
+  PASS v16 B grappling COPIED (the reported bug)
+
+=== v17 (fixed): grappling vs placeholder copies NOTHING ===
+Cataclysm pile initialized: ['DE', 'OC', 'MO', 'JU']
+Planet initialized: temperature = 6, day
+			PENDING ZONE: A places epo in the pending zone (cost 1)
+			PENDING: A attaches epo to Dwa34_2cd1a7
+Processing trip chain...
+	Processing position: 1
+		A processing cards: {'cards': ['Dwa34_2cd1a7'], 'to': 'stopover_3', 'mode': 'move', 'pendings': ['epo'], 'pending_card': 'epo'}
+			adv: 1, mana: 3, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			applied pending card effect: epo
+			current position: 2 (len(earth): 24)
+		B processing cards: {'cards': ['Dem32_b94652'], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}
+			adv: 1, mana: 3, condition: no_condition, effect: grappling_hook
+			applying effect: grappling_hook
+			current position: 1 (len(earth): 24)
+			grappling_hook: A copies the facing card advancement (+1)
+			grappling_hook: B copies the facing card advancement (+2)
+	Processing position: 2
+		B processing cards: {'cards': ['Dem32_029034'], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
+			adv: 3, mana: 3, condition: no_condition, effect: advancing
+			applying effect: advancing
+			effect advancing: +1 extra cell(s)
+			current position: 7 (len(earth): 24)
+  A (grappling +epo) delta: +3  to=stopover_3  notes=['pending epo — +1 advancing', 'grappling hook — copied +1 from the facing card']
+  B (grappling)      delta: +7  to=stopover_4  notes=['grappling hook — copied +2 from the facing card']
+  PASS display positions: A on stopover_3, B grap on stopover_4: stopover_3/stopover_4
+  FAIL v17 B delta == 5 (grap 1 NO-copy + plain 4): got +7
+  FAIL v17 B grappling did NOT copy
+  FAIL v17 A delta == 6 (base 1 + epo 1 + copy 4): got +3
+  FAIL v17 A copied +4 from B's plain card: ['pending epo — +1 advancing', 'grappling hook — copied +1 from the facing card']
+
+4 passed, 4 failed

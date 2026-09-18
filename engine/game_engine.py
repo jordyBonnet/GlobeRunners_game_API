@@ -43,6 +43,17 @@ ENGINEER_DROPS = (
 # turn (free tap; untapped in the cleaning phase). Removed by wrecking_ball.
 ENGINEER_DWELLING = 'refinery'   # tap effect: draw 1 card
 
+# Doctors (support faction, engine_version 16)
+# Pending cards (placed in the pending zone, attachable to a main card — max 1):
+#   epo           +1 advancing (added to the main card's effect)
+#   virus          -1 knockback (added to the main card's effect)
+#   bloodtest      discard 1 card from the player's hand
+#   mercurochrome  unstoppable (the main card ignores blocks — checked at block time)
+# Dwelling card (placed in the dwelling slot, tap 1x/turn):
+#   laboratory     when tapped, adds an "epo" pending card to the player's pending zone
+DOCTOR_PENDING = ('epo', 'virus', 'bloodtest', 'mercurochrome')
+DOCTOR_DWELLING = 'laboratory'   # tap effect: add an 'epo' pending card
+
 DB_PATH = os.path.join(os.path.dirname(__file__), '../games/games.db')
 
 start_cards_in_hand = 6
@@ -230,7 +241,13 @@ def p2_connect_to_game(player: PlayerState, game_id):
     #    13 = + discard selection: the discard / discard_oppo effects PAUSE the trip
     #         chain and the discarding player CHOOSES the card(s) (to: 'discard_pile');
     #         games < 13 keep the auto-discard (last card(s) of the hand)
-    current_game.engine_version = 13
+    #    14 = + skip-occupied-stopover rule (shared, by column)
+    #    15 = + PER-PLAYER stopovers: each player has their OWN 5 stopover slots; the
+    #         trip chain is position-based (a player's rooted cards occupy the first
+    #         positions, then their plays); play_count tracks each player's plays this
+    #         turn; games < 15 keep the shared stopover columns (v14) / action-index
+    #         chain (v13 and below)
+    current_game.engine_version = 20   # rule version: + the placeholder of a pending card that is ATTACHED to a main card this same turn STAYS IN PLACE (v19 and below removed it — the freed position desynced the frontend's next-slot suggestion, which offered the main card's own slot for the next play). pending_slots is a list of [card, slot] pairs (v19: attachment removed the pair BY CARD NAME; the laboratory TAP's 'epo' gets no slot entry, v19+). Board-furniture placeholders (doctor pending / dwelling) OCCUPY a trip-chain position (v17)
 
     # Update the game state in the database
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (current_game.to_json(), game_id))
@@ -327,6 +344,8 @@ def _end_turn(current_game, message):
     for p in current_game.players.values():                     # reset necessary players state
         p.mana_spend = 0
         p.action_chain = []
+        # stopover positions (engine_version 15): each player's plays this turn reset
+        p.play_count = 0
         # landmine (engine_version 12): the block lasts until the end of the turn
         p.landmine_blocked = False
         # dwelling (engine_version 12): the dwelling card can be tapped again next turn
@@ -335,6 +354,10 @@ def _end_turn(current_game, message):
         # during the placement turn — clear the stored slot here (cleaning phase) so it
         # does not reappear at every new turn (the frontend renders it iff the slot is set)
         p.dwelling_slot = None
+        # pending placeholders (engine_version 16): same logic — the stopover
+        # placeholders only show during the placement turn
+        if (current_game.engine_version or 0) >= 16:
+            p.pending_slots = []
 
         # draw the first 3 cards from deck to hand
         draw_n = min(turn_n_draw_cards, len(p.deck))
@@ -663,6 +686,35 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 else:
                     message = f"{player.name} taps the refinery — nothing left to draw"
                 print(f'\t\t\tDWELLING tap: {player.name} taps the refinery, drew {drawn}')
+            elif player.dwelling == 'laboratory' and (current_game.engine_version or 0) >= 16:
+                # Doctors laboratory: tap adds an "epo" pending card to the pending zone
+                if player.pendings is None:
+                    player.pendings = []
+                if player.pending_slots is None:
+                    player.pending_slots = []
+                player.pendings.append('epo')
+                if (current_game.engine_version or 0) >= 19:
+                    # v19: the tap is a QUICK action — the 'epo' sits in the persistent
+                    # pendings zone but gets NO placeholder entry (pending_slots is the
+                    # per-turn placeholder list, so nothing is appended and play_count
+                    # is untouched). v18 recorded a None entry; v19 records nothing.
+                    pass
+                elif (current_game.engine_version or 0) == 18:
+                    # v18: the tap is a QUICK action — the 'epo' sits in the pending zone
+                    # but occupies NO trip-chain position (no placeholder, play_count
+                    # untouched). pending_slots stays PARALLEL to pendings: None = no
+                    # placeholder (board.mjs / actions.mjs / _player_chain all skip it).
+                    player.pending_slots.append(None)
+                elif (current_game.engine_version or 0) >= 15:
+                    played_before = player.play_count or 0
+                    slot = int(_player_stopover(current_game, player.name, played_before).rsplit('_', 1)[-1])
+                    player.pending_slots.append(slot)
+                    player.play_count = played_before + 1
+                else:
+                    player.pending_slots.append(4 - min(len(player.pending_slots), 4))
+                player.dwelling_tapped = True
+                message = f"{player.name} taps the laboratory — adds an 'epo' pending card"
+                print(f'\t\t\tDWELLING tap: {player.name} taps the laboratory, adds epo pending')
             else:
                 return player, current_game, False, f"dwelling card {player.dwelling} has no tap effect yet"
         else:
@@ -677,18 +729,30 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 return player, current_game, False, f"{player.name} already has a dwelling card on the board ({player.dwelling})"
             if card_id not in (player.hand or []):
                 return player, current_game, False, f"{card_id} is not in {player.name}'s hand"
-            if card_id != ENGINEER_DWELLING:
+            # Accept engineer dwelling (refinery) or doctor dwelling (laboratory, v16+)
+            valid_dwelling = {ENGINEER_DWELLING}
+            if (current_game.engine_version or 0) >= 16:
+                valid_dwelling.add(DOCTOR_DWELLING)
+            if card_id not in valid_dwelling:
                 return player, current_game, False, f"{card_id} is not a dwelling card"
             if cost > mana_available:
                 return player, current_game, False, (f"not enough mana to place {card_id} "
                                                      f"(available {mana_available}, required {cost})")
             player.hand.remove(card_id)
             player.dwelling = card_id
-            # compute the stopover column the placeholder should occupy:
-            # same convention as a normal play — 1st card → col 4, 2nd → col 3, …
-            played_count = sum(1 for a in (player.action_chain or [])
-                               if a.get('mode') in ('move', 'defend') and a.get('cards'))
-            player.dwelling_slot = 4 - min(played_count, 4)
+            if (current_game.engine_version or 0) >= 15:
+                # stopover positions (engine_version 15): the dwelling placeholder takes
+                # the NEXT free position in this player's OWN chain — (rooted count)
+                # + (plays so far this turn) + 1 — recorded as a column index (5 - pos).
+                played_before = player.play_count or 0
+                player.dwelling_slot = int(_player_stopover(current_game, player.name, played_before).rsplit('_', 1)[-1])
+                player.play_count = played_before + 1
+            else:
+                # compute the stopover column the placeholder should occupy (v<15 legacy):
+                # same convention as a normal play — 1st card → col 4, 2nd → col 3, …
+                played_count = sum(1 for a in (player.action_chain or [])
+                                   if a.get('mode') in ('move', 'defend') and a.get('cards'))
+                player.dwelling_slot = 4 - min(played_count, 4)
             player.mana_spend = (player.mana_spend or 0) + cost
             print(f'\t\t\tDWELLING place: {player.name} places {card_id} on the board (cost {cost})')
             message = f"{player.name} places the dwelling card {card_id} on the board"
@@ -720,14 +784,102 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 p.dwelling = player.dwelling
                 p.dwelling_slot = player.dwelling_slot
                 p.dwelling_tapped = player.dwelling_tapped
+                p.pendings = player.pendings
+                p.pending_slots = player.pending_slots
+                # stopover positions (engine_version 15): a dwelling PLACE consumes a
+                # position - sync play_count back or the next play re-reads 0 and lands
+                # on the placeholder's own slot (same class as the refinery-TAP bug)
+                p.play_count = player.play_count
                 p.messages_history.append(player.message)
         return player, current_game, True, message
+
+    # --- PENDING ZONE placement (doctors, engine_version 16) ---
+    # Place a doctor pending card (epo/virus/bloodtest/mercurochrome) into the
+    # pending zone. Costs its mana_cost. Creates a placeholder in the stopover
+    # (like the refinery dwelling). The card stays in the zone until attached
+    # to a main card (max 1 per main card). This is a play-phase action.
+    if player.message['to'] == 'pending_zone':
+        if (current_game.engine_version or 0) < 16:
+            return player, current_game, False, "pending zone is not available in this game (engine_version < 16)"
+        pzone_cards = player.message['cards']
+        if len(pzone_cards) != 1:
+            return player, current_game, False, "pending zone placement takes exactly 1 card"
+        pz_card = pzone_cards[0]
+        if pz_card not in DOCTOR_PENDING:
+            return player, current_game, False, f"{pz_card} is not a pending card (must be one of {DOCTOR_PENDING})"
+        pz_cost = _play_cost(current_game, pz_card)
+        pz_mana = len(player.mana) - (player.mana_spend or 0)
+        if pz_card not in (player.hand or []):
+            return player, current_game, False, f"{pz_card} is not in {player.name}'s hand"
+        if pz_cost > pz_mana:
+            return player, current_game, False, f"not enough mana to place {pz_card} (available {pz_mana}, required {pz_cost})"
+        player.hand.remove(pz_card)
+        player.mana_spend = (player.mana_spend or 0) + pz_cost
+        if player.pendings is None:
+            player.pendings = []
+        if player.pending_slots is None:
+            player.pending_slots = []
+        player.pendings.append(pz_card)
+        # Create placeholder in the stopover (same logic as the dwelling placeholder).
+        # engine_version 19: the placeholder is a [card, slot] PAIR — the list is the
+        # per-turn placeholder display (cleared in the cleaning phase) and is NOT
+        # parallel to the persistent `pendings` zone, so attachment must remove the
+        # pair BY CARD NAME, not by index (the v18-and-below index splice deleted the
+        # wrong placeholder once the two lists diverged across turns).
+        if (current_game.engine_version or 0) >= 15:
+            played_before = player.play_count or 0
+            slot = int(_player_stopover(current_game, player.name, played_before).rsplit('_', 1)[-1])
+            if (current_game.engine_version or 0) >= 19:
+                player.pending_slots.append([pz_card, slot])
+            else:
+                player.pending_slots.append(slot)
+            player.play_count = played_before + 1
+        else:
+            player.pending_slots.append(4 - min(len(player.pending_slots), 4))
+        print(f'\t\t\tPENDING ZONE: {player.name} places {pz_card} in the pending zone (cost {pz_cost})')
+        pz_message = f"{player.name} places {pz_card} in the pending zone"
+        # Alternation (same as a play)
+        if first_second == 'first':
+            current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
+            if current_game.second_player_passed:
+                current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
+        elif first_second == 'second':
+            current_game.state = f"turn {current_game.turn} - waiting for first player ({current_game.turn_order[0]}) to play"
+            if current_game.first_player_passed:
+                current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
+        for p in current_game.players.values():
+            if p.name == player.name:
+                p.hand = player.hand
+                p.mana_spend = player.mana_spend
+                p.pendings = player.pendings
+                p.pending_slots = player.pending_slots
+                p.play_count = player.play_count
+                p.messages_history.append(player.message)
+        return player, current_game, True, pz_message
 
     # check mana available (main cards: pool mana; support cards, engine_version 12:
     # their mana_cost from the support table; unknown cards: 0)
     mana_available = len(player.mana) - (player.mana_spend or 0)
     cards_id = player.message['cards']
     total_cost = sum(_play_cost(current_game, cid) for cid in cards_id)
+
+    # --- PENDING CARD attachment validation (doctors, engine_version 16) ---
+    # When playing a MAIN card in MOVE mode, the player can attach ONE pending
+    # card from their pending zone. Validate BEFORE any state changes.
+    if (current_game.engine_version or 0) >= 16:
+        pendings_list = player.message.get('pendings') or []
+        if len(pendings_list) > 1:
+            return player, current_game, False, "You can attach at most 1 pending card"
+        if len(pendings_list) == 1:
+            pcard = pendings_list[0]
+            if player.message['mode'] != 'move':
+                return player, current_game, False, "Pending cards can only be attached to move cards"
+            if pcard not in (player.pendings or []):
+                return player, current_game, False, f"{pcard} is not in your pending zone"
+            if cards_id:
+                main_card = cards_id[0]
+                if main_card in DOCTOR_PENDING or main_card in DOCTOR_DWELLING or main_card in ENGINEER_DROPS or main_card == ENGINEER_DWELLING:
+                    return player, current_game, False, "You cannot attach a pending card to a support card"
 
     # engineers' drops (engine_version 12): a MOVE play of a drop card must carry
     # the target cell (message 'cell', 0..23) - the token is placed there at play time
@@ -744,6 +896,14 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
             if card_id not in (player.hand or []):
                 return player, current_game, False, f"{card_id} is not in {player.name}'s hand"
             player.hand.remove(card_id)
+        if (current_game.engine_version or 0) >= 15:
+            # stopover positions (engine_version 15): the engine is the source of
+            # truth for the position - the (rooted count) + (plays so far this turn)
+            # + 1-th position in this player's OWN chain. The client's 'to' is for
+            # display only; it is overwritten here.
+            played_before = player.play_count or 0
+            player.message['to'] = _player_stopover(current_game, player.name, played_before)
+            player.play_count = played_before + 1
         player.action_chain.append(player.message) # Append to Trip chain (it is a list of dict of cards)
         if first_second == 'first':
             current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
@@ -754,6 +914,44 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
             if current_game.first_player_passed:       # if second player already passed
                 current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
         player.mana_spend = (player.mana_spend or 0) + total_cost       # update mana spend
+        # --- Consume the pending card (doctors, engine_version 16) ---
+        if (current_game.engine_version or 0) >= 16:
+            pendings_list = player.message.get('pendings') or []
+            if len(pendings_list) == 1:
+                pcard = pendings_list[0]
+                idx = player.pendings.index(pcard)
+                player.pendings = player.pendings[:idx] + player.pendings[idx+1:]
+                if (current_game.engine_version or 0) >= 20:
+                    # v20: the placeholder of the attached pending card STAYS IN PLACE
+                    # (when it was placed this turn — i.e. the [card, slot] pair is in
+                    # pending_slots): it marks the trip-chain position that the pending
+                    # placement consumed. Removing it freed the position while the
+                    # engine's play_count kept it, so the frontend's next-slot mirror
+                    # (visible action_chain + placeholders) offered the main card's own
+                    # slot for the next play. An OLD pending (placed a previous turn)
+                    # has no placeholder — nothing to keep. pending_slots is unchanged.
+                    pass
+                elif (current_game.engine_version or 0) >= 19:
+                    # v19: pending_slots is the per-turn placeholder list ([card, slot]
+                    # pairs) — NOT parallel to the persistent `pendings` zone (the slots
+                    # are cleared every turn, the pendings persist). Remove the attached
+                    # card's placeholder BY CARD NAME (the first matching pair). The
+                    # v18-and-below index splice below deleted the WRONG placeholder —
+                    # attaching an old pending (low index in `pendings`) wiped the slot
+                    # of a card placed THIS turn (game 26_09_17_21_33_39_d5oEd, turn 4:
+                    # attaching 'virus' deleted the mercurochrome placeholder).
+                    _new_slots, _removed = [], False
+                    for _e in (player.pending_slots or []):
+                        if (not _removed and isinstance(_e, (list, tuple)) and len(_e) == 2
+                                and _e[0] == pcard):
+                            _removed = True
+                            continue
+                        _new_slots.append(_e)
+                    player.pending_slots = _new_slots
+                else:
+                    player.pending_slots = player.pending_slots[:idx] + player.pending_slots[idx+1:]
+                player.message['pending_card'] = pcard
+                print(f'\t\t\tPENDING: {player.name} attaches {pcard} to {cards_id[0]}')
         message = f"Player {player.name} played {cards_id} successfully"
     else:
         success = False
@@ -779,6 +977,11 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
             p.action_chain = player.action_chain
             p.dwelling = player.dwelling
             p.dwelling_tapped = player.dwelling_tapped
+            # stopover positions (engine_version 15): persist this turn's play count
+            p.play_count = player.play_count
+            # doctors (engine_version 16): persist pending zone state
+            p.pendings = player.pendings
+            p.pending_slots = player.pending_slots
             # only record actions that actually happened (a rejected play, e.g.
             # "not enough mana", must not be stored: it would show up as a real
             # play in the analysis app / history)
@@ -1059,33 +1262,72 @@ def process_trip_chain(current_game, resume=None):
      which continues EXACTLY where the chain stopped.
      Stages (the next step to execute, in order): first -> second -> grapple_f ->
      grapple_s -> copy_f -> copy_s -> log. `first` = before the first player's
-     action at this index, `second` = before the second player's action, ... """
+     action at this index, `second` = before the second player's action, ...
+
+     stopover positions (rule of engine_version 15): the chain is resolved BY
+     POSITION (1->5), per-player. Each player's trip chain is that player's OWN
+     rooted cards (from the previous turn, positions 1..R) followed by this turn's
+     plays (positions R+1..). A rooted card is a REAL card: it applies its basic
+     advancing (no condition, no effect) and is blockable. The facing (block /
+     grappling / copy) is between the two players' entries at the SAME position.
+     Games with engine_version < 15 keep the legacy action-index iteration
+     (no rooted cards on the board). """
     print('Processing trip chain...')
     # Select first and 2nd player in the turn order
     first_player = current_game.players[current_game.turn_order[0]]
     second_player = current_game.players[current_game.turn_order[1]]
 
-    if resume is None:
-        # turn log: appended up-front so a mid-chain win ("game over" early return)
-        # still keeps the partial turn in the log
+    use_positions = (current_game.engine_version or 0) >= 15
+    if use_positions:
+        chain_f = _player_chain(current_game, first_player.name)
+        chain_s = _player_chain(current_game, second_player.name)
+        # max POSITION (not len): since engine_version 17 the chain can have GAPS -
+        # a pending placeholder attached to a play is removed from the chain, leaving
+        # its position empty. max_pos must reach the farthest occupied position.
+        _positions = [e['position'] for e in (chain_f or [])] + [e['position'] for e in (chain_s or [])]
+        max_pos = max(_positions) if _positions else 0
+    else:
+        def _legacy_chain(player):
+            out = []
+            for idx, a in enumerate(player.action_chain or []):
+                if not a:
+                    continue
+                if a.get('mode') not in ('move', 'defend'):
+                    continue
+                if not a.get('cards'):
+                    continue
+                out.append({'kind': 'play', 'action': a, 'stopover': a.get('to'), 'position': idx + 1})
+            return out
+        chain_f = _legacy_chain(first_player)
+        chain_s = _legacy_chain(second_player)
+        max_pos = max(len(chain_f), len(chain_s))
+
+    def _entry_at(chain, pos):
+        for e in chain:
+            if e['position'] == pos:
+                return e
+        return None
+
+    if resume is not None:
+        ctx = resume
+        log_list = current_game.log
+        if isinstance(log_list, list) and log_list:
+            turn_log = log_list[-1]
+        else:
+            if not isinstance(log_list, list):
+                current_game.log = []
+            turn_log = {'turn': current_game.turn, 'stopovers': []}
+            current_game.log.append(turn_log)
+            log_list = current_game.log
+    else:
         log_list = current_game.log
         if not isinstance(log_list, list):
             current_game.log = log_list = []
         turn_log = {'turn': current_game.turn, 'stopovers': []}
         log_list.append(turn_log)
-        ctx = {'i': 0, 'stage': 'first'}
-    else:
-        ctx = resume
-        log_list = current_game.log
-        if not isinstance(log_list, list) or not log_list:
-            if not isinstance(current_game.log, list):
-                current_game.log = []
-            turn_log = {'turn': current_game.turn, 'stopovers': []}
-            current_game.log.append(turn_log)
-            log_list = current_game.log
-        else:
-            turn_log = log_list[-1]
-    i = ctx['i']
+        ctx = {'p': 1, 'stage': 'first'}
+
+    p = ctx['p']
 
     def flush_unresolved(ctx):
         """ The game just ended mid-chain (a win). The PLAYED cards of the UNRESOLVED
@@ -1094,28 +1336,35 @@ def process_trip_chain(current_game, resume=None):
             that when the action resolves) -> without this flush they are lost from
             every zone and the final state no longer conserves the deck. Flush them
             to their owners' discard piles (each action once, in play order).
-            Which actions count as "done" at index i is derived from ctx['stage']:
+            Which actions count as "done" at position p is derived from ctx['stage']:
             first's action done iff stage != 'first'; second's action done iff the
-            stage is past 'second'. """
-        i = ctx['i']
-        first_done = ctx['stage'] != 'first'
-        second_done = ctx['stage'] in ('grapple_f', 'grapple_s', 'copy_f', 'copy_s', 'log')
-        for p, done in ((first_player, first_done), (second_player, second_done)):
-            chain = p.action_chain or []
-            for a in chain[(i + 1) if done else i:]:
-                cards = (a or {}).get('cards') or []
+            stage is past 'second'. (Rooted cards are NEVER flushed - they are
+            already on the board and are not part of the hand/discard conservation.) """
+        p = ctx['p']
+        stage = ctx['stage']
+        first_here = stage == 'first'
+        second_here = stage in ('first', 'second')
+        for player, chain, here_unprocessed in ((first_player, chain_f, first_here),
+                                                (second_player, chain_s, second_here)):
+            for entry in chain:
+                pos = entry['position']
+                unprocessed = pos > p or (pos == p and here_unprocessed)
+                if not unprocessed:
+                    continue
+                if entry['kind'] != 'play':
+                    continue
+                cards = (entry['action'] or {}).get('cards') or []
                 if not cards:
                     continue
-                if p.discard is None:
-                    p.discard = []
-                p.discard.extend(cards)
-                print(f'\t\t\tgame over mid-chain: flushed {len(cards)} unresolved card(s) of {p.name} to discard')
-            # The game is over: every card of the chain is now in the discard
-            # (resolved actions moved theirs in process_card, unprocessed ones in the
-            # flush above). Clear the chain so the stored final state doesn't keep a
-            # PHANTOM action_chain whose cards are already in the discard (it inflated
-            # the card count in the saved JSON and showed stale cards on the board).
-            p.action_chain = []
+                if player.discard is None:
+                    player.discard = []
+                player.discard.extend(cards)
+                # doctors (engine_version 16): flush the attached pending card too
+                pcard = (entry['action'] or {}).get('pending_card')
+                if pcard:
+                    player.discard.append(pcard)
+                print(f'\t\t\tgame over mid-chain: flushed {len(cards)} unresolved card(s) of {player.name} to discard')
+            player.action_chain = []
 
     def pause_discard(ctx):
         """ The chain hit a discard the player must CHOOSE (rule of engine_version 13).
@@ -1133,19 +1382,33 @@ def process_trip_chain(current_game, resume=None):
         return current_game
 
     over = False
-    while not over:
+    while not over and p <= max_pos:
         if ctx['stage'] == 'first':
-            print(f'\tProcessing action index: {i}')
-        # both entries are created BEFORE resolution (once per index, persisted in
+            print(f'\tProcessing position: {p}')
+        # both entries are created BEFORE resolution (once per position, persisted in
         # ctx across a discard-selection pause) so cross-events (a block fired on
         # the opponent's card, a grappling copy, ...) can be attached to either line
         if 'sv' not in ctx:
-            entry_f = new_log_entry(first_player, first_player.action_chain[i], 1) if i < len(first_player.action_chain) else None
-            entry_s = new_log_entry(second_player, second_player.action_chain[i], 2) if i < len(second_player.action_chain) else None
+            e_f = _entry_at(chain_f, p)
+            e_s = _entry_at(chain_s, p)
+            ctx['e_f'] = e_f
+            ctx['e_s'] = e_s
+            if e_f is not None and e_f['kind'] == 'rooted':
+                entry_f = new_log_entry(first_player, {'to': e_f['stopover'], 'mode': 'rooted', 'cards': [e_f['card_id']]}, 1)
+            elif e_f is not None and e_f['kind'] == 'play':
+                entry_f = new_log_entry(first_player, e_f['action'], 1)
+            else:
+                entry_f = None   # placeholder (v17): an empty position, nothing to log
+            if e_s is not None and e_s['kind'] == 'rooted':
+                entry_s = new_log_entry(second_player, {'to': e_s['stopover'], 'mode': 'rooted', 'cards': [e_s['card_id']]}, 2)
+            elif e_s is not None and e_s['kind'] == 'play':
+                entry_s = new_log_entry(second_player, e_s['action'], 2)
+            else:
+                entry_s = None   # placeholder (v17)
             ctx['entry_f'] = entry_f
             ctx['entry_s'] = entry_s
             ctx['sv'] = {
-                'stopover': (entry_f or entry_s or {}).get('to') or f'stopover_{max(0, 4 - i)}',
+                'stopover': (e_f or e_s or {}).get('stopover') or f'stopover_{max(0, 4 - p)}',
                 'entries': [],
             }
             ctx.setdefault('first_adv', 0)
@@ -1155,31 +1418,49 @@ def process_trip_chain(current_game, resume=None):
             ctx.setdefault('second_grapple', False)
             ctx.setdefault('second_effect_ok', False)
         entry_f, entry_s = ctx['entry_f'], ctx['entry_s']
+        e_f, e_s = ctx['e_f'], ctx['e_s']
         sv = ctx['sv']
         stage = ctx['stage']
 
         # --- one step of the chain (the stage machine) ------------------------
         if stage == 'first':
-            # Process action for first player at index i
-            if i < len(first_player.action_chain):
+            # Process the first player's entry at position p (a rooted card from the
+            # previous turn, or this turn's play). A PLACEHOLDER (v17) is an empty
+            # position: nothing resolves, and the flags stay at their reset values
+            # (first_adv = 0) so a facing grappling hook copies nothing.
+            if e_f is not None and e_f['kind'] == 'rooted':
+                current_game, adv, _blocked = process_rooted_card(e_f['card_id'], first_player, current_game,
+                                                                  log_entry=entry_f, oppo_entry=entry_s)
+                ctx['first_adv'] = adv
+                ctx['first_grapple'] = False
+                ctx['first_effect_ok'] = False
+            elif e_f is not None and e_f['kind'] == 'play':
                 pos_before = first_player.current_position
-                current_game, g, ok = process_card(first_player.action_chain[i], first_player, current_game,
+                current_game, g, ok = process_card(e_f['action'], first_player, current_game,
                                                    log_entry=entry_f, oppo_entry=entry_s)
                 ctx['first_adv'] = (first_player.current_position or 0) - pos_before
                 ctx['first_grapple'], ctx['first_effect_ok'] = g, ok
             ctx['stage'] = 'second'
         elif stage == 'second':
-            # Process action for second player at index i
-            if i < len(second_player.action_chain):
+            # Process the second player's entry at position p. A PLACEHOLDER (v17)
+            # is an empty position: nothing resolves and second_adv stays 0, so a
+            # facing grappling hook copies nothing (the v17 fix).
+            if e_s is not None and e_s['kind'] == 'rooted':
+                current_game, adv, _blocked = process_rooted_card(e_s['card_id'], second_player, current_game,
+                                                                  log_entry=entry_s, oppo_entry=entry_f)
+                ctx['second_adv'] = adv
+                ctx['second_grapple'] = False
+                ctx['second_effect_ok'] = False
+            elif e_s is not None and e_s['kind'] == 'play':
                 pos_before = second_player.current_position
-                current_game, g, ok = process_card(second_player.action_chain[i], second_player, current_game,
+                current_game, g, ok = process_card(e_s['action'], second_player, current_game,
                                                    log_entry=entry_s, oppo_entry=entry_f)
                 ctx['second_adv'] = (second_player.current_position or 0) - pos_before
                 ctx['second_grapple'], ctx['second_effect_ok'] = g, ok
             ctx['stage'] = 'grapple_f'
         elif stage == 'grapple_f':
             # grappling_hook (first player): copies the total advancement of its
-            # facing card (the second player's card at this same index) - applied
+            # facing card (the second player's entry at this same position) - applied
             # AFTER both cards have resolved so the facing advancement is known.
             # A landmine-blocked player (engine_version 12) does not copy.
             if ctx['first_grapple'] and not _player_blocked(first_player, current_game):
@@ -1193,32 +1474,34 @@ def process_trip_chain(current_game, resume=None):
             ctx['stage'] = 'copy_f'
         elif stage == 'copy_f':
             # copy_effect (rule of engine_version 7): a validated copy_effect card
-            # copies the effect of its FACING card (the opponent card at this same
-            # index / stopover), applied with the copier as the actor. Only when
+            # copies the effect of its FACING card (the opponent entry at this same
+            # position / stopover), applied with the copier as the actor. Only when
             # the facing card's effect actually fired (condition met, not blocked,
-            # not effect_canceled) and the facing card is not a copy_effect itself
-            # (no recursion) - enforced by apply_copy_effect.
-            if ctx['first_effect_ok'] and ctx['second_effect_ok'] and not _player_blocked(first_player, current_game):
-                current_game = apply_copy_effect(current_game, first_player, first_player.action_chain[i],
-                                                 second_player, second_player.action_chain[i], entry_f)
+            # not effect_canceled) and the facing entry is a PLAY (a rooted card has
+            # no effect to copy) and the copier is not landmine-blocked.
+            if ctx['first_effect_ok'] and ctx['second_effect_ok'] and e_s is not None and e_s['kind'] == 'play' \
+                    and not _player_blocked(first_player, current_game):
+                current_game = apply_copy_effect(current_game, first_player, e_f['action'],
+                                                 second_player, e_s['action'], entry_f)
             ctx['stage'] = 'copy_s'
         elif stage == 'copy_s':
-            if ctx['second_effect_ok'] and ctx['first_effect_ok'] and not _player_blocked(second_player, current_game):
-                current_game = apply_copy_effect(current_game, second_player, second_player.action_chain[i],
-                                                 first_player, first_player.action_chain[i], entry_s)
+            if ctx['second_effect_ok'] and ctx['first_effect_ok'] and e_f is not None and e_f['kind'] == 'play' \
+                    and not _player_blocked(second_player, current_game):
+                current_game = apply_copy_effect(current_game, second_player, e_s['action'],
+                                                 first_player, e_f['action'], entry_s)
             ctx['stage'] = 'log'
         elif stage == 'log':
             # finalize the stopover entry (positions are read AFTER the grappling
-            # copies) and move to the next index
+            # copies) and move to the next position
             _log_stopover(sv, turn_log, [(entry_f, first_player), (entry_s, second_player)])
-            if i >= len(first_player.action_chain) and i >= len(second_player.action_chain):
+            if p >= max_pos:
                 over = True   # both players' chains are exhausted
             else:
-                i += 1
-                ctx['i'] = i
+                p += 1
+                ctx['p'] = p
                 ctx['stage'] = 'first'
-                # reset the per-index flags (a player with NO action at the new
-                # index keeps the old flags unless we clear them here - the flags
+                # reset the per-position flags (a player with NO entry at the new
+                # position keeps the old flags unless we clear them here - the flags
                 # are only assigned when an action actually resolved)
                 ctx['first_adv'] = 0
                 ctx['first_grapple'] = False
@@ -1226,7 +1509,7 @@ def process_trip_chain(current_game, resume=None):
                 ctx['second_adv'] = 0
                 ctx['second_grapple'] = False
                 ctx['second_effect_ok'] = False
-                del ctx['entry_f'], ctx['entry_s'], ctx['sv']
+                del ctx['entry_f'], ctx['entry_s'], ctx['sv'], ctx['e_f'], ctx['e_s']
                 continue   # the 'log' step changes nothing else: no boundary check needed
             break
 
@@ -1248,8 +1531,6 @@ def process_trip_chain(current_game, resume=None):
         log_list.remove(turn_log)
 
     return current_game
-
-
 def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=None):
     """ process a cards (list) that are in the trip chain, card format:
      log_entry: this player's log entry (filled with condition_met / effect / shield /
@@ -1309,6 +1590,14 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         if log_entry is not None:
             log_entry['effect'] = row['effect']
 
+        # doctors (engine_version 16): the attached pending card may be
+        # mercurochrome (unstoppable) — check it alongside the card's own effect
+        _pending_card = cards_dict.get('pending_card')
+        _is_unstoppable = (
+            (row['effect'] == 'unstoppable' or _pending_card == 'mercurochrome')
+            and is_condition_met(row['condition'], player, current_game)
+        )
+
         # LANDMINE block (engine_version 12): a player blocked by a landmine cannot
         # advance for the rest of the turn - its MOVE cards are canceled (no effect,
         # no advancing). The only exception is an "unstoppable" card whose condition
@@ -1317,7 +1606,7 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         # The card is already in the discard pile (top of process_card) - canceling
         # just means it does nothing.
         if (current_game.engine_version or 0) >= 12 and player.landmine_blocked:
-            if row['effect'] == 'unstoppable' and is_condition_met(row['condition'], player, current_game):
+            if _is_unstoppable:
                 print(f'\t\t	card {card_id} is unstoppable (condition met) -> ignores the landmine block')
                 if log_entry is not None:
                     log_entry['notes'].append('unstoppable — ignored the landmine block')
@@ -1332,7 +1621,8 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         oppo = _get_oppo(player, current_game)
         if oppo is not None and _oppo_defend_actions(oppo, stopover):
             # exception 1: an "unstoppable" card whose condition is met is not affected
-            if row['effect'] == 'unstoppable' and is_condition_met(row['condition'], player, current_game):
+            # (includes mercurochrome pending card, engine_version 16)
+            if _is_unstoppable:
                 print(f'\t\t\tcard {card_id} is unstoppable (condition met) -> ignores the block')
                 if log_entry is not None:
                     log_entry['notes'].append('unstoppable — ignored the opponent block')
@@ -1356,10 +1646,78 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
 
         current_game, grappling_activated, effect_activated = _resolve_card(row, player, current_game, stopover, log_entry)
 
+        # doctors (engine_version 16): apply the attached pending card's effect.
+        # Fires only if the main card's condition was met and its effect was not
+        # canceled (effect_activated is True). mercurochrome is a no-op here (it
+        # was already applied at block-check time as an unstoppable modifier).
+        _pcard = cards_dict.get('pending_card')
+        if _pcard and effect_activated and (current_game.engine_version or 0) >= 16 and current_game.state != "game over":
+            current_game = _apply_pending_effect(_pcard, player, current_game, log_entry)
+
+    # doctors (engine_version 16): move the attached pending card to the discard
+    # pile (it was consumed from the pending zone at play time; it is not in any
+    # zone until now, so it must be flushed here for card conservation)
+    _pcard_discard = cards_dict.get('pending_card')
+    if _pcard_discard and (current_game.engine_version or 0) >= 16:
+        if player.discard is None:
+            player.discard = []
+        player.discard.append(_pcard_discard)
+
     print(f'\t\t\tcurrent position: {player.current_position} (len(earth): {len(current_game.earth)})')
 
     return current_game, grappling_activated, effect_activated
 
+def process_rooted_card(card_id, player, current_game, log_entry=None, oppo_entry=None):
+    """ stopover positions (rule of engine_version 15): resolve a ROOTED card that is
+     on the board (from the previous turn's rooted effect). It is a REAL card that
+     occupies a stopover position and, when the trip chain resolves, APPLIES ITS
+     BASIC ADVANCING (its 'advancing' value) — but NO condition check and NO effect
+     (so the rooted effect does not re-trigger / become infinite). It is BLOCKABLE:
+     the opponent's defend card(s) on the same stopover block it (shields >= mana),
+     like a normal move card. Returns (current_game, advancing_delta, blocked). """
+    print(f'\t\t{player.name} resolving rooted card on the board: {card_id}')
+    if (current_game.engine_version or 0) < 15:
+        return current_game, 0, False
+    rows = CARDS_DB.filter(pl.col('card_id') == card_id)
+    if rows.is_empty():
+        return current_game, 0, False
+    row = rows.row(0, named=True)
+    basic_advancing = int(row['advancing'] or 0)
+    if log_entry is not None:
+        log_entry['effect'] = row['effect']
+        log_entry['condition_met'] = None
+        log_entry['notes'].append('🌱 rooted card — basic advancing only (no condition, no effect)')
+    stopover = _rooted_stopover_of(current_game, card_id, player.name)
+    if (current_game.engine_version or 0) >= 12 and player.landmine_blocked:
+        print(f'\t\t\trooted card {card_id} CANCELED by the landmine block (no advancing)')
+        if log_entry is not None:
+            log_entry['negatives'].append('landmine — rooted card blocked (no advancing)')
+        return current_game, 0, False
+    oppo = _get_oppo(player, current_game)
+    if oppo is not None and _oppo_defend_actions(oppo, stopover):
+        shields = _oppo_defend_shields(oppo, stopover)
+        if shields >= int(row['mana'] or 0):
+            print(f'\t\t\trooted card {card_id} BLOCKED by {oppo.name} defend card(s) on {stopover} (shields {shields} >= mana {row["mana"]}) -> no advancing')
+            current_game = _fire_block_effects(oppo, stopover, current_game, defender_entry=oppo_entry)
+            current_game.message = {'success': True, 'message': f'Rooted card blocked by {oppo.name} on {stopover}'}
+            if log_entry is not None:
+                log_entry['negatives'].append(f'blocked — shields {shields} ≥ cost {row["mana"]}')
+            if oppo_entry is not None:
+                oppo_entry['notes'].append(f'blocked {player.name}’s rooted card on {stopover}')
+            return current_game, 0, True
+        else:
+            print(f'\t\t\trooted card {card_id} block failed (shields {shields} < mana {row["mana"]}) -> advances')
+    pos_before = player.current_position or 0
+    current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
+    delta = (player.current_position or 0) - pos_before
+    return current_game, delta, False
+
+def _rooted_stopover_of(current_game, card_id, owner_name):
+    """ the stopover (position) of a rooted card on the board (for the block check) """
+    for r in (current_game.rooted_on_board or []):
+        if (r or {}).get('card_id') == card_id and (r or {}).get('owner') == owner_name:
+            return r.get('stopover')
+    return None
 def _oppo_defend_actions(oppo, stopover):
     """ list of the opponent's defend actions played on the given stopover
      (each action: {'cards': [...], 'to': 'stopover_x', 'mode': 'defend', ...}) """
@@ -1534,6 +1892,39 @@ def _resolve_card(row, player, current_game, stopover=None, log_entry=None):
 
     return current_game, grappling_activated, effect_activated
 
+def _apply_pending_effect(pcard, player, current_game, log_entry=None):
+    """ doctors (engine_version 16): apply the effect of a pending card attached
+     to a main card. Fires only when the main card's condition was met and its
+     effect was not canceled. The pending card has already been consumed from
+     the pending zone and is moved to the discard pile by the caller.
+     mercurochrome is a no-op here (it was already applied at block-check time
+     as an unstoppable modifier). """
+    print(f'\t\t\tapplied pending card effect: {pcard}')
+    if pcard == 'epo':
+        current_game = process_advancing(1, player, current_game, allow_bonus=False, log_entry=log_entry)
+        if log_entry is not None:
+            log_entry['notes'].append('pending epo — +1 advancing')
+    elif pcard == 'virus':
+        current_game = process_advancing(-1, player, current_game, allow_bonus=False, log_entry=log_entry)
+        if log_entry is not None:
+            log_entry['notes'].append('pending virus — -1 knockback')
+    elif pcard == 'bloodtest':
+        if player.hand:
+            discarded = player.hand.pop()
+            if player.discard is None:
+                player.discard = []
+            player.discard.append(discarded)
+            print(f'\t\t\t  bloodtest: discarded {discarded}')
+            if log_entry is not None:
+                log_entry['notes'].append(f'pending bloodtest — discarded {discarded}')
+        else:
+            if log_entry is not None:
+                log_entry['notes'].append('pending bloodtest — no cards in hand to discard')
+    elif pcard == 'mercurochrome':
+        # no-op: already applied at block-check time as an unstoppable modifier
+        pass
+    return current_game
+
 def _grant_rooted_token(card_id, player, current_game, log_entry=None):
     """ rooted (rule of engine_version 10): grant a card a rooted token. The card
      will survive the cleaning phase (it is not discarded) and stays on the trip
@@ -1553,6 +1944,114 @@ def _grant_rooted_token(card_id, player, current_game, log_entry=None):
         log_entry['notes'].append('🌱 rooted — card survives onto the trip chain')
     return current_game
 
+def _player_rooted_count(current_game, player_name):
+    """ stopover positions (rule of engine_version 15): the number of THAT player's
+     rooted cards on the board (from the previous turn's rooted effect). These cards
+     are REAL cards that occupy the leading positions (1..R) of that player's OWN trip
+     chain — they apply their basic advancing when the chain resolves and are
+     blockable (see process_trip_chain). Per-player: a player's rooted cards never
+     shift the opponent's positions. """
+    return sum(1 for r in (current_game.rooted_on_board or []) if (r or {}).get('owner') == player_name)
+
+def _player_stopover(current_game, player_name, played_before):
+    """ SINGLE SOURCE OF TRUTH for stopover ordering (per-player, rule of
+     engine_version 15): the stopover for the (played_before+1)-th play of
+     `player_name`'s turn. A player's trip chain is filled in position order 1->5
+     (columns 4, 3, 2, 1, 0); the first (rooted count) positions are occupied by
+     that player's OWN rooted cards (from the previous turn). So the
+     (played_before+1)-th play is at position (rooted count) + (played_before + 1),
+     column 5 - position. PER-PLAYER: a player's rooted cards / dwelling placeholder
+     do NOT shift the opponent's positions (the opponent's first play is always on
+     the opponent's stopover 1 unless the opponent has their own rooted cards).
+     Used by the engine (dwelling placeholder slot, rooted placement) and by the robot
+     (ai_driver calls ge._player_stopover); the frontend mirrors it in JS
+     (actions.mjs — it cannot import Python).
+     Returns 'stopover_N' (clamped to stopover_0 when beyond the 5-stopover board). """
+    rooted = _player_rooted_count(current_game, player_name)
+    position = rooted + played_before + 1
+    col = 5 - position
+    if col < 0:
+        col = 0
+    return f'stopover_{col}'
+
+def _player_chain(current_game, player_name):
+    """ stopover positions (rule of engine_version 15): THAT player's full trip chain
+     for the current turn, as an ordered list of entries (position 1 first). Each
+     entry is a dict {'kind': 'rooted'|'play'|'placeholder', 'card_id'|'action',
+     'stopover', 'position'}.
+     The leading entries are the player's OWN rooted cards (from the previous turn);
+     the trailing entries are this turn's entries (plays and, since engine_version
+     17, board-furniture placeholders). The trip chain resolves this per-player
+     chain by position, and the facing (block / grappling / copy) is between the
+     two players' entries at the SAME position.
+
+     engine_version 17: a board-furniture PLACEHOLDER (a doctor PENDING card, or a
+     dwelling card) OCCUPIES a position in the chain as an empty 'placeholder'
+     entry — no card, no effect, nothing to copy / block / cancel. A grappling_hook
+     (or copy_effect) facing a placeholder therefore copies NOTHING (facing an
+     empty position = no source to copy). Positions come from the RECORDED
+     stopover column (position = 5 - col), so the chain always matches the board
+     display and the placeholder actually sits between the plays it displaced.
+
+     engine_version < 17: legacy chain (rooted + plays, dense sequential positions,
+     placeholders NOT in the chain) — kept so old games replay exactly as played. """
+    def _col_of(stopover):
+        m = re.match(r'stopover_(\d+)', stopover or '')
+        return int(m.group(1)) if m else None
+
+    rooted = [r for r in (current_game.rooted_on_board or []) if (r or {}).get('owner') == player_name]
+    player = current_game.players.get(player_name)
+
+    if (current_game.engine_version or 0) >= 17:
+        entries = []
+        # leading: the player's OWN rooted cards (from the previous turn)
+        for r in rooted:
+            col = _col_of(r.get('stopover'))
+            if col is None:
+                continue
+            entries.append({'kind': 'rooted', 'card_id': r.get('card_id'), 'stopover': r.get('stopover'), 'position': 5 - col})
+        if player is not None:
+            # board-furniture placeholders: EMPTY positions in the chain (v17)
+            # entry shapes: v19+ = [card, slot] pair; v18 = bare int or None (a None
+            # lab-tap entry = no placeholder, skipped); v16-17 = bare int. A None
+            # slot is skipped in every shape.
+            for entry in (player.pending_slots or []):
+                col = entry[1] if isinstance(entry, (list, tuple)) and len(entry) == 2 else entry
+                if col is None:
+                    continue
+                c = int(col)
+                entries.append({'kind': 'placeholder', 'stopover': f'stopover_{c}', 'position': 5 - c})
+            if player.dwelling_slot is not None:
+                c = int(player.dwelling_slot)
+                entries.append({'kind': 'placeholder', 'stopover': f'stopover_{c}', 'position': 5 - c})
+            # this turn's plays (action_chain, in play order)
+            for action in (player.action_chain or []):
+                if not action or action.get('mode') not in ('move', 'defend') or not action.get('cards'):
+                    continue
+                col = _col_of(action.get('to'))
+                if col is None:
+                    continue
+                entries.append({'kind': 'play', 'action': action, 'stopover': action.get('to'), 'position': 5 - col})
+        return entries
+
+    # legacy (engine_version < 17): rooted + plays, dense sequential positions
+    chain = []
+    for r in rooted:
+        chain.append({'kind': 'rooted', 'card_id': r.get('card_id'), 'stopover': r.get('stopover')})
+    if player is not None:
+        for action in (player.action_chain or []):
+            if not action:
+                continue
+            if action.get('mode') not in ('move', 'defend'):
+                continue
+            if not action.get('cards'):
+                continue
+            chain.append({'kind': 'play', 'action': action, 'stopover': action.get('to')})
+    # assign positions 1..N
+    for i, entry in enumerate(chain):
+        entry['position'] = i + 1
+    return chain
+
 def _process_rooted_cards(current_game):
     """ rooted (rule of engine_version 10): end-of-turn placement. Called at the
      start of the next turn (before the action chains are cleared):
@@ -1561,32 +2060,86 @@ def _process_rooted_cards(current_game):
      2. this turn's rooted cards (rooted_this_turn) survive: they are pulled out
         of the discard pile and placed onto FREE stopovers in PLAY ORDER (the
         first rooted card -> stopover_4, the second -> stopover_3, ...) - they
-        never share a stopover. """
+        never share a stopover.
+
+     engine_version 15 (per-player): each player's rooted cards are placed on their
+     OWN leading positions (stopover_4, stopover_3, ...) independently of the
+     opponent. engine_version 14 (shared skip): the free-stopover computation is
+     shared across both players (skipping rooted + dwelling columns). Legacy (v10-13):
+     sequential placement on stopover_4..0 in play order. """
     if (current_game.engine_version or 0) < 10:
         return current_game
     # 1. discard the previous turn's rooted cards (they are no longer on the board)
     for card in (current_game.rooted_on_board or []):
         owner = current_game.players.get(card.get('owner'))
-        if owner is not None and card.get('card_id'):
-            if owner.discard is None:
-                owner.discard = []
-            owner.discard.append(card['card_id'])
-            print(f'\t\trooted: card {card["card_id"]} ({owner.name}) served its turn -> discarded')
+        if owner is None:
+            continue
+        if not card.get('card_id'):
+            continue
+        if owner.discard is None:
+            owner.discard = []
+        owner.discard.append(card['card_id'])
+        print(f'\t\trooted: card {card["card_id"]} ({owner.name}) served its turn -> discarded')
     current_game.rooted_on_board = []
-    # 2. place this turn's rooted cards onto free stopovers (in play order, no stacking)
-    free_stopovers = ['stopover_4', 'stopover_3', 'stopover_2', 'stopover_1', 'stopover_0']
-    for i, entry in enumerate(current_game.rooted_this_turn or []):
-        card_id = entry.get('card_id')
-        owner_name = entry.get('owner')
-        owner = current_game.players.get(owner_name)
-        if owner is not None and owner.discard and card_id in owner.discard:
-            owner.discard.remove(card_id)   # the card survives: pulled out of the discard
-        stopover = free_stopovers[i] if i < len(free_stopovers) else f'stopover_extra_{i}'
-        current_game.rooted_on_board.append({'card_id': card_id, 'owner': owner_name, 'stopover': stopover})
-        print(f'\t\trooted: card {card_id} ({owner_name}) stays on the trip chain -> {stopover}')
+    if (current_game.engine_version or 0) >= 15:
+        # v15: per-player placement (each player's rooted cards on their own positions)
+        by_owner = {}
+        for entry in (current_game.rooted_this_turn or []):
+            by_owner.setdefault(entry.get('owner'), []).append(entry)
+        for owner_name, entries in by_owner.items():
+            owner = current_game.players.get(owner_name)
+            for k, entry in enumerate(entries):
+                card_id = entry.get('card_id')
+                if owner is not None and owner.discard and card_id in owner.discard:
+                    owner.discard.remove(card_id)   # the card survives: pulled out of the discard
+                col = (4 - k) if k < 5 else 0
+                stopover = f'stopover_{col}'
+                current_game.rooted_on_board.append({'card_id': card_id, 'owner': owner_name, 'stopover': stopover})
+                print(f'\t\trooted: card {card_id} ({owner_name}) stays on the trip chain -> {stopover} (position {k + 1})')
+    elif (current_game.engine_version or 0) >= 14:
+        # v14: shared skip (rooted + dwelling columns reserved across both players)
+        for i, entry in enumerate(current_game.rooted_this_turn or []):
+            card_id = entry.get('card_id')
+            owner_name = entry.get('owner')
+            owner = current_game.players.get(owner_name)
+            if owner is not None and owner.discard and card_id in owner.discard:
+                owner.discard.remove(card_id)   # the card survives: pulled out of the discard
+            stopover = _next_free_stopover_v14(current_game, i, owner_name)
+            current_game.rooted_on_board.append({'card_id': card_id, 'owner': owner_name, 'stopover': stopover})
+            print(f'\t\trooted: card {card_id} ({owner_name}) stays on the trip chain -> {stopover}')
+    else:
+        # legacy (v10-13): sequential placement on stopover_4..0 in play order
+        free_stopovers = ['stopover_4', 'stopover_3', 'stopover_2', 'stopover_1', 'stopover_0']
+        for i, entry in enumerate(current_game.rooted_this_turn or []):
+            card_id = entry.get('card_id')
+            owner_name = entry.get('owner')
+            owner = current_game.players.get(owner_name)
+            if owner is not None and owner.discard and card_id in owner.discard:
+                owner.discard.remove(card_id)   # the card survives: pulled out of the discard
+            stopover = free_stopovers[i] if i < len(free_stopovers) else f'stopover_extra_{i}'
+            current_game.rooted_on_board.append({'card_id': card_id, 'owner': owner_name, 'stopover': stopover})
+            print(f'\t\trooted: card {card_id} ({owner_name}) stays on the trip chain -> {stopover}')
+    # clear the per-turn buffer
     current_game.rooted_this_turn = []
     return current_game
-
+def _next_free_stopover_v14(current_game, played_count, owner_name):
+    """ engine_version 14 ONLY (superseded by the v15 per-player rule): the
+     (played_count+1)-th FREE stopover, skipping columns reserved by board furniture
+     (rooted-on-board cards + the two players' dwelling placeholders — shared, by
+     column). Kept so v14 games replay exactly as they were played. """
+    occupied = set()
+    for r in (current_game.rooted_on_board or []):
+        m = re.match(r'stopover_(\d+)', (r or {}).get('stopover') or '')
+        if m:
+            occupied.add(int(m.group(1)) % 5)
+    for p in current_game.players.values():
+        if p.dwelling and p.dwelling_slot is not None:
+            occupied.add(int(p.dwelling_slot) % 5)
+    free = [c for c in (4, 3, 2, 1, 0) if c not in occupied]
+    if not free:
+        return f'stopover_{4 - min(played_count, 4)}'
+    col = free[played_count] if played_count < len(free) else free[-1]
+    return f'stopover_{col}'
 def _get_oppo(player, current_game):
     """ return the opponent PlayerState (the other player in the game), or None if playing alone """
     for p in current_game.players.values():
@@ -2022,6 +2575,15 @@ def process_advancing(advancing_value, player, current_game, allow_bonus=True, l
      biome-bonus note only when it is the entry owner who moves, and the win note). """
     if advancing_value == 0:
         return current_game
+
+    # Defensive: ensure the player's token is in the earth array at their current
+    # position. A previous effect (cataclysm knockback, win-condition reset, etc.)
+    # may have left the player in earth[0] while current_position points elsewhere.
+    if player.name not in current_game.earth[player.current_position]:
+        for _ct in current_game.earth:
+            while player.name in _ct:
+                _ct.remove(player.name)
+        current_game.earth[player.current_position].append(player.name)
 
     # faction biome bonus: standing on one of the two biomes of your own faction
     # grants +1 to forward movement (recoil / backward movement is not boosted)

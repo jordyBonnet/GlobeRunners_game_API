@@ -1,0 +1,2692 @@
+
+===== process_trip_chain (line 1066) =====
+CONSTS: [' process the action chain of the game, effect first then advancing.\n     grappling_hook copies: after BOTH facing cards at an index have resolved, each\n     validated grappling card advances by the total advancement of the facing card\n     (see apply_grappling_copy / grappling_copy_amount).\n     copy_effect copies: after BOTH facing cards at an index have resolved, each\n     validated copy_effect card applies the effect of the facing card with itself as\n     the actor (see apply_copy_effect) - only when the facing effect fired.\n\n     Also records the public turn log in GameState.log (turn -> stopover -> entries).\n\n     discard selection (rule of engine_version 13): when a discard / discard_oppo\n     effect fires, the chain PAUSES (current_game.pending_discard is set by\n     apply_effect) at the next step boundary. The resume context (index, stage,\n     log entries, per-player flags) is saved in current_game.chain_resume and the\n     state switches to "turn N - waiting for X to discard K card(s)". When the\n     discarding player submits the choice (to: \'discard_pile\'),\n     handle_websocket_message calls process_trip_chain(current_game, resume=ctx)\n     which continues EXACTLY where the chain stopped.\n     Stages (the next step to execute, in order): first -> second -> grapple_f ->\n     grapple_s -> copy_f -> copy_s -> log. `first` = before the first player\'s\n     action at this index, `second` = before the second player\'s action, ... ', 'Processing trip chain...', 0, 1, 15, None, ('turn', 'stopovers'), 'first', ('p', 'stage'), -1, 'p', False, 'stage', '\tProcessing position: ', 'sv', 'e_f', 'e_s', 'kind', 'rooted', 'stopover', 'card_id', ('to', 'mode', 'cards'), 'action', 2, 'entry_f', 'entry_s', 'stopover_', 4, ('stopover', 'entries'), 'first_adv', 'first_grapple', 'first_effect_ok', 'second_adv', 'second_grapple', 'second_effect_ok', ('log_entry', 'oppo_entry'), 'second', 'grapple_f', 'grapple_s', 'copy_f', 'play', 'copy_s', 'log', True, 'game over', 'stopovers']
+NAMES: ('print', 'players', 'turn_order', 'engine_version', '_player_chain', 'name', 'max', 'len', 'log', 'isinstance', 'list', 'turn', 'append', 'new_log_entry', 'get', 'setdefault', 'process_rooted_card', 'current_position', 'process_card', '_player_blocked', 'apply_grappling_copy', 'grappling_copy_amount', 'apply_copy_effect', '_log_stopover', 'state', 'pending_discard', 'remove')
+VARARGS/vartype: ('current_game', 'resume', 'use_positions', 'max_pos', '_legacy_chain', '_entry_at', 'log_list', 'turn_log', 'ctx', 'p', 'flush_unresolved', 'pause_discard', 'over', 'e_f', 'e_s', 'entry_f', 'entry_s', 'sv', 'stage', 'adv', '_blocked', 'pos_before', 'g', 'ok', 'resolved')
+               0 MAKE_CELL                0 (current_game)
+               2 MAKE_CELL               25 (chain_f)
+               4 MAKE_CELL               26 (chain_s)
+               6 MAKE_CELL               27 (first_player)
+               8 MAKE_CELL               28 (second_player)
+
+1066          10 RESUME                   0
+
+1088          12 LOAD_GLOBAL              1 (NULL + print)
+              22 LOAD_CONST               1 ('Processing trip chain...')
+              24 CALL                     1
+              32 POP_TOP
+
+1090          34 LOAD_DEREF               0 (current_game)
+              36 LOAD_ATTR                2 (players)
+              56 LOAD_DEREF               0 (current_game)
+              58 LOAD_ATTR                4 (turn_order)
+              78 LOAD_CONST               2 (0)
+              80 BINARY_SUBSCR
+              84 BINARY_SUBSCR
+              88 STORE_DEREF             27 (first_player)
+
+1091          90 LOAD_DEREF               0 (current_game)
+              92 LOAD_ATTR                2 (players)
+             112 LOAD_DEREF               0 (current_game)
+             114 LOAD_ATTR                4 (turn_order)
+             134 LOAD_CONST               3 (1)
+             136 BINARY_SUBSCR
+             140 BINARY_SUBSCR
+             144 STORE_DEREF             28 (second_player)
+
+1100         146 LOAD_DEREF               0 (current_game)
+             148 LOAD_ATTR                6 (engine_version)
+             168 COPY                     1
+             170 POP_JUMP_IF_TRUE         2 (to 176)
+             172 POP_TOP
+             174 LOAD_CONST               2 (0)
+         >>  176 LOAD_CONST               4 (15)
+             178 COMPARE_OP              92 (>=)
+             182 STORE_FAST               2 (use_positions)
+
+1101         184 LOAD_FAST                2 (use_positions)
+             186 POP_JUMP_IF_FALSE       75 (to 338)
+
+1102         188 LOAD_GLOBAL              9 (NULL + _player_chain)
+             198 LOAD_DEREF               0 (current_game)
+             200 LOAD_DEREF              27 (first_player)
+             202 LOAD_ATTR               10 (name)
+             222 CALL                     2
+             230 STORE_DEREF             25 (chain_f)
+
+1103         232 LOAD_GLOBAL              9 (NULL + _player_chain)
+             242 LOAD_DEREF               0 (current_game)
+             244 LOAD_DEREF              28 (second_player)
+             246 LOAD_ATTR               10 (name)
+             266 CALL                     2
+             274 STORE_DEREF             26 (chain_s)
+
+1104         276 LOAD_GLOBAL             13 (NULL + max)
+             286 LOAD_GLOBAL             15 (NULL + len)
+             296 LOAD_DEREF              25 (chain_f)
+             298 CALL                     1
+             306 LOAD_GLOBAL             15 (NULL + len)
+             316 LOAD_DEREF              26 (chain_s)
+             318 CALL                     1
+             326 CALL                     2
+             334 STORE_FAST               3 (max_pos)
+             336 JUMP_FORWARD            49 (to 436)
+
+1107     >>  338 LOAD_CONST               5 (<code object _legacy_chain at 0x0000022491B3C540, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1107>)
+             340 MAKE_FUNCTION            0
+             342 STORE_FAST               4 (_legacy_chain)
+
+1113         344 PUSH_NULL
+             346 LOAD_FAST                4 (_legacy_chain)
+             348 LOAD_DEREF              27 (first_player)
+             350 CALL                     1
+             358 STORE_DEREF             25 (chain_f)
+
+1114         360 PUSH_NULL
+             362 LOAD_FAST                4 (_legacy_chain)
+             364 LOAD_DEREF              28 (second_player)
+             366 CALL                     1
+             374 STORE_DEREF             26 (chain_s)
+
+1115         376 LOAD_GLOBAL             13 (NULL + max)
+             386 LOAD_GLOBAL             15 (NULL + len)
+             396 LOAD_DEREF              25 (chain_f)
+             398 CALL                     1
+             406 LOAD_GLOBAL             15 (NULL + len)
+             416 LOAD_DEREF              26 (chain_s)
+             418 CALL                     1
+             426 CALL                     2
+             434 STORE_FAST               3 (max_pos)
+
+1117     >>  436 LOAD_CONST               6 (<code object _entry_at at 0x0000022491E54210, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1117>)
+             438 MAKE_FUNCTION            0
+             440 STORE_FAST               5 (_entry_at)
+
+1123         442 LOAD_FAST                1 (resume)
+             444 POP_JUMP_IF_NOT_NONE    75 (to 596)
+
+1126         446 LOAD_DEREF               0 (current_game)
+             448 LOAD_ATTR               16 (log)
+             468 STORE_FAST               6 (log_list)
+
+1127         470 LOAD_GLOBAL             19 (NULL + isinstance)
+             480 LOAD_FAST                6 (log_list)
+             482 LOAD_GLOBAL             20 (list)
+             492 CALL                     2
+             500 POP_JUMP_IF_TRUE         9 (to 520)
+
+1128         502 BUILD_LIST               0
+             504 COPY                     1
+             506 LOAD_DEREF               0 (current_game)
+             508 STORE_ATTR               8 (log)
+             518 STORE_FAST               6 (log_list)
+
+1129     >>  520 LOAD_DEREF               0 (current_game)
+             522 LOAD_ATTR               22 (turn)
+             542 BUILD_LIST               0
+             544 LOAD_CONST               8 (('turn', 'stopovers'))
+             546 BUILD_CONST_KEY_MAP      2
+             548 STORE_FAST               7 (turn_log)
+
+1130         550 LOAD_FAST                6 (log_list)
+             552 LOAD_ATTR               25 (NULL|self + append)
+             572 LOAD_FAST                7 (turn_log)
+             574 CALL                     1
+             582 POP_TOP
+
+1131         584 LOAD_CONST               3 (1)
+             586 LOAD_CONST               9 ('first')
+             588 LOAD_CONST              10 (('p', 'stage'))
+             590 BUILD_CONST_KEY_MAP      2
+             592 STORE_FAST               8 (ctx)
+             594 JUMP_FORWARD           125 (to 846)
+
+1133     >>  596 LOAD_FAST                1 (resume)
+             598 STORE_FAST               8 (ctx)
+
+1134         600 LOAD_DEREF               0 (current_game)
+             602 LOAD_ATTR               16 (log)
+             622 STORE_FAST               6 (log_list)
+
+1135         624 LOAD_GLOBAL             19 (NULL + isinstance)
+             634 LOAD_FAST                6 (log_list)
+             636 LOAD_GLOBAL             20 (list)
+             646 CALL                     2
+             654 POP_JUMP_IF_FALSE        2 (to 660)
+             656 LOAD_FAST                6 (log_list)
+             658 POP_JUMP_IF_TRUE        88 (to 836)
+
+1136     >>  660 LOAD_GLOBAL             19 (NULL + isinstance)
+             670 LOAD_DEREF               0 (current_game)
+             672 LOAD_ATTR               16 (log)
+             692 LOAD_GLOBAL             20 (list)
+             702 CALL                     2
+             710 POP_JUMP_IF_TRUE         7 (to 726)
+
+1137         712 BUILD_LIST               0
+             714 LOAD_DEREF               0 (current_game)
+             716 STORE_ATTR               8 (log)
+
+1138     >>  726 LOAD_DEREF               0 (current_game)
+             728 LOAD_ATTR               22 (turn)
+             748 BUILD_LIST               0
+             750 LOAD_CONST               8 (('turn', 'stopovers'))
+             752 BUILD_CONST_KEY_MAP      2
+             754 STORE_FAST               7 (turn_log)
+
+1139         756 LOAD_DEREF               0 (current_game)
+             758 LOAD_ATTR               16 (log)
+             778 LOAD_ATTR               25 (NULL|self + append)
+             798 LOAD_FAST                7 (turn_log)
+             800 CALL                     1
+             808 POP_TOP
+
+1140         810 LOAD_DEREF               0 (current_game)
+             812 LOAD_ATTR               16 (log)
+             832 STORE_FAST               6 (log_list)
+             834 JUMP_FORWARD             5 (to 846)
+
+1142     >>  836 LOAD_FAST                6 (log_list)
+             838 LOAD_CONST              11 (-1)
+             840 BINARY_SUBSCR
+             844 STORE_FAST               7 (turn_log)
+
+1143     >>  846 LOAD_FAST                8 (ctx)
+             848 LOAD_CONST              12 ('p')
+             850 BINARY_SUBSCR
+             854 STORE_FAST               9 (p)
+
+1145         856 LOAD_CLOSURE            25 (chain_f)
+             858 LOAD_CLOSURE            26 (chain_s)
+             860 LOAD_CLOSURE            27 (first_player)
+             862 LOAD_CLOSURE            28 (second_player)
+             864 BUILD_TUPLE              4
+             866 LOAD_CONST              13 (<code object flush_unresolved at 0x0000022491D6C3C0, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1145>)
+             868 MAKE_FUNCTION            8 (closure)
+             870 STORE_FAST              10 (flush_unresolved)
+
+1178         872 LOAD_CLOSURE             0 (current_game)
+             874 BUILD_TUPLE              1
+             876 LOAD_CONST              14 (<code object pause_discard at 0x0000022491B20600, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1178>)
+             878 MAKE_FUNCTION            8 (closure)
+             880 STORE_FAST              11 (pause_discard)
+
+1193         882 LOAD_CONST              15 (False)
+             884 STORE_FAST              12 (over)
+
+1194     >>  886 LOAD_FAST               12 (over)
+             888 EXTENDED_ARG             4
+             890 POP_JUMP_IF_TRUE      1066 (to 3024)
+             892 LOAD_FAST                9 (p)
+             894 LOAD_FAST                3 (max_pos)
+             896 COMPARE_OP              26 (<=)
+             900 EXTENDED_ARG             4
+             902 POP_JUMP_IF_FALSE     1060 (to 3024)
+
+1195     >>  904 LOAD_FAST                8 (ctx)
+             906 LOAD_CONST              16 ('stage')
+             908 BINARY_SUBSCR
+             912 LOAD_CONST               9 ('first')
+             914 COMPARE_OP              40 (==)
+             918 POP_JUMP_IF_FALSE       14 (to 948)
+
+1196         920 LOAD_GLOBAL              1 (NULL + print)
+             930 LOAD_CONST              17 ('\tProcessing position: ')
+             932 LOAD_FAST                9 (p)
+             934 FORMAT_VALUE             0
+             936 BUILD_STRING             2
+             938 CALL                     1
+             946 POP_TOP
+
+1200     >>  948 LOAD_CONST              18 ('sv')
+             950 LOAD_FAST                8 (ctx)
+             952 CONTAINS_OP              1
+             954 EXTENDED_ARG             1
+             956 POP_JUMP_IF_FALSE      305 (to 1568)
+
+1201         958 PUSH_NULL
+             960 LOAD_FAST                5 (_entry_at)
+             962 LOAD_DEREF              25 (chain_f)
+             964 LOAD_FAST                9 (p)
+             966 CALL                     2
+             974 STORE_FAST              13 (e_f)
+
+1202         976 PUSH_NULL
+             978 LOAD_FAST                5 (_entry_at)
+             980 LOAD_DEREF              26 (chain_s)
+             982 LOAD_FAST                9 (p)
+             984 CALL                     2
+             992 STORE_FAST              14 (e_s)
+
+1203         994 LOAD_FAST               13 (e_f)
+             996 LOAD_FAST                8 (ctx)
+             998 LOAD_CONST              19 ('e_f')
+            1000 STORE_SUBSCR
+
+1204        1004 LOAD_FAST               14 (e_s)
+            1006 LOAD_FAST                8 (ctx)
+            1008 LOAD_CONST              20 ('e_s')
+            1010 STORE_SUBSCR
+
+1206        1014 LOAD_FAST               13 (e_f)
+            1016 POP_JUMP_IF_NONE        50 (to 1118)
+
+1207        1018 LOAD_FAST               13 (e_f)
+            1020 LOAD_CONST              21 ('kind')
+            1022 BINARY_SUBSCR
+            1026 LOAD_CONST              22 ('rooted')
+            1028 COMPARE_OP              40 (==)
+            1032 POP_JUMP_IF_FALSE       25 (to 1084)
+
+1208        1034 LOAD_GLOBAL             27 (NULL + new_log_entry)
+            1044 LOAD_DEREF              27 (first_player)
+            1046 LOAD_FAST               13 (e_f)
+            1048 LOAD_CONST              23 ('stopover')
+            1050 BINARY_SUBSCR
+            1054 LOAD_CONST              22 ('rooted')
+            1056 LOAD_FAST               13 (e_f)
+            1058 LOAD_CONST              24 ('card_id')
+            1060 BINARY_SUBSCR
+            1064 BUILD_LIST               1
+            1066 LOAD_CONST              25 (('to', 'mode', 'cards'))
+            1068 BUILD_CONST_KEY_MAP      3
+            1070 LOAD_CONST               3 (1)
+            1072 CALL                     3
+            1080 STORE_FAST              15 (entry_f)
+            1082 JUMP_FORWARD            19 (to 1122)
+
+1210     >> 1084 LOAD_GLOBAL             27 (NULL + new_log_entry)
+            1094 LOAD_DEREF              27 (first_player)
+            1096 LOAD_FAST               13 (e_f)
+            1098 LOAD_CONST              26 ('action')
+            1100 BINARY_SUBSCR
+            1104 LOAD_CONST               3 (1)
+            1106 CALL                     3
+            1114 STORE_FAST              15 (entry_f)
+            1116 JUMP_FORWARD             2 (to 1122)
+
+1212     >> 1118 LOAD_CONST               7 (None)
+            1120 STORE_FAST              15 (entry_f)
+
+1213     >> 1122 LOAD_FAST               14 (e_s)
+            1124 POP_JUMP_IF_NONE        50 (to 1226)
+
+1214        1126 LOAD_FAST               14 (e_s)
+            1128 LOAD_CONST              21 ('kind')
+            1130 BINARY_SUBSCR
+            1134 LOAD_CONST              22 ('rooted')
+            1136 COMPARE_OP              40 (==)
+            1140 POP_JUMP_IF_FALSE       25 (to 1192)
+
+1215        1142 LOAD_GLOBAL             27 (NULL + new_log_entry)
+            1152 LOAD_DEREF              28 (second_player)
+            1154 LOAD_FAST               14 (e_s)
+            1156 LOAD_CONST              23 ('stopover')
+            1158 BINARY_SUBSCR
+            1162 LOAD_CONST              22 ('rooted')
+            1164 LOAD_FAST               14 (e_s)
+            1166 LOAD_CONST              24 ('card_id')
+            1168 BINARY_SUBSCR
+            1172 BUILD_LIST               1
+            1174 LOAD_CONST              25 (('to', 'mode', 'cards'))
+            1176 BUILD_CONST_KEY_MAP      3
+            1178 LOAD_CONST              27 (2)
+            1180 CALL                     3
+            1188 STORE_FAST              16 (entry_s)
+            1190 JUMP_FORWARD            19 (to 1230)
+
+1217     >> 1192 LOAD_GLOBAL             27 (NULL + new_log_entry)
+            1202 LOAD_DEREF              28 (second_player)
+            1204 LOAD_FAST               14 (e_s)
+            1206 LOAD_CONST              26 ('action')
+            1208 BINARY_SUBSCR
+            1212 LOAD_CONST              27 (2)
+            1214 CALL                     3
+            1222 STORE_FAST              16 (entry_s)
+            1224 JUMP_FORWARD             2 (to 1230)
+
+1219     >> 1226 LOAD_CONST               7 (None)
+            1228 STORE_FAST              16 (entry_s)
+
+1220     >> 1230 LOAD_FAST               15 (entry_f)
+            1232 LOAD_FAST                8 (ctx)
+            1234 LOAD_CONST              28 ('entry_f')
+            1236 STORE_SUBSCR
+
+1221        1240 LOAD_FAST               16 (entry_s)
+            1242 LOAD_FAST                8 (ctx)
+            1244 LOAD_CONST              29 ('entry_s')
+            1246 STORE_SUBSCR
+
+1223        1250 LOAD_FAST               13 (e_f)
+            1252 COPY                     1
+            1254 POP_JUMP_IF_TRUE         2 (to 1260)
+            1256 POP_TOP
+            1258 LOAD_FAST               14 (e_s)
+         >> 1260 COPY                     1
+            1262 POP_JUMP_IF_TRUE         2 (to 1268)
+            1264 POP_TOP
+            1266 BUILD_MAP                0
+         >> 1268 LOAD_ATTR               29 (NULL|self + get)
+            1288 LOAD_CONST              23 ('stopover')
+            1290 CALL                     1
+            1298 COPY                     1
+            1300 POP_JUMP_IF_TRUE        18 (to 1338)
+            1302 POP_TOP
+            1304 LOAD_CONST              30 ('stopover_')
+            1306 LOAD_GLOBAL             13 (NULL + max)
+            1316 LOAD_CONST               2 (0)
+            1318 LOAD_CONST              31 (4)
+            1320 LOAD_FAST                9 (p)
+            1322 BINARY_OP               10 (-)
+            1326 CALL                     2
+            1334 FORMAT_VALUE             0
+            1336 BUILD_STRING             2
+
+1224     >> 1338 BUILD_LIST               0
+
+1222        1340 LOAD_CONST              32 (('stopover', 'entries'))
+            1342 BUILD_CONST_KEY_MAP      2
+            1344 LOAD_FAST                8 (ctx)
+            1346 LOAD_CONST              18 ('sv')
+            1348 STORE_SUBSCR
+
+1226        1352 LOAD_FAST                8 (ctx)
+            1354 LOAD_ATTR               31 (NULL|self + setdefault)
+            1374 LOAD_CONST              33 ('first_adv')
+            1376 LOAD_CONST               2 (0)
+            1378 CALL                     2
+            1386 POP_TOP
+
+1227        1388 LOAD_FAST                8 (ctx)
+            1390 LOAD_ATTR               31 (NULL|self + setdefault)
+            1410 LOAD_CONST              34 ('first_grapple')
+            1412 LOAD_CONST              15 (False)
+            1414 CALL                     2
+            1422 POP_TOP
+
+1228        1424 LOAD_FAST                8 (ctx)
+            1426 LOAD_ATTR               31 (NULL|self + setdefault)
+            1446 LOAD_CONST              35 ('first_effect_ok')
+            1448 LOAD_CONST              15 (False)
+            1450 CALL                     2
+            1458 POP_TOP
+
+1229        1460 LOAD_FAST                8 (ctx)
+            1462 LOAD_ATTR               31 (NULL|self + setdefault)
+            1482 LOAD_CONST              36 ('second_adv')
+            1484 LOAD_CONST               2 (0)
+            1486 CALL                     2
+            1494 POP_TOP
+
+1230        1496 LOAD_FAST                8 (ctx)
+            1498 LOAD_ATTR               31 (NULL|self + setdefault)
+            1518 LOAD_CONST              37 ('second_grapple')
+            1520 LOAD_CONST              15 (False)
+            1522 CALL                     2
+            1530 POP_TOP
+
+1231        1532 LOAD_FAST                8 (ctx)
+            1534 LOAD_ATTR               31 (NULL|self + setdefault)
+            1554 LOAD_CONST              38 ('second_effect_ok')
+            1556 LOAD_CONST              15 (False)
+            1558 CALL                     2
+            1566 POP_TOP
+
+1232     >> 1568 LOAD_FAST                8 (ctx)
+            1570 LOAD_CONST              28 ('entry_f')
+            1572 BINARY_SUBSCR
+            1576 LOAD_FAST                8 (ctx)
+            1578 LOAD_CONST              29 ('entry_s')
+            1580 BINARY_SUBSCR
+            1584 STORE_FAST              16 (entry_s)
+            1586 STORE_FAST              15 (entry_f)
+
+1233        1588 LOAD_FAST                8 (ctx)
+            1590 LOAD_CONST              19 ('e_f')
+            1592 BINARY_SUBSCR
+            1596 LOAD_FAST                8 (ctx)
+            1598 LOAD_CONST              20 ('e_s')
+            1600 BINARY_SUBSCR
+            1604 STORE_FAST              14 (e_s)
+            1606 STORE_FAST              13 (e_f)
+
+1234        1608 LOAD_FAST                8 (ctx)
+            1610 LOAD_CONST              18 ('sv')
+            1612 BINARY_SUBSCR
+            1616 STORE_FAST              17 (sv)
+
+1235        1618 LOAD_FAST                8 (ctx)
+            1620 LOAD_CONST              16 ('stage')
+            1622 BINARY_SUBSCR
+            1626 STORE_FAST              18 (stage)
+
+1238        1628 LOAD_FAST               18 (stage)
+            1630 LOAD_CONST               9 ('first')
+            1632 COMPARE_OP              40 (==)
+            1636 POP_JUMP_IF_FALSE      124 (to 1886)
+
+1241        1638 LOAD_FAST               13 (e_f)
+            1640 POP_JUMP_IF_NONE       115 (to 1872)
+
+1242        1642 LOAD_FAST               13 (e_f)
+            1644 LOAD_CONST              21 ('kind')
+            1646 BINARY_SUBSCR
+            1650 LOAD_CONST              22 ('rooted')
+            1652 COMPARE_OP              40 (==)
+            1656 POP_JUMP_IF_FALSE       39 (to 1736)
+
+1243        1658 LOAD_GLOBAL             33 (NULL + process_rooted_card)
+            1668 LOAD_FAST               13 (e_f)
+            1670 LOAD_CONST              24 ('card_id')
+            1672 BINARY_SUBSCR
+            1676 LOAD_DEREF              27 (first_player)
+            1678 LOAD_DEREF               0 (current_game)
+
+1244        1680 LOAD_FAST               15 (entry_f)
+            1682 LOAD_FAST               16 (entry_s)
+
+1243        1684 KW_NAMES                39 (('log_entry', 'oppo_entry'))
+            1686 CALL                     5
+            1694 UNPACK_SEQUENCE          3
+            1698 STORE_DEREF              0 (current_game)
+            1700 STORE_FAST              19 (adv)
+            1702 STORE_FAST              20 (_blocked)
+
+1245        1704 LOAD_FAST               19 (adv)
+            1706 LOAD_FAST                8 (ctx)
+            1708 LOAD_CONST              33 ('first_adv')
+            1710 STORE_SUBSCR
+
+1246        1714 LOAD_CONST              15 (False)
+            1716 LOAD_FAST                8 (ctx)
+            1718 LOAD_CONST              34 ('first_grapple')
+            1720 STORE_SUBSCR
+
+1247        1724 LOAD_CONST              15 (False)
+            1726 LOAD_FAST                8 (ctx)
+            1728 LOAD_CONST              35 ('first_effect_ok')
+            1730 STORE_SUBSCR
+            1734 JUMP_FORWARD            68 (to 1872)
+
+1249     >> 1736 LOAD_DEREF              27 (first_player)
+            1738 LOAD_ATTR               34 (current_position)
+            1758 STORE_FAST              21 (pos_before)
+
+1250        1760 LOAD_GLOBAL             37 (NULL + process_card)
+            1770 LOAD_FAST               13 (e_f)
+            1772 LOAD_CONST              26 ('action')
+            1774 BINARY_SUBSCR
+            1778 LOAD_DEREF              27 (first_player)
+            1780 LOAD_DEREF               0 (current_game)
+
+1251        1782 LOAD_FAST               15 (entry_f)
+            1784 LOAD_FAST               16 (entry_s)
+
+1250        1786 KW_NAMES                39 (('log_entry', 'oppo_entry'))
+            1788 CALL                     5
+            1796 UNPACK_SEQUENCE          3
+            1800 STORE_DEREF              0 (current_game)
+            1802 STORE_FAST              22 (g)
+            1804 STORE_FAST              23 (ok)
+
+1252        1806 LOAD_DEREF              27 (first_player)
+            1808 LOAD_ATTR               34 (current_position)
+            1828 COPY                     1
+            1830 POP_JUMP_IF_TRUE         2 (to 1836)
+            1832 POP_TOP
+            1834 LOAD_CONST               2 (0)
+         >> 1836 LOAD_FAST               21 (pos_before)
+            1838 BINARY_OP               10 (-)
+            1842 LOAD_FAST                8 (ctx)
+            1844 LOAD_CONST              33 ('first_adv')
+            1846 STORE_SUBSCR
+
+1253        1850 LOAD_FAST               22 (g)
+            1852 LOAD_FAST               23 (ok)
+            1854 SWAP                     2
+            1856 LOAD_FAST                8 (ctx)
+            1858 LOAD_CONST              34 ('first_grapple')
+            1860 STORE_SUBSCR
+            1864 LOAD_FAST                8 (ctx)
+            1866 LOAD_CONST              35 ('first_effect_ok')
+            1868 STORE_SUBSCR
+
+1254     >> 1872 LOAD_CONST              40 ('second')
+            1874 LOAD_FAST                8 (ctx)
+            1876 LOAD_CONST              16 ('stage')
+            1878 STORE_SUBSCR
+            1882 EXTENDED_ARG             1
+            1884 JUMP_FORWARD           465 (to 2816)
+
+1255     >> 1886 LOAD_FAST               18 (stage)
+            1888 LOAD_CONST              40 ('second')
+            1890 COMPARE_OP              40 (==)
+            1894 POP_JUMP_IF_FALSE      124 (to 2144)
+
+1257        1896 LOAD_FAST               14 (e_s)
+            1898 POP_JUMP_IF_NONE       115 (to 2130)
+
+1258        1900 LOAD_FAST               14 (e_s)
+            1902 LOAD_CONST              21 ('kind')
+            1904 BINARY_SUBSCR
+            1908 LOAD_CONST              22 ('rooted')
+            1910 COMPARE_OP              40 (==)
+            1914 POP_JUMP_IF_FALSE       39 (to 1994)
+
+1259        1916 LOAD_GLOBAL             33 (NULL + process_rooted_card)
+            1926 LOAD_FAST               14 (e_s)
+            1928 LOAD_CONST              24 ('card_id')
+            1930 BINARY_SUBSCR
+            1934 LOAD_DEREF              28 (second_player)
+            1936 LOAD_DEREF               0 (current_game)
+
+1260        1938 LOAD_FAST               16 (entry_s)
+            1940 LOAD_FAST               15 (entry_f)
+
+1259        1942 KW_NAMES                39 (('log_entry', 'oppo_entry'))
+            1944 CALL                     5
+            1952 UNPACK_SEQUENCE          3
+            1956 STORE_DEREF              0 (current_game)
+            1958 STORE_FAST              19 (adv)
+            1960 STORE_FAST              20 (_blocked)
+
+1261        1962 LOAD_FAST               19 (adv)
+            1964 LOAD_FAST                8 (ctx)
+            1966 LOAD_CONST              36 ('second_adv')
+            1968 STORE_SUBSCR
+
+1262        1972 LOAD_CONST              15 (False)
+            1974 LOAD_FAST                8 (ctx)
+            1976 LOAD_CONST              37 ('second_grapple')
+            1978 STORE_SUBSCR
+
+1263        1982 LOAD_CONST              15 (False)
+            1984 LOAD_FAST                8 (ctx)
+            1986 LOAD_CONST              38 ('second_effect_ok')
+            1988 STORE_SUBSCR
+            1992 JUMP_FORWARD            68 (to 2130)
+
+1265     >> 1994 LOAD_DEREF              28 (second_player)
+            1996 LOAD_ATTR               34 (current_position)
+            2016 STORE_FAST              21 (pos_before)
+
+1266        2018 LOAD_GLOBAL             37 (NULL + process_card)
+            2028 LOAD_FAST               14 (e_s)
+            2030 LOAD_CONST              26 ('action')
+            2032 BINARY_SUBSCR
+            2036 LOAD_DEREF              28 (second_player)
+            2038 LOAD_DEREF               0 (current_game)
+
+1267        2040 LOAD_FAST               16 (entry_s)
+            2042 LOAD_FAST               15 (entry_f)
+
+1266        2044 KW_NAMES                39 (('log_entry', 'oppo_entry'))
+            2046 CALL                     5
+            2054 UNPACK_SEQUENCE          3
+            2058 STORE_DEREF              0 (current_game)
+            2060 STORE_FAST              22 (g)
+            2062 STORE_FAST              23 (ok)
+
+1268        2064 LOAD_DEREF              28 (second_player)
+            2066 LOAD_ATTR               34 (current_position)
+            2086 COPY                     1
+            2088 POP_JUMP_IF_TRUE         2 (to 2094)
+            2090 POP_TOP
+            2092 LOAD_CONST               2 (0)
+         >> 2094 LOAD_FAST               21 (pos_before)
+            2096 BINARY_OP               10 (-)
+            2100 LOAD_FAST                8 (ctx)
+            2102 LOAD_CONST              36 ('second_adv')
+            2104 STORE_SUBSCR
+
+1269        2108 LOAD_FAST               22 (g)
+            2110 LOAD_FAST               23 (ok)
+            2112 SWAP                     2
+            2114 LOAD_FAST                8 (ctx)
+            2116 LOAD_CONST              37 ('second_grapple')
+            2118 STORE_SUBSCR
+            2122 LOAD_FAST                8 (ctx)
+            2124 LOAD_CONST              38 ('second_effect_ok')
+            2126 STORE_SUBSCR
+
+1270     >> 2130 LOAD_CONST              41 ('grapple_f')
+            2132 LOAD_FAST                8 (ctx)
+            2134 LOAD_CONST              16 ('stage')
+            2136 STORE_SUBSCR
+            2140 EXTENDED_ARG             1
+            2142 JUMP_FORWARD           336 (to 2816)
+
+1271     >> 2144 LOAD_FAST               18 (stage)
+            2146 LOAD_CONST              41 ('grapple_f')
+            2148 COMPARE_OP              40 (==)
+            2152 POP_JUMP_IF_FALSE       51 (to 2256)
+
+1276        2154 LOAD_FAST                8 (ctx)
+            2156 LOAD_CONST              34 ('first_grapple')
+            2158 BINARY_SUBSCR
+            2162 POP_JUMP_IF_FALSE       39 (to 2242)
+            2164 LOAD_GLOBAL             39 (NULL + _player_blocked)
+            2174 LOAD_DEREF              27 (first_player)
+            2176 LOAD_DEREF               0 (current_game)
+            2178 CALL                     2
+            2186 POP_JUMP_IF_TRUE        27 (to 2242)
+
+1277        2188 LOAD_GLOBAL             41 (NULL + apply_grappling_copy)
+            2198 LOAD_DEREF               0 (current_game)
+            2200 LOAD_DEREF              27 (first_player)
+
+1278        2202 LOAD_GLOBAL             43 (NULL + grappling_copy_amount)
+            2212 LOAD_DEREF               0 (current_game)
+            2214 LOAD_FAST                8 (ctx)
+            2216 LOAD_CONST              36 ('second_adv')
+            2218 BINARY_SUBSCR
+            2222 CALL                     2
+            2230 LOAD_FAST               15 (entry_f)
+
+1277        2232 CALL                     4
+            2240 STORE_DEREF              0 (current_game)
+
+1279     >> 2242 LOAD_CONST              42 ('grapple_s')
+            2244 LOAD_FAST                8 (ctx)
+            2246 LOAD_CONST              16 ('stage')
+            2248 STORE_SUBSCR
+            2252 EXTENDED_ARG             1
+            2254 JUMP_FORWARD           280 (to 2816)
+
+1280     >> 2256 LOAD_FAST               18 (stage)
+            2258 LOAD_CONST              42 ('grapple_s')
+            2260 COMPARE_OP              40 (==)
+            2264 POP_JUMP_IF_FALSE       50 (to 2366)
+
+1281        2266 LOAD_FAST                8 (ctx)
+            2268 LOAD_CONST              37 ('second_grapple')
+            2270 BINARY_SUBSCR
+            2274 POP_JUMP_IF_FALSE       39 (to 2354)
+            2276 LOAD_GLOBAL             39 (NULL + _player_blocked)
+            2286 LOAD_DEREF              28 (second_player)
+            2288 LOAD_DEREF               0 (current_game)
+            2290 CALL                     2
+            2298 POP_JUMP_IF_TRUE        27 (to 2354)
+
+1282        2300 LOAD_GLOBAL             41 (NULL + apply_grappling_copy)
+            2310 LOAD_DEREF               0 (current_game)
+            2312 LOAD_DEREF              28 (second_player)
+
+1283        2314 LOAD_GLOBAL             43 (NULL + grappling_copy_amount)
+            2324 LOAD_DEREF               0 (current_game)
+            2326 LOAD_FAST                8 (ctx)
+            2328 LOAD_CONST              33 ('first_adv')
+            2330 BINARY_SUBSCR
+            2334 CALL                     2
+            2342 LOAD_FAST               16 (entry_s)
+
+1282        2344 CALL                     4
+            2352 STORE_DEREF              0 (current_game)
+
+1284     >> 2354 LOAD_CONST              43 ('copy_f')
+            2356 LOAD_FAST                8 (ctx)
+            2358 LOAD_CONST              16 ('stage')
+            2360 STORE_SUBSCR
+            2364 JUMP_FORWARD           225 (to 2816)
+
+1285     >> 2366 LOAD_FAST               18 (stage)
+            2368 LOAD_CONST              43 ('copy_f')
+            2370 COMPARE_OP              40 (==)
+            2374 POP_JUMP_IF_FALSE       60 (to 2496)
+
+1294        2376 LOAD_FAST                8 (ctx)
+            2378 LOAD_CONST              35 ('first_effect_ok')
+            2380 BINARY_SUBSCR
+            2384 POP_JUMP_IF_FALSE       49 (to 2484)
+            2386 LOAD_FAST                8 (ctx)
+            2388 LOAD_CONST              38 ('second_effect_ok')
+            2390 BINARY_SUBSCR
+            2394 POP_JUMP_IF_FALSE       44 (to 2484)
+            2396 LOAD_FAST               14 (e_s)
+            2398 POP_JUMP_IF_NONE        42 (to 2484)
+            2400 LOAD_FAST               14 (e_s)
+            2402 LOAD_CONST              21 ('kind')
+            2404 BINARY_SUBSCR
+            2408 LOAD_CONST              44 ('play')
+            2410 COMPARE_OP              40 (==)
+            2414 POP_JUMP_IF_FALSE       34 (to 2484)
+
+1295        2416 LOAD_GLOBAL             39 (NULL + _player_blocked)
+            2426 LOAD_DEREF              27 (first_player)
+            2428 LOAD_DEREF               0 (current_game)
+            2430 CALL                     2
+            2438 POP_JUMP_IF_TRUE        22 (to 2484)
+
+1296        2440 LOAD_GLOBAL             45 (NULL + apply_copy_effect)
+            2450 LOAD_DEREF               0 (current_game)
+            2452 LOAD_DEREF              27 (first_player)
+            2454 LOAD_FAST               13 (e_f)
+            2456 LOAD_CONST              26 ('action')
+            2458 BINARY_SUBSCR
+
+1297        2462 LOAD_DEREF              28 (second_player)
+            2464 LOAD_FAST               14 (e_s)
+            2466 LOAD_CONST              26 ('action')
+            2468 BINARY_SUBSCR
+            2472 LOAD_FAST               15 (entry_f)
+
+1296        2474 CALL                     6
+            2482 STORE_DEREF              0 (current_game)
+
+1298     >> 2484 LOAD_CONST              45 ('copy_s')
+            2486 LOAD_FAST                8 (ctx)
+            2488 LOAD_CONST              16 ('stage')
+            2490 STORE_SUBSCR
+            2494 JUMP_FORWARD           160 (to 2816)
+
+1299     >> 2496 LOAD_FAST               18 (stage)
+            2498 LOAD_CONST              45 ('copy_s')
+            2500 COMPARE_OP              40 (==)
+            2504 POP_JUMP_IF_FALSE       60 (to 2626)
+
+1300        2506 LOAD_FAST                8 (ctx)
+            2508 LOAD_CONST              38 ('second_effect_ok')
+            2510 BINARY_SUBSCR
+            2514 POP_JUMP_IF_FALSE       49 (to 2614)
+            2516 LOAD_FAST                8 (ctx)
+            2518 LOAD_CONST              35 ('first_effect_ok')
+            2520 BINARY_SUBSCR
+            2524 POP_JUMP_IF_FALSE       44 (to 2614)
+            2526 LOAD_FAST               13 (e_f)
+            2528 POP_JUMP_IF_NONE        42 (to 2614)
+            2530 LOAD_FAST               13 (e_f)
+            2532 LOAD_CONST              21 ('kind')
+            2534 BINARY_SUBSCR
+            2538 LOAD_CONST              44 ('play')
+            2540 COMPARE_OP              40 (==)
+            2544 POP_JUMP_IF_FALSE       34 (to 2614)
+
+1301        2546 LOAD_GLOBAL             39 (NULL + _player_blocked)
+            2556 LOAD_DEREF              28 (second_player)
+            2558 LOAD_DEREF               0 (current_game)
+            2560 CALL                     2
+            2568 POP_JUMP_IF_TRUE        22 (to 2614)
+
+1302        2570 LOAD_GLOBAL             45 (NULL + apply_copy_effect)
+            2580 LOAD_DEREF               0 (current_game)
+            2582 LOAD_DEREF              28 (second_player)
+            2584 LOAD_FAST               14 (e_s)
+            2586 LOAD_CONST              26 ('action')
+            2588 BINARY_SUBSCR
+
+1303        2592 LOAD_DEREF              27 (first_player)
+            2594 LOAD_FAST               13 (e_f)
+            2596 LOAD_CONST              26 ('action')
+            2598 BINARY_SUBSCR
+            2602 LOAD_FAST               16 (entry_s)
+
+1302        2604 CALL                     6
+            2612 STORE_DEREF              0 (current_game)
+
+1304     >> 2614 LOAD_CONST              46 ('log')
+            2616 LOAD_FAST                8 (ctx)
+            2618 LOAD_CONST              16 ('stage')
+            2620 STORE_SUBSCR
+            2624 JUMP_FORWARD            95 (to 2816)
+
+1305     >> 2626 LOAD_FAST               18 (stage)
+            2628 LOAD_CONST              46 ('log')
+            2630 COMPARE_OP              40 (==)
+            2634 POP_JUMP_IF_FALSE       90 (to 2816)
+
+1308        2636 LOAD_GLOBAL             47 (NULL + _log_stopover)
+            2646 LOAD_FAST               17 (sv)
+            2648 LOAD_FAST                7 (turn_log)
+            2650 LOAD_FAST               15 (entry_f)
+            2652 LOAD_DEREF              27 (first_player)
+            2654 BUILD_TUPLE              2
+            2656 LOAD_FAST               16 (entry_s)
+            2658 LOAD_DEREF              28 (second_player)
+            2660 BUILD_TUPLE              2
+            2662 BUILD_LIST               2
+            2664 CALL                     3
+            2672 POP_TOP
+
+1309        2674 LOAD_FAST                9 (p)
+            2676 LOAD_FAST                3 (max_pos)
+            2678 COMPARE_OP              92 (>=)
+            2682 POP_JUMP_IF_FALSE        3 (to 2690)
+
+1310        2684 LOAD_CONST              47 (True)
+            2686 STORE_FAST              12 (over)
+            2688 JUMP_FORWARD            62 (to 2814)
+
+1312     >> 2690 LOAD_FAST                9 (p)
+            2692 LOAD_CONST               3 (1)
+            2694 BINARY_OP               13 (+=)
+            2698 STORE_FAST               9 (p)
+
+1313        2700 LOAD_FAST                9 (p)
+            2702 LOAD_FAST                8 (ctx)
+            2704 LOAD_CONST              12 ('p')
+            2706 STORE_SUBSCR
+
+1314        2710 LOAD_CONST               9 ('first')
+            2712 LOAD_FAST                8 (ctx)
+            2714 LOAD_CONST              16 ('stage')
+            2716 STORE_SUBSCR
+
+1318        2720 LOAD_CONST               2 (0)
+            2722 LOAD_FAST                8 (ctx)
+            2724 LOAD_CONST              33 ('first_adv')
+            2726 STORE_SUBSCR
+
+1319        2730 LOAD_CONST              15 (False)
+            2732 LOAD_FAST                8 (ctx)
+            2734 LOAD_CONST              34 ('first_grapple')
+            2736 STORE_SUBSCR
+
+1320        2740 LOAD_CONST              15 (False)
+            2742 LOAD_FAST                8 (ctx)
+            2744 LOAD_CONST              35 ('first_effect_ok')
+            2746 STORE_SUBSCR
+
+1321        2750 LOAD_CONST               2 (0)
+            2752 LOAD_FAST                8 (ctx)
+            2754 LOAD_CONST              36 ('second_adv')
+            2756 STORE_SUBSCR
+
+1322        2760 LOAD_CONST              15 (False)
+            2762 LOAD_FAST                8 (ctx)
+            2764 LOAD_CONST              37 ('second_grapple')
+            2766 STORE_SUBSCR
+
+1323        2770 LOAD_CONST              15 (False)
+            2772 LOAD_FAST                8 (ctx)
+            2774 LOAD_CONST              38 ('second_effect_ok')
+            2776 STORE_SUBSCR
+
+1324        2780 LOAD_FAST                8 (ctx)
+            2782 LOAD_CONST              28 ('entry_f')
+            2784 DELETE_SUBSCR
+            2786 LOAD_FAST                8 (ctx)
+            2788 LOAD_CONST              29 ('entry_s')
+            2790 DELETE_SUBSCR
+            2792 LOAD_FAST                8 (ctx)
+            2794 LOAD_CONST              18 ('sv')
+            2796 DELETE_SUBSCR
+            2798 LOAD_FAST                8 (ctx)
+            2800 LOAD_CONST              19 ('e_f')
+            2802 DELETE_SUBSCR
+            2804 LOAD_FAST                8 (ctx)
+            2806 LOAD_CONST              20 ('e_s')
+            2808 DELETE_SUBSCR
+
+1325        2810 EXTENDED_ARG             3
+            2812 JUMP_BACKWARD          964 (to 886)
+
+1326     >> 2814 JUMP_FORWARD           104 (to 3024)
+
+1329     >> 2816 LOAD_DEREF               0 (current_game)
+            2818 LOAD_ATTR               48 (state)
+            2838 LOAD_CONST              48 ('game over')
+            2840 COMPARE_OP              40 (==)
+            2844 POP_JUMP_IF_FALSE       60 (to 2966)
+
+1332        2846 LOAD_DEREF               0 (current_game)
+            2848 LOAD_ATTR               50 (pending_discard)
+            2868 POP_JUMP_IF_NONE         7 (to 2884)
+
+1333        2870 LOAD_CONST               7 (None)
+            2872 LOAD_DEREF               0 (current_game)
+            2874 STORE_ATTR              25 (pending_discard)
+
+1334     >> 2884 PUSH_NULL
+            2886 LOAD_FAST               10 (flush_unresolved)
+            2888 LOAD_FAST                8 (ctx)
+            2890 CALL                     1
+            2898 POP_TOP
+
+1335        2900 LOAD_FAST               18 (stage)
+            2902 LOAD_CONST               9 ('first')
+            2904 COMPARE_OP              40 (==)
+            2908 POP_JUMP_IF_FALSE        5 (to 2920)
+            2910 LOAD_FAST               15 (entry_f)
+            2912 LOAD_DEREF              27 (first_player)
+            2914 BUILD_TUPLE              2
+            2916 BUILD_LIST               1
+            2918 JUMP_FORWARD             7 (to 2934)
+         >> 2920 LOAD_FAST               15 (entry_f)
+            2922 LOAD_DEREF              27 (first_player)
+            2924 BUILD_TUPLE              2
+            2926 LOAD_FAST               16 (entry_s)
+            2928 LOAD_DEREF              28 (second_player)
+            2930 BUILD_TUPLE              2
+            2932 BUILD_LIST               2
+         >> 2934 STORE_FAST              24 (resolved)
+
+1336        2936 LOAD_GLOBAL             47 (NULL + _log_stopover)
+            2946 LOAD_FAST               17 (sv)
+            2948 LOAD_FAST                7 (turn_log)
+            2950 LOAD_FAST               24 (resolved)
+            2952 CALL                     3
+            2960 POP_TOP
+
+1337        2962 LOAD_DEREF               0 (current_game)
+            2964 RETURN_VALUE
+
+1338     >> 2966 LOAD_DEREF               0 (current_game)
+            2968 LOAD_ATTR               50 (pending_discard)
+            2988 POP_JUMP_IF_NONE         8 (to 3006)
+
+1339        2990 PUSH_NULL
+            2992 LOAD_FAST               11 (pause_discard)
+            2994 LOAD_FAST                8 (ctx)
+            2996 CALL                     1
+            3004 RETURN_VALUE
+
+1194     >> 3006 LOAD_FAST               12 (over)
+            3008 POP_JUMP_IF_TRUE         7 (to 3024)
+            3010 LOAD_FAST                9 (p)
+            3012 LOAD_FAST                3 (max_pos)
+            3014 COMPARE_OP              26 (<=)
+            3018 POP_JUMP_IF_FALSE        2 (to 3024)
+            3020 EXTENDED_ARG             4
+            3022 JUMP_BACKWARD         1060 (to 904)
+
+1342     >> 3024 LOAD_FAST                7 (turn_log)
+            3026 LOAD_CONST              49 ('stopovers')
+            3028 BINARY_SUBSCR
+            3032 POP_JUMP_IF_TRUE        17 (to 3068)
+
+1343        3034 LOAD_FAST                6 (log_list)
+            3036 LOAD_ATTR               53 (NULL|self + remove)
+            3056 LOAD_FAST                7 (turn_log)
+            3058 CALL                     1
+            3066 POP_TOP
+
+1345     >> 3068 LOAD_DEREF               0 (current_game)
+            3070 RETURN_VALUE
+
+Disassembly of <code object _legacy_chain at 0x0000022491B3C540, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1107>:
+1107           0 RESUME                   0
+
+1108           2 BUILD_LIST               0
+               4 STORE_FAST               1 (out)
+
+1109           6 LOAD_GLOBAL              1 (NULL + enumerate)
+              16 LOAD_FAST                0 (player)
+              18 LOAD_ATTR                2 (action_chain)
+              38 COPY                     1
+              40 POP_JUMP_IF_TRUE         2 (to 46)
+              42 POP_TOP
+              44 BUILD_LIST               0
+         >>   46 CALL                     1
+              54 GET_ITER
+         >>   56 FOR_ITER                86 (to 232)
+              60 UNPACK_SEQUENCE          2
+              64 STORE_FAST               2 (idx)
+              66 STORE_FAST               3 (a)
+
+1110          68 LOAD_FAST                3 (a)
+              70 POP_JUMP_IF_TRUE         1 (to 74)
+              72 JUMP_BACKWARD            9 (to 56)
+         >>   74 LOAD_FAST                3 (a)
+              76 LOAD_ATTR                5 (NULL|self + get)
+              96 LOAD_CONST               1 ('mode')
+              98 CALL                     1
+             106 LOAD_CONST               2 (('move', 'defend'))
+             108 CONTAINS_OP              0
+             110 POP_JUMP_IF_TRUE         1 (to 114)
+             112 JUMP_BACKWARD           29 (to 56)
+         >>  114 LOAD_FAST                3 (a)
+             116 LOAD_ATTR                5 (NULL|self + get)
+             136 LOAD_CONST               3 ('cards')
+             138 CALL                     1
+             146 POP_JUMP_IF_TRUE         1 (to 150)
+             148 JUMP_BACKWARD           47 (to 56)
+
+1111     >>  150 LOAD_FAST                1 (out)
+             152 LOAD_ATTR                7 (NULL|self + append)
+             172 LOAD_CONST               4 ('play')
+             174 LOAD_FAST                3 (a)
+             176 LOAD_FAST                3 (a)
+             178 LOAD_ATTR                5 (NULL|self + get)
+             198 LOAD_CONST               5 ('to')
+             200 CALL                     1
+             208 LOAD_FAST                2 (idx)
+             210 LOAD_CONST               6 (1)
+             212 BINARY_OP                0 (+)
+             216 LOAD_CONST               7 (('kind', 'action', 'stopover', 'position'))
+             218 BUILD_CONST_KEY_MAP      4
+             220 CALL                     1
+             228 POP_TOP
+             230 JUMP_BACKWARD           88 (to 56)
+
+1109     >>  232 END_FOR
+
+1112         234 LOAD_FAST                1 (out)
+             236 RETURN_VALUE
+
+Disassembly of <code object _entry_at at 0x0000022491E54210, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1117>:
+1117           0 RESUME                   0
+
+1118           2 LOAD_FAST                0 (chain)
+               4 GET_ITER
+         >>    6 FOR_ITER                14 (to 38)
+              10 STORE_FAST               2 (e)
+
+1119          12 LOAD_FAST                2 (e)
+              14 LOAD_CONST               1 ('position')
+              16 BINARY_SUBSCR
+              20 LOAD_FAST                1 (pos)
+              22 COMPARE_OP              40 (==)
+              26 POP_JUMP_IF_TRUE         1 (to 30)
+              28 JUMP_BACKWARD           12 (to 6)
+
+1120     >>   30 LOAD_FAST                2 (e)
+              32 SWAP                     2
+              34 POP_TOP
+              36 RETURN_VALUE
+
+1118     >>   38 END_FOR
+
+1121          40 RETURN_CONST             0 (None)
+
+Disassembly of <code object flush_unresolved at 0x0000022491D6C3C0, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1145>:
+               0 COPY_FREE_VARS           4
+
+1145           2 RESUME                   0
+
+1157           4 LOAD_FAST                0 (ctx)
+               6 LOAD_CONST               1 ('p')
+               8 BINARY_SUBSCR
+              12 STORE_FAST               1 (p)
+
+1158          14 LOAD_FAST                0 (ctx)
+              16 LOAD_CONST               2 ('stage')
+              18 BINARY_SUBSCR
+              22 STORE_FAST               2 (stage)
+
+1159          24 LOAD_FAST                2 (stage)
+              26 LOAD_CONST               3 ('first')
+              28 COMPARE_OP              40 (==)
+              32 STORE_FAST               3 (first_here)
+
+1160          34 LOAD_FAST                2 (stage)
+              36 LOAD_CONST               4 (('first', 'second'))
+              38 CONTAINS_OP              0
+              40 STORE_FAST               4 (second_here)
+
+1161          42 LOAD_DEREF              14 (first_player)
+              44 LOAD_DEREF              12 (chain_f)
+              46 LOAD_FAST                3 (first_here)
+              48 BUILD_TUPLE              3
+              50 LOAD_DEREF              15 (second_player)
+              52 LOAD_DEREF              13 (chain_s)
+              54 LOAD_FAST                4 (second_here)
+              56 BUILD_TUPLE              3
+              58 BUILD_TUPLE              2
+              60 GET_ITER
+         >>   62 FOR_ITER               167 (to 400)
+              66 UNPACK_SEQUENCE          3
+              70 STORE_FAST               5 (player)
+              72 STORE_FAST               6 (chain)
+              74 STORE_FAST               7 (here_unprocessed)
+
+1162          76 LOAD_FAST                6 (chain)
+              78 GET_ITER
+         >>   80 FOR_ITER               149 (to 382)
+              84 STORE_FAST               8 (entry)
+
+1163          86 LOAD_FAST                8 (entry)
+              88 LOAD_CONST               5 ('position')
+              90 BINARY_SUBSCR
+              94 STORE_FAST               9 (pos)
+
+1164          96 LOAD_FAST                9 (pos)
+              98 LOAD_FAST                1 (p)
+             100 COMPARE_OP              68 (>)
+             104 COPY                     1
+             106 POP_JUMP_IF_TRUE         9 (to 126)
+             108 POP_TOP
+             110 LOAD_FAST                9 (pos)
+             112 LOAD_FAST                1 (p)
+             114 COMPARE_OP              40 (==)
+             118 COPY                     1
+             120 POP_JUMP_IF_FALSE        2 (to 126)
+             122 POP_TOP
+             124 LOAD_FAST                7 (here_unprocessed)
+         >>  126 STORE_FAST              10 (unprocessed)
+
+1165         128 LOAD_FAST               10 (unprocessed)
+             130 POP_JUMP_IF_TRUE         1 (to 134)
+             132 JUMP_BACKWARD           27 (to 80)
+         >>  134 LOAD_FAST                8 (entry)
+             136 LOAD_CONST               6 ('kind')
+             138 BINARY_SUBSCR
+             142 LOAD_CONST               7 ('play')
+             144 COMPARE_OP              40 (==)
+             148 POP_JUMP_IF_TRUE         1 (to 152)
+             150 JUMP_BACKWARD           36 (to 80)
+
+1166     >>  152 LOAD_FAST                8 (entry)
+             154 LOAD_CONST               8 ('action')
+             156 BINARY_SUBSCR
+             160 COPY                     1
+             162 POP_JUMP_IF_TRUE         2 (to 168)
+             164 POP_TOP
+             166 BUILD_MAP                0
+         >>  168 LOAD_ATTR                1 (NULL|self + get)
+             188 LOAD_CONST               9 ('cards')
+             190 CALL                     1
+             198 COPY                     1
+             200 POP_JUMP_IF_TRUE         2 (to 206)
+             202 POP_TOP
+             204 BUILD_LIST               0
+         >>  206 STORE_FAST              11 (cards)
+
+1167         208 LOAD_FAST               11 (cards)
+             210 POP_JUMP_IF_TRUE         1 (to 214)
+             212 JUMP_BACKWARD           67 (to 80)
+
+1168     >>  214 LOAD_FAST                5 (player)
+             216 LOAD_ATTR                2 (discard)
+             236 POP_JUMP_IF_NOT_NONE     7 (to 252)
+
+1169         238 BUILD_LIST               0
+             240 LOAD_FAST                5 (player)
+             242 STORE_ATTR               1 (discard)
+
+1170     >>  252 LOAD_FAST                5 (player)
+             254 LOAD_ATTR                2 (discard)
+             274 LOAD_ATTR                5 (NULL|self + extend)
+             294 LOAD_FAST               11 (cards)
+             296 CALL                     1
+             304 POP_TOP
+
+1171         306 LOAD_GLOBAL              7 (NULL + print)
+             316 LOAD_CONST              11 ('\t\t\tgame over mid-chain: flushed ')
+             318 LOAD_GLOBAL              9 (NULL + len)
+             328 LOAD_FAST               11 (cards)
+             330 CALL                     1
+             338 FORMAT_VALUE             0
+             340 LOAD_CONST              12 (' unresolved card(s) of ')
+             342 LOAD_FAST                5 (player)
+             344 LOAD_ATTR               10 (name)
+             364 FORMAT_VALUE             0
+             366 LOAD_CONST              13 (' to discard')
+             368 BUILD_STRING             5
+             370 CALL                     1
+             378 POP_TOP
+             380 JUMP_BACKWARD          151 (to 80)
+
+1162     >>  382 END_FOR
+
+1176         384 BUILD_LIST               0
+             386 LOAD_FAST                5 (player)
+             388 STORE_ATTR               6 (action_chain)
+             398 JUMP_BACKWARD          169 (to 62)
+
+1161     >>  400 END_FOR
+             402 RETURN_CONST            10 (None)
+
+Disassembly of <code object pause_discard at 0x0000022491B20600, file "C:\Users\jordy\Documents\python\projects\globerunners_the_game\engine\game_engine.py", line 1178>:
+               0 COPY_FREE_VARS           1
+
+1178           2 RESUME                   0
+
+1184           4 LOAD_DEREF               4 (current_game)
+               6 LOAD_ATTR                0 (pending_discard)
+              26 COPY                     1
+              28 POP_JUMP_IF_TRUE         2 (to 34)
+              30 POP_TOP
+              32 BUILD_MAP                0
+         >>   34 STORE_FAST               1 (pending)
+
+1185          36 LOAD_FAST                1 (pending)
+              38 LOAD_ATTR                3 (NULL|self + get)
+              58 LOAD_CONST               1 ('player')
+              60 CALL                     1
+              68 COPY                     1
+              70 POP_JUMP_IF_TRUE         2 (to 76)
+              72 POP_TOP
+              74 LOAD_CONST               2 ('?')
+         >>   76 STORE_FAST               2 (name)
+
+1186          78 LOAD_GLOBAL              5 (NULL + int)
+              88 LOAD_FAST                1 (pending)
+              90 LOAD_ATTR                3 (NULL|self + get)
+             110 LOAD_CONST               3 ('n')
+             112 CALL                     1
+             120 COPY                     1
+             122 POP_JUMP_IF_TRUE         2 (to 128)
+             124 POP_TOP
+             126 LOAD_CONST               4 (0)
+         >>  128 CALL                     1
+             136 STORE_FAST               3 (n)
+
+1187         138 LOAD_FAST                0 (ctx)
+             140 LOAD_DEREF               4 (current_game)
+             142 STORE_ATTR               3 (chain_resume)
+
+1188         152 LOAD_CONST               5 ('turn ')
+             154 LOAD_DEREF               4 (current_game)
+             156 LOAD_ATTR                8 (turn)
+             176 FORMAT_VALUE             0
+             178 LOAD_CONST               6 (' - waiting for ')
+             180 LOAD_FAST                2 (name)
+             182 FORMAT_VALUE             0
+             184 LOAD_CONST               7 (' to discard ')
+             186 LOAD_FAST                3 (n)
+             188 FORMAT_VALUE             0
+             190 LOAD_CONST               8 (' card(s)')
+             192 BUILD_STRING             7
+             194 LOAD_DEREF               4 (current_game)
+             196 STORE_ATTR               5 (state)
+
+1189         206 LOAD_CONST               9 (True)
+             208 LOAD_FAST                2 (name)
+             210 FORMAT_VALUE             0
+             212 LOAD_CONST              10 (': choose ')
+             214 LOAD_FAST                3 (n)
+             216 FORMAT_VALUE             0
+             218 LOAD_CONST              11 (' card(s) to discard')
+             220 BUILD_STRING             4
+             222 LOAD_CONST              12 (('success', 'message'))
+             224 BUILD_CONST_KEY_MAP      2
+             226 LOAD_DEREF               4 (current_game)
+             228 STORE_ATTR               6 (message)
+
+1190         238 LOAD_GLOBAL             15 (NULL + print)
+             248 LOAD_CONST              13 ('\t\tdiscard selection pending: ')
+             250 LOAD_FAST                2 (name)
+             252 FORMAT_VALUE             0
+             254 LOAD_CONST              14 (' must choose ')
+             256 LOAD_FAST                3 (n)
+             258 FORMAT_VALUE             0
+             260 LOAD_CONST              15 (' card(s) (chain paused, next stage ')
+             262 LOAD_FAST                0 (ctx)
+             264 LOAD_CONST              16 ('stage')
+             266 BINARY_SUBSCR
+             270 FORMAT_VALUE             0
+             272 LOAD_CONST              17 (')')
+             274 BUILD_STRING             7
+             276 CALL                     1
+             284 POP_TOP
+
+1191         286 LOAD_DEREF               4 (current_game)
+             288 RETURN_VALUE
+
+----- nested _legacy_chain (line 1107) -----
+CONSTS: [None, 'mode', ('move', 'defend'), 'cards', 'play', 'to', 1, ('kind', 'action', 'stopover', 'position')]
+NAMES: ('enumerate', 'action_chain', 'get', 'append')
+VARNAMES: ('player', 'out', 'idx', 'a')
+1107           0 RESUME                   0
+
+1108           2 BUILD_LIST               0
+               4 STORE_FAST               1 (out)
+
+1109           6 LOAD_GLOBAL              1 (NULL + enumerate)
+              16 LOAD_FAST                0 (player)
+              18 LOAD_ATTR                2 (action_chain)
+              38 COPY                     1
+              40 POP_JUMP_IF_TRUE         2 (to 46)
+              42 POP_TOP
+              44 BUILD_LIST               0
+         >>   46 CALL                     1
+              54 GET_ITER
+         >>   56 FOR_ITER                86 (to 232)
+              60 UNPACK_SEQUENCE          2
+              64 STORE_FAST               2 (idx)
+              66 STORE_FAST               3 (a)
+
+1110          68 LOAD_FAST                3 (a)
+              70 POP_JUMP_IF_TRUE         1 (to 74)
+              72 JUMP_BACKWARD            9 (to 56)
+         >>   74 LOAD_FAST                3 (a)
+              76 LOAD_ATTR                5 (NULL|self + get)
+              96 LOAD_CONST               1 ('mode')
+              98 CALL                     1
+             106 LOAD_CONST               2 (('move', 'defend'))
+             108 CONTAINS_OP              0
+             110 POP_JUMP_IF_TRUE         1 (to 114)
+             112 JUMP_BACKWARD           29 (to 56)
+         >>  114 LOAD_FAST                3 (a)
+             116 LOAD_ATTR                5 (NULL|self + get)
+             136 LOAD_CONST               3 ('cards')
+             138 CALL                     1
+             146 POP_JUMP_IF_TRUE         1 (to 150)
+             148 JUMP_BACKWARD           47 (to 56)
+
+1111     >>  150 LOAD_FAST                1 (out)
+             152 LOAD_ATTR                7 (NULL|self + append)
+             172 LOAD_CONST               4 ('play')
+             174 LOAD_FAST                3 (a)
+             176 LOAD_FAST                3 (a)
+             178 LOAD_ATTR                5 (NULL|self + get)
+             198 LOAD_CONST               5 ('to')
+             200 CALL                     1
+             208 LOAD_FAST                2 (idx)
+             210 LOAD_CONST               6 (1)
+             212 BINARY_OP                0 (+)
+             216 LOAD_CONST               7 (('kind', 'action', 'stopover', 'position'))
+             218 BUILD_CONST_KEY_MAP      4
+             220 CALL                     1
+             228 POP_TOP
+             230 JUMP_BACKWARD           88 (to 56)
+
+1109     >>  232 END_FOR
+
+1112         234 LOAD_FAST                1 (out)
+             236 RETURN_VALUE
+
+----- nested _entry_at (line 1117) -----
+CONSTS: [None, 'position']
+NAMES: ()
+VARNAMES: ('chain', 'pos', 'e')
+1117           0 RESUME                   0
+
+1118           2 LOAD_FAST                0 (chain)
+               4 GET_ITER
+         >>    6 FOR_ITER                14 (to 38)
+              10 STORE_FAST               2 (e)
+
+1119          12 LOAD_FAST                2 (e)
+              14 LOAD_CONST               1 ('position')
+              16 BINARY_SUBSCR
+              20 LOAD_FAST                1 (pos)
+              22 COMPARE_OP              40 (==)
+              26 POP_JUMP_IF_TRUE         1 (to 30)
+              28 JUMP_BACKWARD           12 (to 6)
+
+1120     >>   30 LOAD_FAST                2 (e)
+              32 SWAP                     2
+              34 POP_TOP
+              36 RETURN_VALUE
+
+1118     >>   38 END_FOR
+
+1121          40 RETURN_CONST             0 (None)
+
+----- nested flush_unresolved (line 1145) -----
+CONSTS: [" The game just ended mid-chain (a win). The PLAYED cards of the UNRESOLVED\n            entries have already left their owner's hand (player_play removes them at\n            play time) but were never moved to the discard pile (process_card does\n            that when the entry resolves) -> without this flush they are lost from\n            every zone and the final state no longer conserves the deck. Flush them\n            to their owners' discard piles (each play once, in play order).\n            ROOTED cards are NOT flushed: they are in rooted_on_board (a separate\n            zone) and are discarded at the end of the turn by _process_rooted_cards.\n            Which entry at position p is unprocessed is derived from ctx['stage']:\n            first's entry unprocessed iff stage == 'first'; second's entry\n            unprocessed iff stage is 'first' or 'second'. ", 'p', 'stage', 'first', ('first', 'second'), 'position', 'kind', 'play', 'action', 'cards', None, '\t\t\tgame over mid-chain: flushed ', ' unresolved card(s) of ', ' to discard']
+NAMES: ('get', 'discard', 'extend', 'print', 'len', 'name', 'action_chain')
+VARNAMES: ('ctx', 'p', 'stage', 'first_here', 'second_here', 'player', 'chain', 'here_unprocessed', 'entry', 'pos', 'unprocessed', 'cards')
+               0 COPY_FREE_VARS           4
+
+1145           2 RESUME                   0
+
+1157           4 LOAD_FAST                0 (ctx)
+               6 LOAD_CONST               1 ('p')
+               8 BINARY_SUBSCR
+              12 STORE_FAST               1 (p)
+
+1158          14 LOAD_FAST                0 (ctx)
+              16 LOAD_CONST               2 ('stage')
+              18 BINARY_SUBSCR
+              22 STORE_FAST               2 (stage)
+
+1159          24 LOAD_FAST                2 (stage)
+              26 LOAD_CONST               3 ('first')
+              28 COMPARE_OP              40 (==)
+              32 STORE_FAST               3 (first_here)
+
+1160          34 LOAD_FAST                2 (stage)
+              36 LOAD_CONST               4 (('first', 'second'))
+              38 CONTAINS_OP              0
+              40 STORE_FAST               4 (second_here)
+
+1161          42 LOAD_DEREF              14 (first_player)
+              44 LOAD_DEREF              12 (chain_f)
+              46 LOAD_FAST                3 (first_here)
+              48 BUILD_TUPLE              3
+              50 LOAD_DEREF              15 (second_player)
+              52 LOAD_DEREF              13 (chain_s)
+              54 LOAD_FAST                4 (second_here)
+              56 BUILD_TUPLE              3
+              58 BUILD_TUPLE              2
+              60 GET_ITER
+         >>   62 FOR_ITER               167 (to 400)
+              66 UNPACK_SEQUENCE          3
+              70 STORE_FAST               5 (player)
+              72 STORE_FAST               6 (chain)
+              74 STORE_FAST               7 (here_unprocessed)
+
+1162          76 LOAD_FAST                6 (chain)
+              78 GET_ITER
+         >>   80 FOR_ITER               149 (to 382)
+              84 STORE_FAST               8 (entry)
+
+1163          86 LOAD_FAST                8 (entry)
+              88 LOAD_CONST               5 ('position')
+              90 BINARY_SUBSCR
+              94 STORE_FAST               9 (pos)
+
+1164          96 LOAD_FAST                9 (pos)
+              98 LOAD_FAST                1 (p)
+             100 COMPARE_OP              68 (>)
+             104 COPY                     1
+             106 POP_JUMP_IF_TRUE         9 (to 126)
+             108 POP_TOP
+             110 LOAD_FAST                9 (pos)
+             112 LOAD_FAST                1 (p)
+             114 COMPARE_OP              40 (==)
+             118 COPY                     1
+             120 POP_JUMP_IF_FALSE        2 (to 126)
+             122 POP_TOP
+             124 LOAD_FAST                7 (here_unprocessed)
+         >>  126 STORE_FAST              10 (unprocessed)
+
+1165         128 LOAD_FAST               10 (unprocessed)
+             130 POP_JUMP_IF_TRUE         1 (to 134)
+             132 JUMP_BACKWARD           27 (to 80)
+         >>  134 LOAD_FAST                8 (entry)
+             136 LOAD_CONST               6 ('kind')
+             138 BINARY_SUBSCR
+             142 LOAD_CONST               7 ('play')
+             144 COMPARE_OP              40 (==)
+             148 POP_JUMP_IF_TRUE         1 (to 152)
+             150 JUMP_BACKWARD           36 (to 80)
+
+1166     >>  152 LOAD_FAST                8 (entry)
+             154 LOAD_CONST               8 ('action')
+             156 BINARY_SUBSCR
+             160 COPY                     1
+             162 POP_JUMP_IF_TRUE         2 (to 168)
+             164 POP_TOP
+             166 BUILD_MAP                0
+         >>  168 LOAD_ATTR                1 (NULL|self + get)
+             188 LOAD_CONST               9 ('cards')
+             190 CALL                     1
+             198 COPY                     1
+             200 POP_JUMP_IF_TRUE         2 (to 206)
+             202 POP_TOP
+             204 BUILD_LIST               0
+         >>  206 STORE_FAST              11 (cards)
+
+1167         208 LOAD_FAST               11 (cards)
+             210 POP_JUMP_IF_TRUE         1 (to 214)
+             212 JUMP_BACKWARD           67 (to 80)
+
+1168     >>  214 LOAD_FAST                5 (player)
+             216 LOAD_ATTR                2 (discard)
+             236 POP_JUMP_IF_NOT_NONE     7 (to 252)
+
+1169         238 BUILD_LIST               0
+             240 LOAD_FAST                5 (player)
+             242 STORE_ATTR               1 (discard)
+
+1170     >>  252 LOAD_FAST                5 (player)
+             254 LOAD_ATTR                2 (discard)
+             274 LOAD_ATTR                5 (NULL|self + extend)
+             294 LOAD_FAST               11 (cards)
+             296 CALL                     1
+             304 POP_TOP
+
+1171         306 LOAD_GLOBAL              7 (NULL + print)
+             316 LOAD_CONST              11 ('\t\t\tgame over mid-chain: flushed ')
+             318 LOAD_GLOBAL              9 (NULL + len)
+             328 LOAD_FAST               11 (cards)
+             330 CALL                     1
+             338 FORMAT_VALUE             0
+             340 LOAD_CONST              12 (' unresolved card(s) of ')
+             342 LOAD_FAST                5 (player)
+             344 LOAD_ATTR               10 (name)
+             364 FORMAT_VALUE             0
+             366 LOAD_CONST              13 (' to discard')
+             368 BUILD_STRING             5
+             370 CALL                     1
+             378 POP_TOP
+             380 JUMP_BACKWARD          151 (to 80)
+
+1162     >>  382 END_FOR
+
+1176         384 BUILD_LIST               0
+             386 LOAD_FAST                5 (player)
+             388 STORE_ATTR               6 (action_chain)
+             398 JUMP_BACKWARD          169 (to 62)
+
+1161     >>  400 END_FOR
+             402 RETURN_CONST            10 (None)
+
+----- nested pause_discard (line 1178) -----
+CONSTS: [" The chain hit a discard the player must CHOOSE (rule of engine_version 13).\n            Persist the resume context, switch the state machine to the waiting\n            state and return: the chain resumes when the discarding player submits\n            the choice (to: 'discard_pile' -> handle_websocket_message ->\n            process_trip_chain(current_game, resume=ctx)). ", 'player', '?', 'n', 0, 'turn ', ' - waiting for ', ' to discard ', ' card(s)', True, ': choose ', ' card(s) to discard', ('success', 'message'), '\t\tdiscard selection pending: ', ' must choose ', ' card(s) (chain paused, next stage ', 'stage', ')']
+NAMES: ('pending_discard', 'get', 'int', 'chain_resume', 'turn', 'state', 'message', 'print')
+VARNAMES: ('ctx', 'pending', 'name', 'n')
+               0 COPY_FREE_VARS           1
+
+1178           2 RESUME                   0
+
+1184           4 LOAD_DEREF               4 (current_game)
+               6 LOAD_ATTR                0 (pending_discard)
+              26 COPY                     1
+              28 POP_JUMP_IF_TRUE         2 (to 34)
+              30 POP_TOP
+              32 BUILD_MAP                0
+         >>   34 STORE_FAST               1 (pending)
+
+1185          36 LOAD_FAST                1 (pending)
+              38 LOAD_ATTR                3 (NULL|self + get)
+              58 LOAD_CONST               1 ('player')
+              60 CALL                     1
+              68 COPY                     1
+              70 POP_JUMP_IF_TRUE         2 (to 76)
+              72 POP_TOP
+              74 LOAD_CONST               2 ('?')
+         >>   76 STORE_FAST               2 (name)
+
+1186          78 LOAD_GLOBAL              5 (NULL + int)
+              88 LOAD_FAST                1 (pending)
+              90 LOAD_ATTR                3 (NULL|self + get)
+             110 LOAD_CONST               3 ('n')
+             112 CALL                     1
+             120 COPY                     1
+             122 POP_JUMP_IF_TRUE         2 (to 128)
+             124 POP_TOP
+             126 LOAD_CONST               4 (0)
+         >>  128 CALL                     1
+             136 STORE_FAST               3 (n)
+
+1187         138 LOAD_FAST                0 (ctx)
+             140 LOAD_DEREF               4 (current_game)
+             142 STORE_ATTR               3 (chain_resume)
+
+1188         152 LOAD_CONST               5 ('turn ')
+             154 LOAD_DEREF               4 (current_game)
+             156 LOAD_ATTR                8 (turn)
+             176 FORMAT_VALUE             0
+             178 LOAD_CONST               6 (' - waiting for ')
+             180 LOAD_FAST                2 (name)
+             182 FORMAT_VALUE             0
+             184 LOAD_CONST               7 (' to discard ')
+             186 LOAD_FAST                3 (n)
+             188 FORMAT_VALUE             0
+             190 LOAD_CONST               8 (' card(s)')
+             192 BUILD_STRING             7
+             194 LOAD_DEREF               4 (current_game)
+             196 STORE_ATTR               5 (state)
+
+1189         206 LOAD_CONST               9 (True)
+             208 LOAD_FAST                2 (name)
+             210 FORMAT_VALUE             0
+             212 LOAD_CONST              10 (': choose ')
+             214 LOAD_FAST                3 (n)
+             216 FORMAT_VALUE             0
+             218 LOAD_CONST              11 (' card(s) to discard')
+             220 BUILD_STRING             4
+             222 LOAD_CONST              12 (('success', 'message'))
+             224 BUILD_CONST_KEY_MAP      2
+             226 LOAD_DEREF               4 (current_game)
+             228 STORE_ATTR               6 (message)
+
+1190         238 LOAD_GLOBAL             15 (NULL + print)
+             248 LOAD_CONST              13 ('\t\tdiscard selection pending: ')
+             250 LOAD_FAST                2 (name)
+             252 FORMAT_VALUE             0
+             254 LOAD_CONST              14 (' must choose ')
+             256 LOAD_FAST                3 (n)
+             258 FORMAT_VALUE             0
+             260 LOAD_CONST              15 (' card(s) (chain paused, next stage ')
+             262 LOAD_FAST                0 (ctx)
+             264 LOAD_CONST              16 ('stage')
+             266 BINARY_SUBSCR
+             270 FORMAT_VALUE             0
+             272 LOAD_CONST              17 (')')
+             274 BUILD_STRING             7
+             276 CALL                     1
+             284 POP_TOP
+
+1191         286 LOAD_DEREF               4 (current_game)
+             288 RETURN_VALUE
+
+===== process_card (line 1348) =====
+CONSTS: [' process a cards (list) that are in the trip chain, card format:\n     log_entry: this player\'s log entry (filled with condition_met / effect / shield /\n     negatives / notes during the resolution); oppo_entry: the opponent\'s entry for the\n     SAME stopover (receives the cross-events: "blocked X\'s card", block-card effect).\n     Returns (current_game, grappling_activated, effect_activated) - effect_activated\n     is True when the card\'s effect actually fired (condition met, not canceled); the\n     trip chain uses it for copy_effect (a copy only happens when the facing effect fired).\n     {\n        \'cards\': random.sample(p1.hand, 3),     # cards selected by user - LIST (if move mode == 1 card, if defend mode no max)\n        \'to\': \'mana\',                           # destination selected by user - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]\n        \'mode\': \'\',                             # mode selected by user - STRING [\'\', move, defend, dwelling_activation, pending, pass]\n        \'pendings\': []                          # cards in pendings zone that has to be added to a normal move card - LIST\n    } ', '\t\t', ' processing cards: ', 'cards', None, 'to', 'mode', 'defend', 0, 'card_id', True, ('named',), 'shield', 'effect', 'condition', 'block', '\t\t\tdefend card ', ' (condition "block") armed on ', ': its effect fires only if it blocks an opponent card', ' (shield ', ') blocks the same stopover, no effect', False, 1, 12, 'unstoppable', '\t\t\tcard ', ' is unstoppable (condition met) -> ignores the landmine block', 'notes', 'unstoppable — ignored the landmine block', ' CANCELED by the landmine block (no effect, no advancing)', 'negatives', 'landmine — blocked (no effect, no advancing)', ' is blocked by a landmine', ('success', 'message'), ' is unstoppable (condition met) -> ignores the block', 'unstoppable — ignored the opponent block', 'mana', ' BLOCKED by ', ' defend card(s) on ', ' (shields ', ' >= mana ', ') -> no effect, no advancing', ('defender_entry',), 'Card blocked by ', ' on ', 'blocked — shields ', ' ≥ cost ', 'blocked ', '’s card on ', '\t\t\tblock failed (shields ', ' < mana ', '), card ', ' plays normally', 'block broken — shields ', ' < cost ', '\t\t\tcurrent position: ', ' (len(earth): ', ')']
+NAMES: ('print', 'name', 'discard', 'extend', 'CARDS_DB', 'filter', 'pl', 'col', 'is_empty', 'row', 'int', 'get', 'engine_version', 'landmine_blocked', 'is_condition_met', 'append', 'message', '_get_oppo', '_oppo_defend_actions', '_oppo_defend_shields', '_fire_block_effects', '_resolve_card', 'current_position', 'len', 'earth')
+VARARGS/vartype: ('cards_dict', 'player', 'current_game', 'log_entry', 'oppo_entry', 'card_ids', 'stopover', 'shield_total', 'card_id', 'row', 'r', 'grappling_activated', 'effect_activated', 'rows', 'oppo', 'shields')
+1348           0 RESUME                   0
+
+1362           2 LOAD_GLOBAL              1 (NULL + print)
+              12 LOAD_CONST               1 ('\t\t')
+              14 LOAD_FAST                1 (player)
+              16 LOAD_ATTR                2 (name)
+              36 FORMAT_VALUE             0
+              38 LOAD_CONST               2 (' processing cards: ')
+              40 LOAD_FAST                0 (cards_dict)
+              42 FORMAT_VALUE             0
+              44 BUILD_STRING             4
+              46 CALL                     1
+              54 POP_TOP
+
+1365          56 LOAD_FAST                0 (cards_dict)
+              58 LOAD_CONST               3 ('cards')
+              60 BINARY_SUBSCR
+              64 STORE_FAST               5 (card_ids)
+
+1366          66 LOAD_FAST                1 (player)
+              68 LOAD_ATTR                4 (discard)
+              88 POP_JUMP_IF_NOT_NONE     7 (to 104)
+
+1367          90 BUILD_LIST               0
+              92 LOAD_FAST                1 (player)
+              94 STORE_ATTR               2 (discard)
+
+1368     >>  104 LOAD_FAST                1 (player)
+             106 LOAD_ATTR                4 (discard)
+             126 LOAD_ATTR                7 (NULL|self + extend)
+             146 LOAD_FAST                5 (card_ids)
+             148 CALL                     1
+             156 POP_TOP
+
+1370         158 LOAD_FAST                0 (cards_dict)
+             160 LOAD_CONST               5 ('to')
+             162 BINARY_SUBSCR
+             166 STORE_FAST               6 (stopover)
+
+1377         168 LOAD_FAST                0 (cards_dict)
+             170 LOAD_CONST               6 ('mode')
+             172 BINARY_SUBSCR
+             176 LOAD_CONST               7 ('defend')
+             178 COMPARE_OP              40 (==)
+             182 POP_JUMP_IF_FALSE      196 (to 576)
+
+1378         184 LOAD_CONST               8 (0)
+             186 STORE_FAST               7 (shield_total)
+
+1379         188 LOAD_FAST                5 (card_ids)
+             190 GET_ITER
+         >>  192 FOR_ITER               177 (to 550)
+             196 STORE_FAST               8 (card_id)
+
+1380         198 LOAD_GLOBAL              8 (CARDS_DB)
+             208 LOAD_ATTR               11 (NULL|self + filter)
+             228 LOAD_GLOBAL             13 (NULL + pl)
+             238 LOAD_ATTR               14 (col)
+             258 LOAD_CONST               9 ('card_id')
+             260 CALL                     1
+             268 LOAD_FAST                8 (card_id)
+             270 COMPARE_OP              40 (==)
+             274 CALL                     1
+             282 STORE_FAST               9 (row)
+
+1381         284 LOAD_FAST                9 (row)
+             286 LOAD_ATTR               17 (NULL|self + is_empty)
+             306 CALL                     0
+             314 POP_JUMP_IF_FALSE        1 (to 318)
+
+1382         316 JUMP_BACKWARD           63 (to 192)
+
+1383     >>  318 LOAD_FAST                9 (row)
+             320 LOAD_ATTR               19 (NULL|self + row)
+             340 LOAD_CONST               8 (0)
+             342 LOAD_CONST              10 (True)
+             344 KW_NAMES                11 (('named',))
+             346 CALL                     2
+             354 STORE_FAST              10 (r)
+
+1384         356 LOAD_FAST                7 (shield_total)
+             358 LOAD_GLOBAL             21 (NULL + int)
+             368 LOAD_FAST               10 (r)
+             370 LOAD_CONST              12 ('shield')
+             372 BINARY_SUBSCR
+             376 COPY                     1
+             378 POP_JUMP_IF_TRUE         2 (to 384)
+             380 POP_TOP
+             382 LOAD_CONST               8 (0)
+         >>  384 CALL                     1
+             392 BINARY_OP               13 (+=)
+             396 STORE_FAST               7 (shield_total)
+
+1385         398 LOAD_FAST                3 (log_entry)
+             400 POP_JUMP_IF_NONE        25 (to 452)
+             402 LOAD_FAST                3 (log_entry)
+             404 LOAD_ATTR               23 (NULL|self + get)
+             424 LOAD_CONST              13 ('effect')
+             426 CALL                     1
+             434 POP_JUMP_IF_NOT_NONE     8 (to 452)
+
+1386         436 LOAD_FAST               10 (r)
+             438 LOAD_CONST              13 ('effect')
+             440 BINARY_SUBSCR
+             444 LOAD_FAST                3 (log_entry)
+             446 LOAD_CONST              13 ('effect')
+             448 STORE_SUBSCR
+
+1387     >>  452 LOAD_FAST               10 (r)
+             454 LOAD_CONST              14 ('condition')
+             456 BINARY_SUBSCR
+             460 LOAD_CONST              15 ('block')
+             462 COMPARE_OP              40 (==)
+             466 POP_JUMP_IF_FALSE       19 (to 506)
+
+1388         468 LOAD_GLOBAL              1 (NULL + print)
+             478 LOAD_CONST              16 ('\t\t\tdefend card ')
+             480 LOAD_FAST                8 (card_id)
+             482 FORMAT_VALUE             0
+             484 LOAD_CONST              17 (' (condition "block") armed on ')
+             486 LOAD_FAST                6 (stopover)
+             488 FORMAT_VALUE             0
+             490 LOAD_CONST              18 (': its effect fires only if it blocks an opponent card')
+             492 BUILD_STRING             5
+             494 CALL                     1
+             502 POP_TOP
+             504 JUMP_BACKWARD          157 (to 192)
+
+1390     >>  506 LOAD_GLOBAL              1 (NULL + print)
+             516 LOAD_CONST              16 ('\t\t\tdefend card ')
+             518 LOAD_FAST                8 (card_id)
+             520 FORMAT_VALUE             0
+             522 LOAD_CONST              19 (' (shield ')
+             524 LOAD_FAST               10 (r)
+             526 LOAD_CONST              12 ('shield')
+             528 BINARY_SUBSCR
+             532 FORMAT_VALUE             0
+             534 LOAD_CONST              20 (') blocks the same stopover, no effect')
+             536 BUILD_STRING             5
+             538 CALL                     1
+             546 POP_TOP
+             548 JUMP_BACKWARD          179 (to 192)
+
+1379     >>  550 END_FOR
+
+1391         552 LOAD_FAST                3 (log_entry)
+             554 POP_JUMP_IF_NONE         5 (to 566)
+
+1392         556 LOAD_FAST                7 (shield_total)
+             558 LOAD_FAST                3 (log_entry)
+             560 LOAD_CONST              12 ('shield')
+             562 STORE_SUBSCR
+
+1393     >>  566 LOAD_FAST                2 (current_game)
+             568 LOAD_CONST              21 (False)
+             570 LOAD_CONST              21 (False)
+             572 BUILD_TUPLE              3
+             574 RETURN_VALUE
+
+1397     >>  576 LOAD_CONST              21 (False)
+             578 STORE_FAST              11 (grappling_activated)
+
+1398         580 LOAD_CONST              21 (False)
+             582 STORE_FAST              12 (effect_activated)
+
+1399         584 LOAD_FAST                5 (card_ids)
+             586 LOAD_CONST               4 (None)
+             588 LOAD_CONST              22 (1)
+             590 BINARY_SLICE
+             592 GET_ITER
+         >>  594 EXTENDED_ARG             2
+             596 FOR_ITER               592 (to 1784)
+             600 STORE_FAST               8 (card_id)
+
+1400         602 LOAD_GLOBAL              8 (CARDS_DB)
+             612 LOAD_ATTR               11 (NULL|self + filter)
+             632 LOAD_GLOBAL             13 (NULL + pl)
+             642 LOAD_ATTR               14 (col)
+             662 LOAD_CONST               9 ('card_id')
+             664 CALL                     1
+             672 LOAD_FAST                8 (card_id)
+             674 COMPARE_OP              40 (==)
+             678 CALL                     1
+             686 STORE_FAST              13 (rows)
+
+1401         688 LOAD_FAST               13 (rows)
+             690 LOAD_ATTR               17 (NULL|self + is_empty)
+             710 CALL                     0
+             718 POP_JUMP_IF_FALSE        1 (to 722)
+
+1402         720 JUMP_BACKWARD           64 (to 594)
+
+1403     >>  722 LOAD_FAST               13 (rows)
+             724 LOAD_ATTR               19 (NULL|self + row)
+             744 LOAD_CONST               8 (0)
+             746 LOAD_CONST              10 (True)
+             748 KW_NAMES                11 (('named',))
+             750 CALL                     2
+             758 STORE_FAST               9 (row)
+
+1404         760 LOAD_FAST                3 (log_entry)
+             762 POP_JUMP_IF_NONE         8 (to 780)
+
+1405         764 LOAD_FAST                9 (row)
+             766 LOAD_CONST              13 ('effect')
+             768 BINARY_SUBSCR
+             772 LOAD_FAST                3 (log_entry)
+             774 LOAD_CONST              13 ('effect')
+             776 STORE_SUBSCR
+
+1414     >>  780 LOAD_FAST                2 (current_game)
+             782 LOAD_ATTR               24 (engine_version)
+             802 COPY                     1
+             804 POP_JUMP_IF_TRUE         2 (to 810)
+             806 POP_TOP
+             808 LOAD_CONST               8 (0)
+         >>  810 LOAD_CONST              23 (12)
+             812 COMPARE_OP              92 (>=)
+             816 POP_JUMP_IF_FALSE      135 (to 1088)
+             818 LOAD_FAST                1 (player)
+             820 LOAD_ATTR               26 (landmine_blocked)
+             840 POP_JUMP_IF_FALSE      123 (to 1088)
+
+1415         842 LOAD_FAST                9 (row)
+             844 LOAD_CONST              13 ('effect')
+             846 BINARY_SUBSCR
+             850 LOAD_CONST              24 ('unstoppable')
+             852 COMPARE_OP              40 (==)
+             856 POP_JUMP_IF_FALSE       54 (to 966)
+             858 LOAD_GLOBAL             29 (NULL + is_condition_met)
+             868 LOAD_FAST                9 (row)
+             870 LOAD_CONST              14 ('condition')
+             872 BINARY_SUBSCR
+             876 LOAD_FAST                1 (player)
+             878 LOAD_FAST                2 (current_game)
+             880 CALL                     3
+             888 POP_JUMP_IF_FALSE       38 (to 966)
+
+1416         890 LOAD_GLOBAL              1 (NULL + print)
+             900 LOAD_CONST              25 ('\t\t\tcard ')
+             902 LOAD_FAST                8 (card_id)
+             904 FORMAT_VALUE             0
+             906 LOAD_CONST              26 (' is unstoppable (condition met) -> ignores the landmine block')
+             908 BUILD_STRING             3
+             910 CALL                     1
+             918 POP_TOP
+
+1417         920 LOAD_FAST                3 (log_entry)
+             922 POP_JUMP_IF_NONE        82 (to 1088)
+
+1418         924 LOAD_FAST                3 (log_entry)
+             926 LOAD_CONST              27 ('notes')
+             928 BINARY_SUBSCR
+             932 LOAD_ATTR               31 (NULL|self + append)
+             952 LOAD_CONST              28 ('unstoppable — ignored the landmine block')
+             954 CALL                     1
+             962 POP_TOP
+             964 JUMP_FORWARD            61 (to 1088)
+
+1420     >>  966 LOAD_GLOBAL              1 (NULL + print)
+             976 LOAD_CONST              25 ('\t\t\tcard ')
+             978 LOAD_FAST                8 (card_id)
+             980 FORMAT_VALUE             0
+             982 LOAD_CONST              29 (' CANCELED by the landmine block (no effect, no advancing)')
+             984 BUILD_STRING             3
+             986 CALL                     1
+             994 POP_TOP
+
+1421         996 LOAD_FAST                3 (log_entry)
+             998 POP_JUMP_IF_NONE        20 (to 1040)
+
+1422        1000 LOAD_FAST                3 (log_entry)
+            1002 LOAD_CONST              30 ('negatives')
+            1004 BINARY_SUBSCR
+            1008 LOAD_ATTR               31 (NULL|self + append)
+            1028 LOAD_CONST              31 ('landmine — blocked (no effect, no advancing)')
+            1030 CALL                     1
+            1038 POP_TOP
+
+1423     >> 1040 LOAD_CONST              10 (True)
+            1042 LOAD_FAST                1 (player)
+            1044 LOAD_ATTR                2 (name)
+            1064 FORMAT_VALUE             0
+            1066 LOAD_CONST              32 (' is blocked by a landmine')
+            1068 BUILD_STRING             2
+            1070 LOAD_CONST              33 (('success', 'message'))
+            1072 BUILD_CONST_KEY_MAP      2
+            1074 LOAD_FAST                2 (current_game)
+            1076 STORE_ATTR              16 (message)
+
+1424        1086 JUMP_BACKWARD          247 (to 594)
+
+1427     >> 1088 LOAD_GLOBAL             35 (NULL + _get_oppo)
+            1098 LOAD_FAST                1 (player)
+            1100 LOAD_FAST                2 (current_game)
+            1102 CALL                     2
+            1110 STORE_FAST              14 (oppo)
+
+1428        1112 LOAD_FAST               14 (oppo)
+            1114 EXTENDED_ARG             1
+            1116 POP_JUMP_IF_NONE       312 (to 1742)
+            1118 LOAD_GLOBAL             37 (NULL + _oppo_defend_actions)
+            1128 LOAD_FAST               14 (oppo)
+            1130 LOAD_FAST                6 (stopover)
+            1132 CALL                     2
+            1140 EXTENDED_ARG             1
+            1142 POP_JUMP_IF_FALSE      299 (to 1742)
+
+1430        1144 LOAD_FAST                9 (row)
+            1146 LOAD_CONST              13 ('effect')
+            1148 BINARY_SUBSCR
+            1152 LOAD_CONST              24 ('unstoppable')
+            1154 COMPARE_OP              40 (==)
+            1158 POP_JUMP_IF_FALSE       55 (to 1270)
+            1160 LOAD_GLOBAL             29 (NULL + is_condition_met)
+            1170 LOAD_FAST                9 (row)
+            1172 LOAD_CONST              14 ('condition')
+            1174 BINARY_SUBSCR
+            1178 LOAD_FAST                1 (player)
+            1180 LOAD_FAST                2 (current_game)
+            1182 CALL                     3
+            1190 POP_JUMP_IF_FALSE       39 (to 1270)
+
+1431        1192 LOAD_GLOBAL              1 (NULL + print)
+            1202 LOAD_CONST              25 ('\t\t\tcard ')
+            1204 LOAD_FAST                8 (card_id)
+            1206 FORMAT_VALUE             0
+            1208 LOAD_CONST              34 (' is unstoppable (condition met) -> ignores the block')
+            1210 BUILD_STRING             3
+            1212 CALL                     1
+            1220 POP_TOP
+
+1432        1222 LOAD_FAST                3 (log_entry)
+            1224 EXTENDED_ARG             1
+            1226 POP_JUMP_IF_NONE       257 (to 1742)
+
+1433        1228 LOAD_FAST                3 (log_entry)
+            1230 LOAD_CONST              27 ('notes')
+            1232 BINARY_SUBSCR
+            1236 LOAD_ATTR               31 (NULL|self + append)
+            1256 LOAD_CONST              35 ('unstoppable — ignored the opponent block')
+            1258 CALL                     1
+            1266 POP_TOP
+            1268 JUMP_FORWARD           236 (to 1742)
+
+1436     >> 1270 LOAD_GLOBAL             39 (NULL + _oppo_defend_shields)
+            1280 LOAD_FAST               14 (oppo)
+            1282 LOAD_FAST                6 (stopover)
+            1284 CALL                     2
+            1292 STORE_FAST              15 (shields)
+
+1437        1294 LOAD_FAST               15 (shields)
+            1296 LOAD_GLOBAL             21 (NULL + int)
+            1306 LOAD_FAST                9 (row)
+            1308 LOAD_CONST              36 ('mana')
+            1310 BINARY_SUBSCR
+            1314 CALL                     1
+            1322 COMPARE_OP              92 (>=)
+            1326 POP_JUMP_IF_FALSE      152 (to 1632)
+
+1438        1328 LOAD_GLOBAL              1 (NULL + print)
+            1338 LOAD_CONST              25 ('\t\t\tcard ')
+            1340 LOAD_FAST                8 (card_id)
+            1342 FORMAT_VALUE             0
+            1344 LOAD_CONST              37 (' BLOCKED by ')
+            1346 LOAD_FAST               14 (oppo)
+            1348 LOAD_ATTR                2 (name)
+            1368 FORMAT_VALUE             0
+            1370 LOAD_CONST              38 (' defend card(s) on ')
+            1372 LOAD_FAST                6 (stopover)
+            1374 FORMAT_VALUE             0
+            1376 LOAD_CONST              39 (' (shields ')
+
+1439        1378 LOAD_FAST               15 (shields)
+            1380 FORMAT_VALUE             0
+            1382 LOAD_CONST              40 (' >= mana ')
+            1384 LOAD_FAST                9 (row)
+            1386 LOAD_CONST              36 ('mana')
+            1388 BINARY_SUBSCR
+            1392 FORMAT_VALUE             0
+            1394 LOAD_CONST              41 (') -> no effect, no advancing')
+
+1438        1396 BUILD_STRING            11
+            1398 CALL                     1
+            1406 POP_TOP
+
+1441        1408 LOAD_GLOBAL             41 (NULL + _fire_block_effects)
+            1418 LOAD_FAST               14 (oppo)
+            1420 LOAD_FAST                6 (stopover)
+            1422 LOAD_FAST                2 (current_game)
+            1424 LOAD_FAST                4 (oppo_entry)
+            1426 KW_NAMES                42 (('defender_entry',))
+            1428 CALL                     4
+            1436 STORE_FAST               2 (current_game)
+
+1442        1438 LOAD_CONST              10 (True)
+            1440 LOAD_CONST              43 ('Card blocked by ')
+            1442 LOAD_FAST               14 (oppo)
+            1444 LOAD_ATTR                2 (name)
+            1464 FORMAT_VALUE             0
+            1466 LOAD_CONST              44 (' on ')
+            1468 LOAD_FAST                6 (stopover)
+            1470 FORMAT_VALUE             0
+            1472 BUILD_STRING             4
+            1474 LOAD_CONST              33 (('success', 'message'))
+            1476 BUILD_CONST_KEY_MAP      2
+            1478 LOAD_FAST                2 (current_game)
+            1480 STORE_ATTR              16 (message)
+
+1443        1490 LOAD_FAST                3 (log_entry)
+            1492 POP_JUMP_IF_NONE        29 (to 1552)
+
+1444        1494 LOAD_FAST                3 (log_entry)
+            1496 LOAD_CONST              30 ('negatives')
+            1498 BINARY_SUBSCR
+            1502 LOAD_ATTR               31 (NULL|self + append)
+            1522 LOAD_CONST              45 ('blocked — shields ')
+            1524 LOAD_FAST               15 (shields)
+            1526 FORMAT_VALUE             0
+            1528 LOAD_CONST              46 (' ≥ cost ')
+            1530 LOAD_FAST                9 (row)
+            1532 LOAD_CONST              36 ('mana')
+            1534 BINARY_SUBSCR
+            1538 FORMAT_VALUE             0
+            1540 BUILD_STRING             4
+            1542 CALL                     1
+            1550 POP_TOP
+
+1445     >> 1552 LOAD_FAST                4 (oppo_entry)
+            1554 POP_JUMP_IF_NONE        36 (to 1628)
+
+1446        1556 LOAD_FAST                4 (oppo_entry)
+            1558 LOAD_CONST              27 ('notes')
+            1560 BINARY_SUBSCR
+            1564 LOAD_ATTR               31 (NULL|self + append)
+            1584 LOAD_CONST              47 ('blocked ')
+            1586 LOAD_FAST                1 (player)
+            1588 LOAD_ATTR                2 (name)
+            1608 FORMAT_VALUE             0
+            1610 LOAD_CONST              48 ('’s card on ')
+            1612 LOAD_FAST                6 (stopover)
+            1614 FORMAT_VALUE             0
+            1616 BUILD_STRING             4
+            1618 CALL                     1
+            1626 POP_TOP
+
+1447     >> 1628 EXTENDED_ARG             2
+            1630 JUMP_BACKWARD          519 (to 594)
+
+1448     >> 1632 LOAD_GLOBAL              1 (NULL + print)
+            1642 LOAD_CONST              49 ('\t\t\tblock failed (shields ')
+            1644 LOAD_FAST               15 (shields)
+            1646 FORMAT_VALUE             0
+            1648 LOAD_CONST              50 (' < mana ')
+            1650 LOAD_FAST                9 (row)
+            1652 LOAD_CONST              36 ('mana')
+            1654 BINARY_SUBSCR
+            1658 FORMAT_VALUE             0
+            1660 LOAD_CONST              51 ('), card ')
+            1662 LOAD_FAST                8 (card_id)
+            1664 FORMAT_VALUE             0
+            1666 LOAD_CONST              52 (' plays normally')
+            1668 BUILD_STRING             7
+            1670 CALL                     1
+            1678 POP_TOP
+
+1449        1680 LOAD_FAST                3 (log_entry)
+            1682 POP_JUMP_IF_NONE        29 (to 1742)
+
+1450        1684 LOAD_FAST                3 (log_entry)
+            1686 LOAD_CONST              27 ('notes')
+            1688 BINARY_SUBSCR
+            1692 LOAD_ATTR               31 (NULL|self + append)
+            1712 LOAD_CONST              53 ('block broken — shields ')
+            1714 LOAD_FAST               15 (shields)
+            1716 FORMAT_VALUE             0
+            1718 LOAD_CONST              54 (' < cost ')
+            1720 LOAD_FAST                9 (row)
+            1722 LOAD_CONST              36 ('mana')
+            1724 BINARY_SUBSCR
+            1728 FORMAT_VALUE             0
+            1730 BUILD_STRING             4
+            1732 CALL                     1
+            1740 POP_TOP
+
+1452     >> 1742 LOAD_GLOBAL             43 (NULL + _resolve_card)
+            1752 LOAD_FAST                9 (row)
+            1754 LOAD_FAST                1 (player)
+            1756 LOAD_FAST                2 (current_game)
+            1758 LOAD_FAST                6 (stopover)
+            1760 LOAD_FAST                3 (log_entry)
+            1762 CALL                     5
+            1770 UNPACK_SEQUENCE          3
+            1774 STORE_FAST               2 (current_game)
+            1776 STORE_FAST              11 (grappling_activated)
+            1778 STORE_FAST              12 (effect_activated)
+            1780 EXTENDED_ARG             2
+            1782 JUMP_BACKWARD          595 (to 594)
+
+1399     >> 1784 END_FOR
+
+1454        1786 LOAD_GLOBAL              1 (NULL + print)
+            1796 LOAD_CONST              55 ('\t\t\tcurrent position: ')
+            1798 LOAD_FAST                1 (player)
+            1800 LOAD_ATTR               44 (current_position)
+            1820 FORMAT_VALUE             0
+            1822 LOAD_CONST              56 (' (len(earth): ')
+            1824 LOAD_GLOBAL             47 (NULL + len)
+            1834 LOAD_FAST                2 (current_game)
+            1836 LOAD_ATTR               48 (earth)
+            1856 CALL                     1
+            1864 FORMAT_VALUE             0
+            1866 LOAD_CONST              57 (')')
+            1868 BUILD_STRING             5
+            1870 CALL                     1
+            1878 POP_TOP
+
+1456        1880 LOAD_FAST                2 (current_game)
+            1882 LOAD_FAST               11 (grappling_activated)
+            1884 LOAD_FAST               12 (effect_activated)
+            1886 BUILD_TUPLE              3
+            1888 RETURN_VALUE
+
+===== _grant_rooted_token (line 1688) =====
+CONSTS: [' rooted (rule of engine_version 10): grant a card a rooted token. The card\n     will survive the cleaning phase (it is not discarded) and stays on the trip\n     chain on a free stopover (placed at end of turn by _process_rooted_cards).\n     The token is ONE-SHOT (the card loses it when it is placed). Cooldown: a card\n     that earned a token the PREVIOUS turn cannot earn another this turn. ', 0, 1, '\t\t\trooted: card ', ' is on cooldown (rooted last turn) -> no token', 'negatives', 'rooted on cooldown — no token', ('card_id', 'owner'), ' earns a rooted token (survives the cleaning phase)', 'notes', '🌱 rooted — card survives onto the trip chain']
+NAMES: ('rooted_history', 'get', 'turn', 'print', 'append', 'rooted_this_turn', 'name')
+VARARGS/vartype: ('card_id', 'player', 'current_game', 'log_entry', 'last')
+1688           0 RESUME                   0
+
+1694           2 LOAD_FAST                2 (current_game)
+               4 LOAD_ATTR                0 (rooted_history)
+              24 LOAD_ATTR                3 (NULL|self + get)
+              44 LOAD_FAST                0 (card_id)
+              46 CALL                     1
+              54 STORE_FAST               4 (last)
+
+1695          56 LOAD_FAST                4 (last)
+              58 POP_JUMP_IF_NONE        61 (to 182)
+              60 LOAD_FAST                4 (last)
+              62 LOAD_FAST                2 (current_game)
+              64 LOAD_ATTR                4 (turn)
+              84 COPY                     1
+              86 POP_JUMP_IF_TRUE         2 (to 92)
+              88 POP_TOP
+              90 LOAD_CONST               1 (0)
+         >>   92 LOAD_CONST               2 (1)
+              94 BINARY_OP               10 (-)
+              98 COMPARE_OP              40 (==)
+             102 POP_JUMP_IF_FALSE       39 (to 182)
+
+1696         104 LOAD_GLOBAL              7 (NULL + print)
+             114 LOAD_CONST               3 ('\t\t\trooted: card ')
+             116 LOAD_FAST                0 (card_id)
+             118 FORMAT_VALUE             0
+             120 LOAD_CONST               4 (' is on cooldown (rooted last turn) -> no token')
+             122 BUILD_STRING             3
+             124 CALL                     1
+             132 POP_TOP
+
+1697         134 LOAD_FAST                3 (log_entry)
+             136 POP_JUMP_IF_NONE        20 (to 178)
+
+1698         138 LOAD_FAST                3 (log_entry)
+             140 LOAD_CONST               5 ('negatives')
+             142 BINARY_SUBSCR
+             146 LOAD_ATTR                9 (NULL|self + append)
+             166 LOAD_CONST               6 ('rooted on cooldown — no token')
+             168 CALL                     1
+             176 POP_TOP
+
+1699     >>  178 LOAD_FAST                2 (current_game)
+             180 RETURN_VALUE
+
+1700     >>  182 LOAD_FAST                2 (current_game)
+             184 LOAD_ATTR               10 (rooted_this_turn)
+             204 LOAD_ATTR                9 (NULL|self + append)
+             224 LOAD_FAST                0 (card_id)
+             226 LOAD_FAST                1 (player)
+             228 LOAD_ATTR               12 (name)
+             248 LOAD_CONST               7 (('card_id', 'owner'))
+             250 BUILD_CONST_KEY_MAP      2
+             252 CALL                     1
+             260 POP_TOP
+
+1701         262 LOAD_FAST                2 (current_game)
+             264 LOAD_ATTR                4 (turn)
+             284 LOAD_FAST                2 (current_game)
+             286 LOAD_ATTR                0 (rooted_history)
+             306 LOAD_FAST                0 (card_id)
+             308 STORE_SUBSCR
+
+1702         312 LOAD_GLOBAL              7 (NULL + print)
+             322 LOAD_CONST               3 ('\t\t\trooted: card ')
+             324 LOAD_FAST                0 (card_id)
+             326 FORMAT_VALUE             0
+             328 LOAD_CONST               8 (' earns a rooted token (survives the cleaning phase)')
+             330 BUILD_STRING             3
+             332 CALL                     1
+             340 POP_TOP
+
+1703         342 LOAD_FAST                3 (log_entry)
+             344 POP_JUMP_IF_NONE        20 (to 386)
+
+1704         346 LOAD_FAST                3 (log_entry)
+             348 LOAD_CONST               9 ('notes')
+             350 BINARY_SUBSCR
+             354 LOAD_ATTR                9 (NULL|self + append)
+             374 LOAD_CONST              10 ('🌱 rooted — card survives onto the trip chain')
+             376 CALL                     1
+             384 POP_TOP
+
+1705     >>  386 LOAD_FAST                2 (current_game)
+             388 RETURN_VALUE
+
+===== _process_rooted_cards (line 1767) =====
+CONSTS: [" rooted (rule of engine_version 10): end-of-turn placement. Called at the\n     start of the next turn (before the action chains are cleared):\n     1. last turn's rooted cards (rooted_on_board) have served their one extra\n        turn -> they are DISCARDED now (card conservation);\n     2. this turn's rooted cards (rooted_this_turn) survive: they are pulled out\n        of the discard pile and placed onto FREE stopovers in PLAY ORDER (the\n        first rooted card -> stopover_4, the second -> stopover_3, ...) - they\n        never share a stopover. ", 0, 10, 'owner', 'card_id', '\t\trooted: card ', ' (', ') served its turn -> discarded', 15, 5, 4, 'stopover_', ('card_id', 'owner', 'stopover'), ') stays on the trip chain -> ', ' (position ', 1, ')', 14, ('stopover_4', 'stopover_3', 'stopover_2', 'stopover_1', 'stopover_0'), 'stopover_extra_']
+NAMES: ('engine_version', 'rooted_on_board', 'players', 'get', 'discard', 'append', 'print', 'name', 'rooted_this_turn', 'setdefault', 'items', 'enumerate', 'remove', '_next_free_stopover_v14', 'len')
+VARARGS/vartype: ('current_game', 'card', 'owner', 'by_owner', 'entry', 'owner_name', 'entries', 'k', 'card_id', 'col', 'stopover', 'i', 'free_stopovers')
+1767           0 RESUME                   0
+
+1776           2 LOAD_FAST                0 (current_game)
+               4 LOAD_ATTR                0 (engine_version)
+              24 COPY                     1
+              26 POP_JUMP_IF_TRUE         2 (to 32)
+              28 POP_TOP
+              30 LOAD_CONST               1 (0)
+         >>   32 LOAD_CONST               2 (10)
+              34 COMPARE_OP               2 (<)
+              38 POP_JUMP_IF_FALSE        2 (to 44)
+
+1777          40 LOAD_FAST                0 (current_game)
+              42 RETURN_VALUE
+
+1779     >>   44 LOAD_FAST                0 (current_game)
+              46 LOAD_ATTR                2 (rooted_on_board)
+              66 COPY                     1
+              68 POP_JUMP_IF_TRUE         2 (to 74)
+              70 POP_TOP
+              72 BUILD_LIST               0
+         >>   74 GET_ITER
+         >>   76 FOR_ITER               145 (to 370)
+              80 STORE_FAST               1 (card)
+
+1780          82 LOAD_FAST                0 (current_game)
+              84 LOAD_ATTR                4 (players)
+             104 LOAD_ATTR                7 (NULL|self + get)
+             124 LOAD_FAST                1 (card)
+             126 LOAD_ATTR                7 (NULL|self + get)
+             146 LOAD_CONST               3 ('owner')
+             148 CALL                     1
+             156 CALL                     1
+             164 STORE_FAST               2 (owner)
+
+1781         166 LOAD_FAST                2 (owner)
+             168 POP_JUMP_IF_NOT_NONE     1 (to 172)
+             170 JUMP_BACKWARD           48 (to 76)
+         >>  172 LOAD_FAST                1 (card)
+             174 LOAD_ATTR                7 (NULL|self + get)
+             194 LOAD_CONST               4 ('card_id')
+             196 CALL                     1
+             204 POP_JUMP_IF_TRUE         1 (to 208)
+             206 JUMP_BACKWARD           66 (to 76)
+
+1782     >>  208 LOAD_FAST                2 (owner)
+             210 LOAD_ATTR                8 (discard)
+             230 POP_JUMP_IF_NOT_NONE     7 (to 246)
+
+1783         232 BUILD_LIST               0
+             234 LOAD_FAST                2 (owner)
+             236 STORE_ATTR               4 (discard)
+
+1784     >>  246 LOAD_FAST                2 (owner)
+             248 LOAD_ATTR                8 (discard)
+             268 LOAD_ATTR               11 (NULL|self + append)
+             288 LOAD_FAST                1 (card)
+             290 LOAD_CONST               4 ('card_id')
+             292 BINARY_SUBSCR
+             296 CALL                     1
+             304 POP_TOP
+
+1785         306 LOAD_GLOBAL             13 (NULL + print)
+             316 LOAD_CONST               5 ('\t\trooted: card ')
+             318 LOAD_FAST                1 (card)
+             320 LOAD_CONST               4 ('card_id')
+             322 BINARY_SUBSCR
+             326 FORMAT_VALUE             0
+             328 LOAD_CONST               6 (' (')
+             330 LOAD_FAST                2 (owner)
+             332 LOAD_ATTR               14 (name)
+             352 FORMAT_VALUE             0
+             354 LOAD_CONST               7 (') served its turn -> discarded')
+             356 BUILD_STRING             5
+             358 CALL                     1
+             366 POP_TOP
+             368 JUMP_BACKWARD          147 (to 76)
+
+1779     >>  370 END_FOR
+
+1786         372 BUILD_LIST               0
+             374 LOAD_FAST                0 (current_game)
+             376 STORE_ATTR               1 (rooted_on_board)
+
+1788         386 LOAD_FAST                0 (current_game)
+             388 LOAD_ATTR                0 (engine_version)
+             408 COPY                     1
+             410 POP_JUMP_IF_TRUE         2 (to 416)
+             412 POP_TOP
+             414 LOAD_CONST               1 (0)
+         >>  416 LOAD_CONST               8 (15)
+             418 COMPARE_OP              92 (>=)
+             422 EXTENDED_ARG             1
+             424 POP_JUMP_IF_FALSE      290 (to 1006)
+
+1794         426 BUILD_MAP                0
+             428 STORE_FAST               3 (by_owner)
+
+1795         430 LOAD_FAST                0 (current_game)
+             432 LOAD_ATTR               16 (rooted_this_turn)
+             452 COPY                     1
+             454 POP_JUMP_IF_TRUE         2 (to 460)
+             456 POP_TOP
+             458 BUILD_LIST               0
+         >>  460 GET_ITER
+         >>  462 FOR_ITER                50 (to 566)
+             466 STORE_FAST               4 (entry)
+
+1796         468 LOAD_FAST                3 (by_owner)
+             470 LOAD_ATTR               19 (NULL|self + setdefault)
+             490 LOAD_FAST                4 (entry)
+             492 LOAD_ATTR                7 (NULL|self + get)
+             512 LOAD_CONST               3 ('owner')
+             514 CALL                     1
+             522 BUILD_LIST               0
+             524 CALL                     2
+             532 LOAD_ATTR               11 (NULL|self + append)
+             552 LOAD_FAST                4 (entry)
+             554 CALL                     1
+             562 POP_TOP
+             564 JUMP_BACKWARD           52 (to 462)
+
+1795     >>  566 END_FOR
+
+1797         568 LOAD_FAST                3 (by_owner)
+             570 LOAD_ATTR               21 (NULL|self + items)
+             590 CALL                     0
+             598 GET_ITER
+         >>  600 FOR_ITER               198 (to 1000)
+             604 UNPACK_SEQUENCE          2
+             608 STORE_FAST               5 (owner_name)
+             610 STORE_FAST               6 (entries)
+
+1798         612 LOAD_FAST                0 (current_game)
+             614 LOAD_ATTR                4 (players)
+             634 LOAD_ATTR                7 (NULL|self + get)
+             654 LOAD_FAST                5 (owner_name)
+             656 CALL                     1
+             664 STORE_FAST               2 (owner)
+
+1799         666 LOAD_GLOBAL             23 (NULL + enumerate)
+             676 LOAD_FAST                6 (entries)
+             678 CALL                     1
+             686 GET_ITER
+         >>  688 FOR_ITER               152 (to 996)
+             692 UNPACK_SEQUENCE          2
+             696 STORE_FAST               7 (k)
+             698 STORE_FAST               4 (entry)
+
+1800         700 LOAD_FAST                4 (entry)
+             702 LOAD_ATTR                7 (NULL|self + get)
+             722 LOAD_CONST               4 ('card_id')
+             724 CALL                     1
+             732 STORE_FAST               8 (card_id)
+
+1801         734 LOAD_FAST                2 (owner)
+             736 POP_JUMP_IF_NONE        53 (to 844)
+             738 LOAD_FAST                2 (owner)
+             740 LOAD_ATTR                8 (discard)
+             760 POP_JUMP_IF_FALSE       41 (to 844)
+             762 LOAD_FAST                8 (card_id)
+             764 LOAD_FAST                2 (owner)
+             766 LOAD_ATTR                8 (discard)
+             786 CONTAINS_OP              0
+             788 POP_JUMP_IF_FALSE       27 (to 844)
+
+1802         790 LOAD_FAST                2 (owner)
+             792 LOAD_ATTR                8 (discard)
+             812 LOAD_ATTR               25 (NULL|self + remove)
+             832 LOAD_FAST                8 (card_id)
+             834 CALL                     1
+             842 POP_TOP
+
+1804     >>  844 LOAD_FAST                7 (k)
+             846 LOAD_CONST               9 (5)
+             848 COMPARE_OP               2 (<)
+             852 POP_JUMP_IF_FALSE        5 (to 864)
+             854 LOAD_CONST              10 (4)
+             856 LOAD_FAST                7 (k)
+             858 BINARY_OP               10 (-)
+             862 JUMP_FORWARD             1 (to 866)
+         >>  864 LOAD_CONST               1 (0)
+         >>  866 STORE_FAST               9 (col)
+
+1805         868 LOAD_CONST              11 ('stopover_')
+             870 LOAD_FAST                9 (col)
+             872 FORMAT_VALUE             0
+             874 BUILD_STRING             2
+             876 STORE_FAST              10 (stopover)
+
+1806         878 LOAD_FAST                0 (current_game)
+             880 LOAD_ATTR                2 (rooted_on_board)
+             900 LOAD_ATTR               11 (NULL|self + append)
+             920 LOAD_FAST                8 (card_id)
+             922 LOAD_FAST                5 (owner_name)
+             924 LOAD_FAST               10 (stopover)
+             926 LOAD_CONST              12 (('card_id', 'owner', 'stopover'))
+             928 BUILD_CONST_KEY_MAP      3
+             930 CALL                     1
+             938 POP_TOP
+
+1807         940 LOAD_GLOBAL             13 (NULL + print)
+             950 LOAD_CONST               5 ('\t\trooted: card ')
+             952 LOAD_FAST                8 (card_id)
+             954 FORMAT_VALUE             0
+             956 LOAD_CONST               6 (' (')
+             958 LOAD_FAST                5 (owner_name)
+             960 FORMAT_VALUE             0
+             962 LOAD_CONST              13 (') stays on the trip chain -> ')
+             964 LOAD_FAST               10 (stopover)
+             966 FORMAT_VALUE             0
+             968 LOAD_CONST              14 (' (position ')
+             970 LOAD_FAST                7 (k)
+             972 LOAD_CONST              15 (1)
+             974 BINARY_OP                0 (+)
+             978 FORMAT_VALUE             0
+             980 LOAD_CONST              16 (')')
+             982 BUILD_STRING             9
+             984 CALL                     1
+             992 POP_TOP
+             994 JUMP_BACKWARD          154 (to 688)
+
+1799     >>  996 END_FOR
+             998 JUMP_BACKWARD          200 (to 600)
+
+1797     >> 1000 END_FOR
+            1002 EXTENDED_ARG             1
+            1004 JUMP_FORWARD           461 (to 1928)
+
+1808     >> 1006 LOAD_FAST                0 (current_game)
+            1008 LOAD_ATTR                0 (engine_version)
+            1028 COPY                     1
+            1030 POP_JUMP_IF_TRUE         2 (to 1036)
+            1032 POP_TOP
+            1034 LOAD_CONST               1 (0)
+         >> 1036 LOAD_CONST              17 (14)
+            1038 COMPARE_OP              92 (>=)
+            1042 POP_JUMP_IF_FALSE      214 (to 1472)
+
+1811        1044 LOAD_GLOBAL             23 (NULL + enumerate)
+            1054 LOAD_FAST                0 (current_game)
+            1056 LOAD_ATTR               16 (rooted_this_turn)
+            1076 COPY                     1
+            1078 POP_JUMP_IF_TRUE         2 (to 1084)
+            1080 POP_TOP
+            1082 BUILD_LIST               0
+         >> 1084 CALL                     1
+            1092 GET_ITER
+         >> 1094 FOR_ITER               185 (to 1468)
+            1098 UNPACK_SEQUENCE          2
+            1102 STORE_FAST              11 (i)
+            1104 STORE_FAST               4 (entry)
+
+1812        1106 LOAD_FAST                4 (entry)
+            1108 LOAD_ATTR                7 (NULL|self + get)
+            1128 LOAD_CONST               4 ('card_id')
+            1130 CALL                     1
+            1138 STORE_FAST               8 (card_id)
+
+1813        1140 LOAD_FAST                4 (entry)
+            1142 LOAD_ATTR                7 (NULL|self + get)
+            1162 LOAD_CONST               3 ('owner')
+            1164 CALL                     1
+            1172 STORE_FAST               5 (owner_name)
+
+1814        1174 LOAD_FAST                0 (current_game)
+            1176 LOAD_ATTR                4 (players)
+            1196 LOAD_ATTR                7 (NULL|self + get)
+            1216 LOAD_FAST                5 (owner_name)
+            1218 CALL                     1
+            1226 STORE_FAST               2 (owner)
+
+1815        1228 LOAD_FAST                2 (owner)
+            1230 POP_JUMP_IF_NONE        53 (to 1338)
+            1232 LOAD_FAST                2 (owner)
+            1234 LOAD_ATTR                8 (discard)
+            1254 POP_JUMP_IF_FALSE       41 (to 1338)
+            1256 LOAD_FAST                8 (card_id)
+            1258 LOAD_FAST                2 (owner)
+            1260 LOAD_ATTR                8 (discard)
+            1280 CONTAINS_OP              0
+            1282 POP_JUMP_IF_FALSE       27 (to 1338)
+
+1816        1284 LOAD_FAST                2 (owner)
+            1286 LOAD_ATTR                8 (discard)
+            1306 LOAD_ATTR               25 (NULL|self + remove)
+            1326 LOAD_FAST                8 (card_id)
+            1328 CALL                     1
+            1336 POP_TOP
+
+1817     >> 1338 LOAD_GLOBAL             27 (NULL + _next_free_stopover_v14)
+            1348 LOAD_FAST                0 (current_game)
+            1350 LOAD_FAST               11 (i)
+            1352 LOAD_FAST                5 (owner_name)
+            1354 CALL                     3
+            1362 STORE_FAST              10 (stopover)
+
+1818        1364 LOAD_FAST                0 (current_game)
+            1366 LOAD_ATTR                2 (rooted_on_board)
+            1386 LOAD_ATTR               11 (NULL|self + append)
+            1406 LOAD_FAST                8 (card_id)
+            1408 LOAD_FAST                5 (owner_name)
+            1410 LOAD_FAST               10 (stopover)
+            1412 LOAD_CONST              12 (('card_id', 'owner', 'stopover'))
+            1414 BUILD_CONST_KEY_MAP      3
+            1416 CALL                     1
+            1424 POP_TOP
+
+1819        1426 LOAD_GLOBAL             13 (NULL + print)
+            1436 LOAD_CONST               5 ('\t\trooted: card ')
+            1438 LOAD_FAST                8 (card_id)
+            1440 FORMAT_VALUE             0
+            1442 LOAD_CONST               6 (' (')
+            1444 LOAD_FAST                5 (owner_name)
+            1446 FORMAT_VALUE             0
+            1448 LOAD_CONST              13 (') stays on the trip chain -> ')
+            1450 LOAD_FAST               10 (stopover)
+            1452 FORMAT_VALUE             0
+            1454 BUILD_STRING             6
+            1456 CALL                     1
+            1464 POP_TOP
+            1466 JUMP_BACKWARD          187 (to 1094)
+
+1811     >> 1468 END_FOR
+            1470 JUMP_FORWARD           228 (to 1928)
+
+1822     >> 1472 BUILD_LIST               0
+            1474 LOAD_CONST              18 (('stopover_4', 'stopover_3', 'stopover_2', 'stopover_1', 'stopover_0'))
+            1476 LIST_EXTEND              1
+            1478 STORE_FAST              12 (free_stopovers)
+
+1823        1480 LOAD_GLOBAL             23 (NULL + enumerate)
+            1490 LOAD_FAST                0 (current_game)
+            1492 LOAD_ATTR               16 (rooted_this_turn)
+            1512 COPY                     1
+            1514 POP_JUMP_IF_TRUE         2 (to 1520)
+            1516 POP_TOP
+            1518 BUILD_LIST               0
+         >> 1520 CALL                     1
+            1528 GET_ITER
+         >> 1530 FOR_ITER               196 (to 1926)
+            1534 UNPACK_SEQUENCE          2
+            1538 STORE_FAST              11 (i)
+            1540 STORE_FAST               4 (entry)
+
+1824        1542 LOAD_FAST                4 (entry)
+            1544 LOAD_ATTR                7 (NULL|self + get)
+            1564 LOAD_CONST               4 ('card_id')
+            1566 CALL                     1
+            1574 STORE_FAST               8 (card_id)
+
+1825        1576 LOAD_FAST                4 (entry)
+            1578 LOAD_ATTR                7 (NULL|self + get)
+            1598 LOAD_CONST               3 ('owner')
+            1600 CALL                     1
+            1608 STORE_FAST               5 (owner_name)
+
+1826        1610 LOAD_FAST                0 (current_game)
+            1612 LOAD_ATTR                4 (players)
+            1632 LOAD_ATTR                7 (NULL|self + get)
+            1652 LOAD_FAST                5 (owner_name)
+            1654 CALL                     1
+            1662 STORE_FAST               2 (owner)
+
+1827        1664 LOAD_FAST                2 (owner)
+            1666 POP_JUMP_IF_NONE        53 (to 1774)
+            1668 LOAD_FAST                2 (owner)
+            1670 LOAD_ATTR                8 (discard)
+            1690 POP_JUMP_IF_FALSE       41 (to 1774)
+            1692 LOAD_FAST                8 (card_id)
+            1694 LOAD_FAST                2 (owner)
+            1696 LOAD_ATTR                8 (discard)
+            1716 CONTAINS_OP              0
+            1718 POP_JUMP_IF_FALSE       27 (to 1774)
+
+1828        1720 LOAD_FAST                2 (owner)
+            1722 LOAD_ATTR                8 (discard)
+            1742 LOAD_ATTR               25 (NULL|self + remove)
+            1762 LOAD_FAST                8 (card_id)
+            1764 CALL                     1
+            1772 POP_TOP
+
+1829     >> 1774 LOAD_FAST               11 (i)
+            1776 LOAD_GLOBAL             29 (NULL + len)
+            1786 LOAD_FAST               12 (free_stopovers)
+            1788 CALL                     1
+            1796 COMPARE_OP               2 (<)
+            1800 POP_JUMP_IF_FALSE        5 (to 1812)
+            1802 LOAD_FAST               12 (free_stopovers)
+            1804 LOAD_FAST               11 (i)
+            1806 BINARY_SUBSCR
+            1810 JUMP_FORWARD             4 (to 1820)
+         >> 1812 LOAD_CONST              19 ('stopover_extra_')
+            1814 LOAD_FAST               11 (i)
+            1816 FORMAT_VALUE             0
+            1818 BUILD_STRING             2
+         >> 1820 STORE_FAST              10 (stopover)
+
+1830        1822 LOAD_FAST                0 (current_game)
+            1824 LOAD_ATTR                2 (rooted_on_board)
+            1844 LOAD_ATTR               11 (NULL|self + append)
+            1864 LOAD_FAST                8 (card_id)
+            1866 LOAD_FAST                5 (owner_name)
+            1868 LOAD_FAST               10 (stopover)
+            1870 LOAD_CONST              12 (('card_id', 'owner', 'stopover'))
+            1872 BUILD_CONST_KEY_MAP      3
+            1874 CALL                     1
+            1882 POP_TOP
+
+1831        1884 LOAD_GLOBAL             13 (NULL + print)
+            1894 LOAD_CONST               5 ('\t\trooted: card ')
+            1896 LOAD_FAST                8 (card_id)
+            1898 FORMAT_VALUE             0
+            1900 LOAD_CONST               6 (' (')
+            1902 LOAD_FAST                5 (owner_name)
+            1904 FORMAT_VALUE             0
+            1906 LOAD_CONST              13 (') stays on the trip chain -> ')
+            1908 LOAD_FAST               10 (stopover)
+            1910 FORMAT_VALUE             0
+            1912 BUILD_STRING             6
+            1914 CALL                     1
+            1922 POP_TOP
+            1924 JUMP_BACKWARD          198 (to 1530)
+
+1823     >> 1926 END_FOR
+
+1832     >> 1928 BUILD_LIST               0
+            1930 LOAD_FAST                0 (current_game)
+            1932 STORE_ATTR               8 (rooted_this_turn)
+
+1833        1942 LOAD_FAST                0 (current_game)
+            1944 RETURN_VALUE

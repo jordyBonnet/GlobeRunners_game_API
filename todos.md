@@ -1,7 +1,8 @@
-- integrate support faction cards being playable for IA
+Bug fixes
+- bug at the start position, it seems it starts at 0, so it create a shift of one all along the rest of the game.
 
 Visuals
-- add a visual effect to identify who is the first player every turn
-- add cards movements animations from one place to another (deck → hand, stopover → discard, etc...)
-- add real player token iamge on the earth
-- use the real cataclysms background cards
+
+
+Others
+- integrate support faction cards being playable for IA

@@ -283,31 +283,27 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   font-size: clamp(1rem, 1.5vw, 1.4rem); font-weight: 800; color: #fff;
   text-shadow: 0 2px 5px #000, 0 0 12px rgba(40,120,255,.8); z-index: 2;
 }
-/* cataclysm deck: 4 face-down cards (placeholder) */
-.env-cata { background: #141b30; }
-.cata-stack { position: absolute; inset: 0; }
-.cata-stack i {
-  position: absolute; inset: 8% 9%; border-radius: 4px;
-  background: url('/assets/GR_cards_back.png') center/cover no-repeat;
-  box-shadow: 0 2px 6px rgba(0,0,0,.5);
-}
-.cata-stack i:nth-child(1) { transform: translate(-8px, 8px) rotate(-7deg); }
-.cata-stack i:nth-child(2) { transform: translate(-4px, 4px) rotate(-3deg); }
-.cata-stack i:nth-child(3) { transform: translate(4px, 4px) rotate(3deg); }
-.cata-stack i:nth-child(4) { transform: translate(8px, 8px) rotate(7deg); }
+/* cataclysm deck: the dedicated card-back (408x552, a 2x2 of the 4 biome disasters);
+   rendered as a full face like the day/night + temperature cards (.env-card img). */
+.env-cata { background: #141b30; }   /* fallback if the back art fails to load */
 
 /* 24 radial positions: tokens sit between the radial lines, just outside the globe */
 #markers-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
 .marker {
   position: absolute; transform: translate(-50%, -50%); z-index: 6; pointer-events: none;
-  width: clamp(22px, 2.6vw, 34px); aspect-ratio: 1; border-radius: 50%;
+  width: clamp(26px, 3vw, 40px); aspect-ratio: 1; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000;
+  font-size: .85rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000;
   border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6);
   transition: left .45s cubic-bezier(.5,1.4,.5,1), top .45s cubic-bezier(.5,1.4,.5,1);
 }
 /* note: the .marker elements are PERSISTED across renders (board.mjs repositions them
    instead of recreating them) so this transition animates the token sliding along the ring */
+/* the token shows the player's FACTION LOGO with the player's first letter on top of it:
+   the logo fills the circle, the letter is a bold overlay. The me/oppo gradient below
+   doubles as the fallback background when the logo is missing (unknown faction). */
+.marker .marker-logo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.marker .marker-letter { position: relative; z-index: 1; font-size: .85rem; }
 .marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
 .marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
 
@@ -455,6 +451,69 @@ body.cell-selecting .cell-target:hover {
   pointer-events: none;
 }
 .slot .dwelling-placeholder img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* pending placeholder (doctors, engine_version 16): a pending card in the zone
+   creates a placeholder in the stopover slot (like the refinery dwelling) */
+.slot .pending-placeholder {
+  position: absolute; inset: 6% 8%; width: 84%; aspect-ratio: 180 / 260;
+  border-radius: 6px; overflow: hidden; z-index: 1;
+  border: 2px solid rgba(255, 200, 100, .5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .5), 0 0 6px rgba(255, 200, 100, .25);
+  opacity: .85;
+  pointer-events: none;
+}
+.slot .pending-placeholder img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* rooted (engine_version 10): a card that earned a rooted token last turn survived
+   the cleaning phase and sits on a stopover until the end of the NEXT turn —
+   rendered with a green "stuck to the trip chain" frame + the rooted-token badge.
+   The card is INERT (no block, no effect) — cursor: default says "not playable". */
+.slot .rooted-on-board {
+  position: absolute; inset: 4% 5%; width: 90%; aspect-ratio: 180 / 260;
+  border-radius: 6px; overflow: hidden; z-index: 2;
+  outline: 2px solid #4caf7d; outline-offset: -2px;
+  box-shadow: 0 3px 9px rgba(0,0,0,.65), 0 0 8px rgba(76,175,125,.55);
+  cursor: default;
+}
+.slot .rooted-on-board img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* the rooted token: a circular status CHIP (top-right of the card) — the
+   tree-with-roots icon on a dark disc + green ring reads clearly over any card art
+   (a bare transparent PNG at the corner blended into the art and looked broken) */
+.slot .rooted-on-board .rooted-token {
+  position: absolute; top: 4%; right: 4%;
+  width: 34%; height: auto; aspect-ratio: 1; object-fit: contain;
+  padding: 8%;
+  background: radial-gradient(circle at 35% 30%, #24381f 0%, #0d1117 72%);
+  border: 2px solid #4caf7d; border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0,0,0,.75), 0 0 10px rgba(76,175,125,.6);
+  pointer-events: none; z-index: 3;
+}
+/* when a played card and a rooted card share a slot (the turn's k-th card still
+   targets the k-th slot — blocking matches by column — so they collide when a
+   rooted card is there): the rooted card sits BEHIND the played card — smaller,
+   nudged up, tilted, lower z-index. The played card stays full-size in front,
+   and the rooted card + its token chip peek out from behind. */
+.slot .rooted-on-board.behind {
+  /* the played card in front covers inset 4%/5% at aspect 180:260 (~1.3 slot-widths
+     tall); the shrunken rooted card (scale .84, origin bottom) is only ~1.09 tall,
+     so it must be shifted up ~28% of its own height for its top edge to peek above
+     the played card's top edge (a visible tilted sliver, more on the left where
+     the -4° tilt raises it) */
+  transform: translateY(-28%) rotate(-4deg) scale(.84);
+  transform-origin: 50% 100%;
+  z-index: 1;
+}
+/* in the layered slot the token chip is RE-PARENTED to the slot (a sibling of the
+   played card, see board.mjs) so it escapes the rooted card's low z-index and sits
+   on top — the full chip style is repeated here because it is no longer a
+   descendant of .rooted-on-board */
+.slot .rooted-token.chip-float {
+  position: absolute; top: -5%; right: 2%;
+  width: 26%; height: auto; aspect-ratio: 1; object-fit: contain;
+  padding: 8%;
+  background: radial-gradient(circle at 35% 30%, #24381f 0%, #0d1117 72%);
+  border: 2px solid #4caf7d; border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0,0,0,.75), 0 0 10px rgba(76,175,125,.6);
+  pointer-events: none; z-index: 6;
+}
 /* defense card: the card AND its frame are presented rotated 90° (landscape),
    straddling the cell — as if the card had been physically turned
    to block the opposing cell across from it. */
@@ -590,7 +649,19 @@ body.cell-selecting .cell-target:hover {
   padding: 30px 42px; text-align: center; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.7);
 }
 .modal-box h2 { font-size: 1.5rem; color: var(--accent-2); margin-bottom: 8px; }
+.modal-box h3 { font-size: 1.2rem; color: var(--accent-2); margin-bottom: 10px; }
 .modal-box p { color: var(--muted); margin-bottom: 18px; }
+
+/* pending card selection popup (doctors, engine_version 16) */
+.pending-popup .modal-box { max-width: 420px; }
+.pending-options { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.pending-opt {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 16px; color: var(--text); font-size: .85rem; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.pending-opt:hover { border-color: var(--accent); background: rgba(79,209,197,.08); }
+.pending-opt:active { background: rgba(79,209,197,.15); }
 
 /* toast */
 #toast {

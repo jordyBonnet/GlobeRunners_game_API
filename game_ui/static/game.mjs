@@ -6,7 +6,7 @@ import { $, toast } from "./utils.mjs";
 import { ENGINEER_DROPS, isEngineerDrop } from "./cards.mjs";
 import { sendAction, connectWs, startPolling } from "./comm.mjs";
 import { checkMana } from "./state.mjs";
-import { playedCount, nextSlotCol, orderHint } from "./actions.mjs";
+import { playedCount, nextSlotCol, orderHint, freeCols } from "./actions.mjs";
 import { N_STOPOVERS } from "./board.mjs";
 import { setup } from "./setup.mjs";
 
@@ -50,9 +50,9 @@ export function confirmCell(cellIndex) {
   if (!id) return;
   exitCellSelect();
   const st = game.state;
-  if (playedCount(st, game.me) >= N_STOPOVERS) { toast(orderHint()); return; }
+  if (freeCols(st, game.me).length === 0) { toast(orderHint()); return; }
   if (!checkMana(id)) return;
-  // the drop occupies the next stopover slot (move mode) + carries its target cell
+  // the drop occupies the player's next position (move mode, per-player v15) + carries its target cell
   sendAction([id], `stopover_${nextSlotCol(st, game.me)}`, "move", [], cellIndex);
   game.selected = new Set();
 }

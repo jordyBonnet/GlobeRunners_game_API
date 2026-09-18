@@ -7,7 +7,7 @@ import { detectPhase, myTurn } from "./phase.mjs";
 import { game } from "./game.mjs";
 import { sendAction } from "./comm.mjs";
 import { checkMana } from "./state.mjs";
-import { playedCount, nextSlotCol, orderHint, dispatchPlay } from "./actions.mjs";
+import { playedCount, nextSlotCol, orderHint, dispatchPlay, freeCols } from "./actions.mjs";
 import { N_STOPOVERS } from "./board.mjs";
 import { makeHandCard } from "./interaction.mjs";
 
@@ -159,7 +159,7 @@ export function renderMyZone(me, interactive) {
     const ph2 = detectPhase(game.state);
     if (!ph2 || ph2.kind !== "play" || !myTurn(game.state)) return;
     if (game.selected.size !== 1) return;
-    if (playedCount(game.state, game.me) >= N_STOPOVERS) { toast(orderHint()); return; }
+    if (freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
     const id = [...game.selected][0];
     if (!checkMana(id)) return;
     sendAction([id], `stopover_${nextSlotCol(game.state, game.me)}`, "defend");

@@ -51,6 +51,22 @@ export function cardImg(id) {
   return `/art/${encodeURIComponent(id)}.png`;
 }
 
+// Earth background image for a game, derived from the board's biome order
+// (state.earth — the engine's biomes_order, public board info). Cell 0 is at the
+// top of the ring, clockwise (board.mjs POS24), so segment 0 (cells 0–5) is the
+// TOP-RIGHT quadrant of the image. The four configs cover one starting biome each:
+//   DE → cfg1, MO → cfg2, OC → cfg3, JU → cfg4
+// so the starting quadrant (where both players begin) is always drawn correctly,
+// and the whole board matches 4/4 when the board's cyclic order matches the asset
+// (12 of the 24 possible orders — the assets only contain 2 cyclic classes).
+// Falls back to the plain playmat when the board is unknown (setup screen, old state).
+export function earthBgSrc(earth) {
+  const first = (earth && earth[0] && earth[0][0]) || null;
+  const CFG = { DE: 1, MO: 2, OC: 3, JU: 4 };
+  if (!CFG[first]) return "/assets/earth_background_playmat.png";
+  return `/assets/earth_cgf${CFG[first]}_nomarker.png`;
+}
+
 // card cost: main cards use `mana`; support cards (engine_version 12+) use `mana_cost`
 export function cardCost(id) {
   const main = CARDPOOL[id];
@@ -93,7 +109,19 @@ export const ENGINEER_DROPS = {
 export const ENGINEER_DWELLING = "refinery";   // tap once/turn -> draw 1
 export const isEngineerDrop    = (id) => !!ENGINEER_DROPS[id];
 export const isEngineerDwelling= (id) => id === ENGINEER_DWELLING;
-export const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id);
+
+/* ---------------- Doctors support faction (engine_version 16) ---------------- */
+// 4 pending cards (placed in the pending zone, attachable to a main card) + 1 dwelling card.
+export const DOCTOR_PENDING = {
+  epo:           { label: "epo — +1 advancing" },
+  virus:         { label: "virus — −1 knockback" },
+  bloodtest:     { label: "bloodtest — discard 1 card" },
+  mercurochrome: { label: "mercurochrome — unstoppable" },
+};
+export const DOCTOR_DWELLING = "laboratory";   // tap once/turn -> adds an 'epo' pending card
+export const isDoctorPending   = (id) => !!DOCTOR_PENDING[id];
+export const isDoctorDwelling  = (id) => id === DOCTOR_DWELLING;
+export const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id) || isDoctorPending(id) || isDoctorDwelling(id);
 
 /* ---------------- factions & support factions ---------------- */
 export const FACTIONS = [
@@ -115,6 +143,12 @@ export function getFactionKey(factionName) {
 export function dwellingPlaceholderSrc(factionName) {
   const key = getFactionKey(factionName);
   return key ? `/cards_ex/placeholder_${key}.png` : "/placeholder.svg";
+}
+
+// faction logo (the player token on the Earth ring, /assets/logo_<key>.png); null if the faction is unknown
+export function factionLogoSrc(factionName) {
+  const f = FACTIONS.find((f) => f.name === factionName);
+  return f ? f.logo : null;
 }
 
 export const SUPPORT_FACS = [

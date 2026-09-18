@@ -60,7 +60,7 @@ export function sendAction(cards, to, mode, pendings = [], cell = null) {
 
 function setConn(ok) {
   const el = $("#conn-state");
-  el.textContent = ok ? "● connected" : "○ disconnected";
+  el.textContent = ok ? (game.id ? `● connected to game ${game.id}` : "● connected") : "○ disconnected";
   el.className = ok ? "conn-ok" : "conn-bad";
   if (!ok && game.id) setTimeout(connectWs, 2000);   // auto-reconnect
 }

@@ -2,10 +2,10 @@
 "use strict";
 
 import { $, toast } from "./utils.mjs";
-import { ENGINEER_DROPS, dwellingPlaceholderSrc } from "./cards.mjs";
+import { ENGINEER_DROPS, dwellingPlaceholderSrc, earthBgSrc, factionLogoSrc } from "./cards.mjs";
 import { myTurn } from "./phase.mjs";
 import { game, cellSelect, confirmCell } from "./game.mjs";
-import { canDropOnStopover, playCardToStopover, orderHint, actionStopoverNum, playedCount } from "./actions.mjs";
+import { canDropOnStopover, playCardToStopover, orderHint, actionStopoverNum, playedCount, freeCols, nextSlotCol } from "./actions.mjs";
 import { makeStaticCard } from "./zones.mjs";
 
 export const BIOME_NAMES = { OC: "Ocean", MO: "Mountain", DE: "Desert", JU: "Jungle" };
@@ -99,6 +99,17 @@ export function renderBoard(st, me, oppoName) {
   buildBoard();
   const earth = st.earth || [];
 
+  // Earth background: pick the config image that matches this board's biome order
+  // (derived from earth[0][0] = the biome of cell 0 — see cards.mjs earthBgSrc).
+  // Only touch the src when it actually changes: the image is ~10 MB, and the
+  // board re-renders on every state poll, so a naive set would re-trigger the
+  // download each time.
+  const bg = $("#board-bg");
+  if (bg) {
+    const src = earthBgSrc(earth);
+    if (bg.getAttribute("src") !== src) bg.setAttribute("src", src);
+  }
+
   // players' advance tokens, between the radial lines of the Earth.
   // The marker ELEMENTS are persisted across renders (repositioned, not recreated) so the
   // CSS left/top transition actually animates — the token visibly slides along the ring when
@@ -116,7 +127,12 @@ export function renderBoard(st, me, oppoName) {
     }
     el.classList.toggle("me", name === game.me);
     el.classList.toggle("oppo", name !== game.me);
-    el.textContent = name.slice(0, 1).toUpperCase();
+    // token = the player's FACTION LOGO with the player's first letter on top of it
+    // (letter-only circle if the faction is unknown). Rebuilt on every render — the
+    // element itself is persisted, so the left/top transition still animates.
+    const logo = factionLogoSrc(p.faction);
+    el.innerHTML = (logo ? `<img class="marker-logo" src="${logo}" alt="" onerror="this.remove()">` : "")
+      + `<b class="marker-letter">${name.slice(0, 1).toUpperCase()}</b>`;
     const pos = Math.min(p.current_position || 0, N_CELLS - 1);
     const tokens = earth[pos] || [];
     const biome = tokens.find((t) => ["OC", "MO", "DE", "JU"].includes(t));
@@ -131,6 +147,13 @@ export function renderBoard(st, me, oppoName) {
     }
   }
   layer.querySelectorAll(".marker").forEach((m) => { if (!seen.has(m.dataset.player)) m.remove(); });
+
+  // drop tokens are NOT persisted across renders (unlike the player markers above,
+  // which must survive for the CSS transition): clear the old ones first, then
+  // redraw the current set. Without this, a token the engine CONSUMED (a player
+  // stepped on it / jump-landed on it) would stay on the board forever, and every
+  // poll would stack another copy of the same token on top of the last.
+  layer.querySelectorAll(".drop-token").forEach((e) => e.remove());
 
   // pet_trap drop tokens on the Earth (public board info: cell -> number of traps;
   //  the next token ARRIVING on that cell is knocked back by -count, then consumed).
@@ -241,12 +264,78 @@ export function renderBoard(st, me, oppoName) {
       el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
       slot.appendChild(el);
     }
-    // visual states: filled slots / next slot (order 1->5) / not-yet-accessible slots
-    const n = Math.min(playedCount(st, name), N_STOPOVERS);
-    const next = n < N_STOPOVERS ? N_STOPOVERS - 1 - n : -1;
+    // pending placeholders (doctors, engine_version 16): a pending card placed
+    // THIS turn creates a placeholder in a stopover slot (like the refinery dwelling).
+    // p.pending_slots is the per-turn placeholder list (cleared in the cleaning
+    // phase — NOT parallel to the persistent p.pendings zone). Entry shapes:
+    // engine_version 19+ = [card, slot] pair; v16-18 = bare slot index (null = skip).
+    // Cleared in the cleaning phase, so placeholders only show during the placement turn.
+    slotEls[row].forEach(s => s.querySelectorAll(".pending-placeholder").forEach(e => e.remove()));
+    for (const entry of (p.pending_slots || [])) {
+      const [phCard, phCol] = Array.isArray(entry) ? entry : [null, entry];
+      if (phCol == null || phCol < 0 || phCol >= N_STOPOVERS) continue;
+      const slot = slotEls[row][phCol];
+      // v20: when the attached pending card was placed THIS turn, the placeholder
+      // STAYS (the engine keeps the [card, slot] pair — it marks the consumed
+      // trip-chain position). The action_chain records the attachment
+      // (pending_card), so the tooltip can say "attached" instead of "waiting".
+      const attached = !!phCard && (p.action_chain || []).some(a => a && a.pending_card === phCard);
+      const el = document.createElement("div");
+      el.className = "card pending-placeholder";
+      el.title = attached
+        ? `📎 Pending: ${phCard} (${name}) — attached to a card this turn; the placeholder holds its stopover position`
+        : `📎 Pending: ${phCard || "…"} (${name})`;
+      el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+      slot.appendChild(el);
+    }
+    // rooted (engine_version 10): a card that earned a rooted token LAST turn survives
+    // the cleaning phase — it sits on a free stopover (game.rooted_on_board:
+    // [{card_id, owner, stopover}]) and is discarded at the end of the FOLLOWING turn.
+    // Render it in its owner's row, at the stored stopover, with the rooted-token
+    // overlay so it reads as "stuck to the trip chain". Inert: no block, no effect —
+    // the visual survival IS the effect. (ALWAYS remove stale ones first: the slots
+    // are built once, not rebuilt on each render, so a removed-from-state card would
+    // otherwise stick in the DOM.)
+    // remove stale rooted cards AND any chip re-parented to the slot in a previous
+    // render (a layered slot moved its chip out of the card — it would orphan otherwise)
+    slotEls[row].forEach(s => {
+      s.querySelectorAll(".rooted-on-board").forEach(e => e.remove());
+      s.querySelectorAll(".rooted-token").forEach(e => e.remove());
+    });
+    for (const r of (st.rooted_on_board || [])) {
+      if (!r || r.owner !== name) continue;
+      const m = /^stopover_(\d+)/.exec(r.stopover || "");
+      if (!m) continue;
+      const col = parseInt(m[1], 10) % N_STOPOVERS;
+      const el = makeStaticCard(r.card_id, name);
+      el.classList.add("rooted-on-board");
+      el.title = `🌱 rooted — ${name}'s card survived the cleaning phase (discarded at the end of next turn)` + (el.title ? " — " + el.title : "");
+      el.insertAdjacentHTML("beforeend",
+        `<img class="rooted-token" src="/assets/effect_rooted.png" alt="rooted" onerror="this.onerror=null;this.src='/placeholder.svg'">`);
+      slotEls[row][col].appendChild(el);
+    }
+    // Defensive fallback (NOT the normal case): plays now SKIP reserved slots (a rooted
+    // card or a dwelling placeholder reserves its stopover column — see actions.mjs
+    // freeCols/nextSlotCol), so a played card and a rooted card should never share a
+    // slot. If a legacy/edge state does put them together, the rooted card goes BEHIND
+    // the played card (smaller, nudged up, tilted, lower z-index) and the rooted-token
+    // chip is RE-PARENTED to the slot (a sibling of the played card) so it escapes the
+    // rooted card's low z-index and stays clearly on top.
+    for (const s of slotEls[row]) {
+      const rooted = s.querySelector(".rooted-on-board");
+      if (!rooted) continue;
+      if (s.querySelector(".played")) {
+        rooted.classList.add("behind");
+        const chip = rooted.querySelector(".rooted-token");
+        if (chip) { chip.classList.add("chip-float"); s.appendChild(chip); }
+      }
+    }
+    // visual states: filled slots / next slot (PER-PLAYER position, v15) / not-yet-accessible slots
+    const free = freeCols(st, name);
+    const next = free.length > 0 ? nextSlotCol(st, name) : -1;
     for (let col = 0; col < N_STOPOVERS; col++) {
       const slot = slotEls[row][col];
-      slot.classList.toggle("filled", slot.querySelector(".played") !== null || slot.querySelector(".dwelling-placeholder") !== null);
+      slot.classList.toggle("filled", slot.querySelector(".played") !== null || slot.querySelector(".dwelling-placeholder") !== null || slot.querySelector(".rooted-on-board") !== null || slot.querySelector(".pending-placeholder") !== null);
       slot.classList.toggle("slot-next", row === "me" && col === next);
     }
   }
