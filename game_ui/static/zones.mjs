@@ -2,12 +2,12 @@
 "use strict";
 
 import { $, toast } from "./utils.mjs";
-import { cardEl } from "./cards.mjs";
+import { cardEl, isMageBlackHole } from "./cards.mjs";
 import { detectPhase, myTurn } from "./phase.mjs";
 import { game } from "./game.mjs";
 import { sendAction } from "./comm.mjs";
 import { checkMana } from "./state.mjs";
-import { playedCount, nextSlotCol, orderHint, dispatchPlay, freeCols } from "./actions.mjs";
+import { playedCount, nextSlotCol, orderHint, dispatchPlay, freeCols, showBlackHoleRotationPopup, showDefendPopup } from "./actions.mjs";
 import { N_STOPOVERS } from "./board.mjs";
 import { makeHandCard } from "./interaction.mjs";
 
@@ -80,35 +80,29 @@ export function renderMyZone(me, interactive) {
   }
   $("#my-mana-count").textContent = `${Math.max(nMana - nSpent, 0)}/${nMana}`;
 
-  // mana / discard drop zones
+  // mana drop zone (the discard pile panel is DISPLAY ONLY since the discard
+  // popup — showDiscardPopup, actions.mjs — replaced the drag-to-discard target)
   const ph = detectPhase(game.state);
   const canMana = interactive && (ph === "init-mana" || ph === "mana-pass");
-  const dzMana = $("#dz-mana"), dzDisc = $("#dz-discard");
+  const dzMana = $("#dz-mana");
   // waiting-for-mana phase (init: 3 cards / mana: 1 card or pass): the mana drop
   // pulses purple to signal "put a card here" (CSS: #dz-mana.mana-waiting)
   dzMana.classList.toggle("mana-waiting", canMana);
-  for (const dz of [dzMana, dzDisc]) {
-    dz.ondragover = (e) => {
-      if (!game.dragCardId) return;
-      e.preventDefault();
-      const ok = dz === dzMana ? canMana : true;   // discarding is always allowed
-      dz.classList.add(ok ? "over" : "invalid");
-    };
-    dz.ondragleave = () => dz.classList.remove("over", "invalid");
-    dz.ondrop = (e) => {
-      e.preventDefault();
-      dz.classList.remove("over", "invalid");
-      const id = game.dragCardId;
-      game.dragCardId = null;
-      if (!id || !me.hand.includes(id)) return;
-      if (dz === dzMana) {
-        if (!canMana) { toast("Cannot put mana in right now"); return; }
-        sendAction([id], "mana", "");
-      } else {
-        sendAction([id], "discard_pile", "");
-      }
-    };
-  }
+  dzMana.ondragover = (e) => {
+    if (!game.dragCardId) return;
+    e.preventDefault();
+    dzMana.classList.add(canMana ? "over" : "invalid");
+  };
+  dzMana.ondragleave = () => dzMana.classList.remove("over", "invalid");
+  dzMana.ondrop = (e) => {
+    e.preventDefault();
+    dzMana.classList.remove("over", "invalid");
+    const id = game.dragCardId;
+    game.dragCardId = null;
+    if (!id || !me.hand.includes(id)) return;
+    if (!canMana) { toast("Cannot put mana in right now"); return; }
+    sendAction([id], "mana", "");
+  };
 
   // action buttons
   $("#btn-play").onclick = async () => {
@@ -130,7 +124,10 @@ export function renderMyZone(me, interactive) {
     }
   };
 
-  // tap the dwelling (refinery): draw 1 card, once per turn (free action, play phase)
+  // tap the dwelling: refinery draws 1 / laboratory adds an 'epo' pending / black_hole
+  // rotates the earth 3 cells. Once per turn (free action, play phase). The black_hole
+  // needs a direction CHOICE (cw/ccw) -> a popup (engine_version 26, Mages);
+  // the other dwellings tap directly.
   const btnTap = $("#btn-tap");   // NOTE: local here - the one in renderAll is NOT in scope
   if (btnTap) btnTap.onclick = () => {
     if (!myTurn(game.state)) return;
@@ -138,31 +135,25 @@ export function renderMyZone(me, interactive) {
     if (!ph3 || ph3.kind !== "play") return;
     const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
     if (!meNow.dwelling || meNow.dwelling_tapped) return;
-    sendAction([], "dwelling", "dwelling_activation");
+    if (isMageBlackHole(meNow.dwelling)) {
+      showBlackHoleRotationPopup();
+    } else {
+      sendAction([], "dwelling", "dwelling_activation");
+    }
   };
 
-  // discard selection (engine_version 13): the trip chain is paused on
-  // "turn N - waiting for NAME to discard K card(s)" — send the chosen cards
-  const btnDiscard = $("#btn-discard");
-  if (btnDiscard) btnDiscard.onclick = async () => {
-    const ph2 = detectPhase(game.state);
-    if (!ph2 || ph2.kind !== "discard" || ph2.actor !== game.me) return;
-    if (game.selected.size !== ph2.n) { toast(`Select exactly ${ph2.n} card(s) to discard`); return; }
-    const resp = await sendAction([...game.selected], "discard_pile", "");
-    if (resp && resp.success === false) return;   // rejected: keep the selection
-    game.selected = new Set();
-  };
+  // discard selection (engine_version ≥ 13): the popup (showDiscardPopup, actions.mjs)
+  // is the interface — auto-opened by renderAll; no action-bar button any more.
 
   // defend button: the selected card is engaged at 90° on the next slot,
   // it blocks the opponent card placed on the SAME stopover
+  // "Play in defense" opens the multi-card defense popup (showDefendPopup,
+  // actions.mjs): the player toggles 1–5 main cards there (cost = Σ mana,
+  // shield = Σ shields) and confirms — no pre-selection in hand is required.
   $("#btn-defend").onclick = () => {
     const ph2 = detectPhase(game.state);
     if (!ph2 || ph2.kind !== "play" || !myTurn(game.state)) return;
-    if (game.selected.size !== 1) return;
-    if (freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
-    const id = [...game.selected][0];
-    if (!checkMana(id)) return;
-    sendAction([id], `stopover_${nextSlotCol(game.state, game.me)}`, "defend");
+    showDefendPopup();
   };
 
   $("#btn-pass").onclick = () => {

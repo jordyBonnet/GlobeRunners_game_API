@@ -121,7 +121,48 @@ export const DOCTOR_PENDING = {
 export const DOCTOR_DWELLING = "laboratory";   // tap once/turn -> adds an 'epo' pending card
 export const isDoctorPending   = (id) => !!DOCTOR_PENDING[id];
 export const isDoctorDwelling  = (id) => id === DOCTOR_DWELLING;
-export const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id) || isDoctorPending(id) || isDoctorDwelling(id);
+
+/* ---------------- Mages support faction (engine_version 22) ---------------- */
+// 5 cards, implemented card by card. Celestial_reversal (first, v22): an INSTANT
+// play-time effect — the player CHOOSES day or night (sent in the action message as
+// `day_night`) and it is FIXED for the rest of the game (the day/night no longer
+// flips each turn). Played in MOVE mode onto a stopover, resolves as a no-op (like
+// a placeholder).
+export const MAGE_CELASTIAL_REVERSAL = "Celestial_reversal";
+export const isMageCelestial = (id) => id === MAGE_CELASTIAL_REVERSAL;
+// Mages `nobodymoves` (engine_version 23): an INSTANT play-time effect — it BLOCKS
+// ALL PLAYERS for the rest of the turn (their MOVE cards are canceled, only
+// "unstoppable" cards may advance; DEFEND unaffected). Played in MOVE mode onto a
+// stopover, resolves as a no-op (like a placeholder). No choice to make — the block
+// is automatic (no popup, no cell selection), so it plays through the normal move path.
+export const MAGE_NOBODYMOVES = "nobodymoves";
+export const isMageNobodyMoves = (id) => id === MAGE_NOBODYMOVES;
+// Mages `thermic_flux` (engine_version 24): an INSTANT play-time effect — the player
+// CHOOSES +4 °C or −4 °C (sent in the action message as `temp_change`: "up"|"down")
+// and the planet temperature changes by that amount, CLAMPED to 1..20, PERMANENTLY.
+// Played in MOVE mode onto a stopover, resolves as a no-op (like a placeholder).
+// Needs a popup to pick the direction (like Celestial_reversal's day/night popup).
+export const MAGE_THERMIC_FLUX = "thermic_flux";
+export const isMageThermicFlux = (id) => id === MAGE_THERMIC_FLUX;
+// Mages `Apocalypticritual` (engine_version 25): an INSTANT play-time effect — the
+// player CHOOSES THE ORDER OF ALL 4 CATACLYSM CARDS (sent in the action message as
+// `cataclysm_order`: a permutation of the 4 biomes, index 0 = strikes next) and the
+// cataclysm pile is SET to that order, PERMANENTLY (until the next ritual).
+// Played in MOVE mode onto a stopover, resolves as a no-op (like a placeholder).
+// Needs a popup to arrange the 4 biomes (like Celestial_reversal / thermic_flux).
+export const MAGE_APOCALYPTICRITUAL = "Apocalypticritual";
+export const isMageApocalypticritual = (id) => id === MAGE_APOCALYPTICRITUAL;
+// Mages `black_hole` (engine_version 26): a DWELLING card (like the refinery /
+// laboratory) — NOT an instant-at-play card. It is PLACED in the dwelling zone
+// (to: "dwelling") and its effect fires on a TAP: it ROTATES THE EARTH 3 CELLS in the
+// player's chosen direction (sent in the tap message as `rotation`: "cw"|"ccw"). The
+// 4 biomes shift position on the board while every token (players, drops, traps) stays
+// on its cell. The tap is free + once per turn, and needs a popup to pick the direction
+// (like Celestial_reversal's day/night popup).
+export const MAGE_BLACK_HOLE = "black_hole";
+export const isMageBlackHole = (id) => id === MAGE_BLACK_HOLE;
+
+export const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id) || isDoctorPending(id) || isDoctorDwelling(id) || isMageCelestial(id) || isMageNobodyMoves(id) || isMageThermicFlux(id) || isMageApocalypticritual(id) || isMageBlackHole(id);
 
 /* ---------------- factions & support factions ---------------- */
 export const FACTIONS = [

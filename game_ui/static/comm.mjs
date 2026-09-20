@@ -37,10 +37,20 @@ export function connectWs() {
   ws.onclose = () => setConn(false);
 }
 
-export function sendAction(cards, to, mode, pendings = [], cell = null) {
+export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight = null, tempChange = null, cataclysmOrder = null, rotation = null) {
   /* sends an action and resolves with the server's reply (state or rejection).
      Sends are serialized: one WS message at a time.
-     `cell` (0-23): target earth cell for an engineer drop placement (engine_version 12). */
+     `cell` (0-23): target earth cell for an engineer drop placement (engine_version 12).
+     `dayNight` ('day'/'night'): the Mages Celestial_reversal day/night choice
+     (engine_version 22) — sent as the message `day_night` field.
+     `tempChange` ('up'/'down'): the Mages thermic_flux +4/−4 °C choice
+     (engine_version 24) — sent as the message `temp_change` field.
+     `cataclysmOrder` (4-biome permutation, e.g. ['OC','DE','JU','MO']): the Mages
+     Apocalypticritual cataclysm-order choice (engine_version 25) — sent as the
+     message `cataclysm_order` field (index 0 = strikes next).
+     `rotation` ('cw'/'ccw'): the Mages black_hole DWELLING tap direction
+     (engine_version 26) — sent as the message `rotation` field (only for a
+     dwelling_activation tap of the black_hole; omitted for every other action). */
   return new Promise((resolve) => {
     const doSend = () => {
       if (!game.ws || game.ws.readyState !== WebSocket.OPEN) {
@@ -52,6 +62,10 @@ export function sendAction(cards, to, mode, pendings = [], cell = null) {
       pendingResolvers.push(resolve);
       const msg = { cards: cards || [], to: to || "", mode: mode || "", pendings };
       if (cell != null) msg.cell = cell;
+      if (dayNight != null) msg.day_night = dayNight;
+      if (tempChange != null) msg.temp_change = tempChange;
+      if (cataclysmOrder != null) msg.cataclysm_order = cataclysmOrder;
+      if (rotation != null) msg.rotation = rotation;
       game.ws.send(JSON.stringify(msg));
     };
     doSend();

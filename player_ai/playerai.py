@@ -11,6 +11,7 @@ class PlayerAI:
 		self.temperature = None     # planet temperature (set via update_player_state)
 		self.day_night = None       # current day/night phase (set via update_player_state)
 		self.drops_on_board = None  # any drop/trap on the earth (set via update_player_state)
+		self.engine_version = None  # rules version of the game (set via update_player_state)
 		CARDS_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/cardpool.parquet')
 		self.CARDS_DB = pl.read_parquet(CARDS_DB_PATH)
 		# support-faction cards (engineers/mages/doctors) - NOT in cardpool. The robot
@@ -101,6 +102,15 @@ class PlayerAI:
 			# < 9: canonical default = met). Unknown (no board info) -> not met,
 			# like the other board-dependent conditions (biome).
 			return bool(self.drops_on_board)
+		if condition == 'pending':
+			# pending (rule of engine_version 21): met iff at least one pending card in
+			# the player's OWN pending zone (the doctors' pending zone). Old games
+			# (< 21) keep the canonical default = met (the condition was unimplemented
+			# in those games). The robot never plays support cards, so its pending zone
+			# is always empty -> the condition is correctly not met for it.
+			if self.engine_version is not None and self.engine_version < 21:
+				return True
+			return len(self.player_state.pendings or []) >= 1
 		dist_match = re.match(r'^dist_(ahead|behind)_sup_(\d+)$', condition)
 		if dist_match:
 			if self.oppo_position is None:
@@ -200,4 +210,5 @@ class PlayerAI:
 					or any((c and ('trap' in c or 'drop' in c)) for c in (game.earth or []))
 					or any((d and d.get('cell') is not None) for d in (game.board_drops or []))   # engineers' drops (engine_version 12)
 				)
+			self.engine_version = game.engine_version
 		

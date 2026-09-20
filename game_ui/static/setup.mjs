@@ -184,13 +184,13 @@ export function initSetup() {
       const picked = ids.slice(0, MAIN_DECK_SIZE);
       const dupes = picked.filter((id, i, arr) => arr.indexOf(id) !== i);
       $("#csv-filename").textContent = `${file.name} — ${ids.length} card(s)` + (unknown.length ? `, ${unknown.length} unknown: ${unknown.slice(0, 3).join(", ")}` : "") + (dupes.length ? `, DUPLICATES: ${[...new Set(dupes)].slice(0, 3).join(", ")}` : "");
-      if (!ids.length) { toast("No card found in this CSV"); return; }
-      if (dupes.length) { toast(`CSV contains duplicate card(s) — a card can only appear once: ${[...new Set(dupes)].join(", ")}`); return; }
+      if (!ids.length) { toast("No card found in this file"); return; }
+      if (dupes.length) { toast(`File contains duplicate card(s) — a card can only appear once: ${[...new Set(dupes)].join(", ")}`); return; }
       setup.deck = picked;
       renderDeckPreview();
       updateLaunchBtn();
     } catch (err) {
-      toast(`Erreur de lecture du CSV : ${err.message}`);
+      toast(`Erreur de lecture du fichier : ${err.message}`);
     }
   };
 

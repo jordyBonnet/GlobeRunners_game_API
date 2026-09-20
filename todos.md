@@ -4,5 +4,7 @@ Bug fixes
 Visuals
 
 
-Others
-- integrate support faction cards being playable for IA
+AI
+- ask llm to create a plan to improve AI with all the effects, conditions, and new support factions. then apply the plan by steps.
+
+

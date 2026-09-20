@@ -5,13 +5,13 @@
 "use strict";
 
 import { $, toast } from "./utils.mjs";
-import { cardCost, cardName, isEngineerDrop, isEngineerDwelling, isSupportPlay } from "./cards.mjs";
+import { cardCost, cardName, isEngineerDrop, isEngineerDwelling, isDoctorDwelling, isMageBlackHole, isSupportPlay } from "./cards.mjs";
 import { detectPhase, myTurn, START_MANA_N } from "./phase.mjs";
 import { game, cellSelect } from "./game.mjs";
 import { renderOppZone, renderMyZone, renderSideRows } from "./zones.mjs";
 import { renderBoard, slotEls, N_STOPOVERS } from "./board.mjs";
 import { renderLog } from "./log.mjs";
-import { canDropOnStopover } from "./actions.mjs";
+import { canDropOnStopover, showDiscardPopup, freeCols } from "./actions.mjs";
 
 // client-side guard: card cost vs available mana (mana zone - mana spent).
 // The engine would reject the play ("not enough mana") but that rejection is easy
@@ -84,11 +84,12 @@ export function renderAll() {
     canAct = myTurn(st);
     hint = canAct ? "Put your card on the next stopover cell (in order 1→5), or “Pass”." : "Waiting for the opponent…";
   } else if (ph && ph.kind === "discard") {
-    // discard selection (engine_version 13): the trip chain is paused
+    // discard selection (engine_version 13): the trip chain is paused — the popup
+    // (showDiscardPopup, actions.mjs) is the interface; hand cards re-open it
     if (ph.actor === game.me) {
       phaseText = `Discard selection — choose ${ph.n} card(s) to discard`;
       canAct = true;
-      hint = `Click ${ph.n} card(s) in your hand, then press the red DISCARD button.`;
+      hint = `The discard popup lists your hand — pick exactly ${ph.n} card(s) and press the red DISCARD button. (Click any hand card to reopen it.)`;
     } else {
       phaseText = `Waiting for ${ph.actor} to discard ${ph.n} card(s)…`;
       hint = "";
@@ -101,33 +102,48 @@ export function renderAll() {
   $("#phase-label").textContent = phaseText;
   $("#action-hint").textContent = hint;
 
-  const btnPlay = $("#btn-play"), btnDefend = $("#btn-defend"), btnPass = $("#btn-pass"), btnTap = $("#btn-tap"), btnDiscard = $("#btn-discard");
+  const btnPlay = $("#btn-play"), btnDefend = $("#btn-defend"), btnPass = $("#btn-pass"), btnTap = $("#btn-tap");
+  // discard popup (engine_version ≥ 13): auto-open when the chain is paused on MY
+  // discard choice (idempotent — renderAll runs on every poll); sweep it away as
+  // soon as the phase is over (the answer was accepted / the game moved on).
+  const myDiscard = ph && ph.kind === "discard" && ph.actor === game.me;
+  if (myDiscard) showDiscardPopup(ph.n);
+  else document.querySelectorAll(".discard-popup").forEach((m) => m.remove());
+  // Defend popup (multi-card defense): user-initiated (the #btn-defend click opens
+  // showDefendPopup), but must be closed as soon as the phase leaves MY PLAY TURN
+  // (opponent acted, turn ended, game over, or a discard pause). renderAll runs on
+  // every poll, so sweep it here (a no-op while it is validly open).
+  if (!(ph && ph.kind === "play" && myTurn(st)))
+    document.querySelectorAll(".defend-popup").forEach((m) => m.remove());
   const selCard = (game.selected.size === 1) ? [...game.selected][0] : null;
   const selIsDrop = selCard && isEngineerDrop(selCard);
-  const selIsDwelling = selCard && isEngineerDwelling(selCard);
-  const canDefend = canAct && ph && ph.kind === "play" && !!selCard && !isSupportPlay(selCard);
+  const selIsDwelling = selCard && (isEngineerDwelling(selCard) || isDoctorDwelling(selCard) || isMageBlackHole(selCard));
+  // Defend (1–5 MAIN cards at once): the selector is showDefendPopup (actions.mjs).
+  // Enabled when it's my play turn, a free position remains, and I hold at least
+  // one defendable (main-faction) card. No pre-selection in hand is required —
+  // the selection happens inside the popup.
+  const myHandCards = (me && me.hand) || [];
+  const canDefend = canAct && ph && ph.kind === "play"
+    && freeCols(st, game.me).length > 0
+    && myHandCards.some((id) => !isSupportPlay(id));
   // dwelling tap: I have a dwelling card, it's untapped, and it's my play turn
   const canTap = canAct && ph && ph.kind === "play" && !!me.dwelling && !me.dwelling_tapped;
   if (ph === "init-mana") {
+    btnPlay.classList.remove("hidden");   // the discard branch hides btnPlay; un-hide it for the phases that show it
     btnPlay.textContent = "Poser en mana";
     btnPlay.disabled = !canAct || game.selected.size === 0;
     btnPass.classList.add("hidden");
     btnDefend.classList.add("hidden");
     btnTap.classList.add("hidden");
-    btnDiscard.classList.add("hidden");
   } else if (ph && ph.kind === "discard") {
-    // discard selection (engine_version 13): the red DISCARD button is the only action
+    // discard selection (engine_version 13): the POPUP is the only action — all
+    // action-bar buttons stay hidden (the popup has its own red DISCARD button)
     btnPlay.classList.add("hidden");
     btnDefend.classList.add("hidden");
     btnPass.classList.add("hidden");
     btnTap.classList.add("hidden");
-    if (ph.actor === game.me) {
-      btnDiscard.classList.remove("hidden");
-      btnDiscard.disabled = game.selected.size !== ph.n;
-    } else {
-      btnDiscard.classList.add("hidden");
-    }
   } else if (ph === "mana-pass" || ph.kind === "play") {
+    btnPlay.classList.remove("hidden");   // the discard branch hides btnPlay; un-hide it for the phases that show it
     if (selIsDrop) btnPlay.textContent = "📍 Place drop (pick a cell)";
     else if (selIsDwelling) btnPlay.textContent = "🏠 Place dwelling";
     else btnPlay.textContent = "Play the card";
@@ -143,7 +159,6 @@ export function renderAll() {
     btnDefend.disabled = true;
     btnPass.disabled = true;
     btnTap.classList.add("hidden");
-    btnDiscard.classList.add("hidden");
   }
 
   const interactive = canAct && (ph === "init-mana" || ph === "mana-pass"

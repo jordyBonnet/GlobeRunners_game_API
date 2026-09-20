@@ -523,8 +523,29 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
             action_chain=[],
         )
 
-    # biomes are static during a game -> reuse final earth (strip player tokens)
+    # biomes are static during a game (pre-v26) -> reuse final earth (strip player tokens)
     earth = [[cell[0]] for cell in state_dict.get("earth") or [] if cell]
+    # black_hole (Mages, engine_version 26): the stored FINAL earth is the POST-rotation
+    # order. Reconstruct the INITIAL earth (turn 1, pre-rotation) by reversing the total
+    # rotation (the sum of all black_hole tap directions, in chronological order). The
+    # rotation is commutative (rotating by a then b == rotating by a+b), so only the total
+    # matters: the engine's rotate_earth(n) gives final[i] = initial[(i - n) mod 24], so
+    # the reversal is initial[i] = final[(i + R) mod 24] with R = sum of all tap deltas.
+    # Tokens are addressed by cell index, so they are unaffected (re-added below).
+    if earth and (state_dict.get("engine_version") or 0) >= 26:
+        _R = 0
+        for _n in names:
+            for _t in (segs.get(_n, {}).get("turns") or []):
+                for _m in (_t.get("moves") or []):
+                    if _m.get("to") == "dwelling" and _m.get("mode") == "dwelling_activation" \
+                            and _m.get("rotation") in ("cw", "ccw"):
+                        _R += 3 if _m["rotation"] == "cw" else -3
+        _R %= 24
+        if _R:
+            _n24 = len(earth)
+            _final_codes = [c[0] for c in earth]
+            for i in range(_n24):
+                earth[i][0] = _final_codes[(i + _R) % _n24]
     for name in turn_order:  # both players start on cell 0
         if earth:
             earth[0].append(name)
@@ -537,15 +558,24 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
         state="replay",
         earth=earth,
         winner=None,
-        temperature=state_dict.get("temperature"),
+        # Mages thermic_flux (engine_version 24): seed the temperature from the INITIAL
+        # rolled value (temperature_initial) so temp_* conditions are evaluated against
+        # the pre-change value — the stored `temperature` is the FINAL value, which would
+        # be wrong for a temp_* condition resolved BEFORE a thermic_flux. Old games (< 24)
+        # have temperature_initial = None, so fall back to the stored `temperature` (the
+        # two are equal when no thermic_flux was played).
+        temperature=state_dict.get("temperature_initial") or state_dict.get("temperature"),
         day_night="day",
         engine_version=state_dict.get("engine_version"),
     )
 
-    # --- cataclysm pile (rule of engine_version 3) ---
-    # The stored FINAL state holds the pile AFTER all its rotations. Each trigger
-    # takes the top card and puts it at the bottom (pure rotation), so the cycle
-    # order is identical and only the starting card must be rewound:
+    # --- cataclysm pile (rule of engine_version 3; reorderable since 25) ---
+    # The stored FINAL state holds the pile AFTER all its rotations (and after all
+    # Apocalypticritual reorders, engine_version 25).
+    #
+    # NO RITUAL in the game (the common case): each trigger takes the top card
+    # and puts it at the bottom (pure rotation), so the cycle order is identical
+    # and only the starting card must be rewound:
     #   initial = final rotated RIGHT by k, where k = number of triggers in the game.
     # A trigger fires ONLY when a 'cataclysm'-condition card actually RESOLVES
     # (move mode, not blocked, chain not cut short by a win). A BLOCKED cataclysm
@@ -553,30 +583,58 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
     # counting all such cards would over-rewind the pile and shift every strike.
     # Count k from the stored game log instead: the engine writes exactly one
     # '⚡ cataclysm — <biome> strikes' note per actual trigger.
+    #
+    # RITUAL in the game (engine_version 25): Apocalypticritual SETS the pile to
+    # the player's chosen order, so the final pile is NOT a rotation of the
+    # initial one. But the initial pile only matters for the strikes BEFORE the
+    # first ritual: strike i before the first ritual is the i-th element of the
+    # initial pile. So: initial = [strike_1, …, strike_min(i,4)] + (the biomes not
+    # in that prefix, in BIOMES order). The ritual overwrites the pile, so the
+    # tail is unobservable — any completion works; BIOMES order keeps it
+    # deterministic. (Verified by the forward simulation: the strikes before the
+    # ritual match the log, the ritual sets the pile, the strikes after are fully
+    # determined by the chosen order.)
     final_pile = list(state_dict.get("cataclysm_pile") or [])
     if (game.engine_version or 0) >= 3 and final_pile:
-        k = 0
+        # chronological event list from the log: ('strike', biome) /
+        # ('ritual', None), in the order the engine wrote them (turn → stopover →
+        # entry → note)
+        events = []
         for t in (state_dict.get("log") or []):
             for s in t.get("stopovers") or []:
                 for e in s.get("entries") or []:
-                    if any(str(n).startswith("⚡ cataclysm —") for n in (e.get("notes") or [])):
-                        k += 1
-        if k == 0 and not (state_dict.get("log") or []):
-            # no stored log (game predates the log feature): best effort — count
-            # the cataclysm move cards (a blocked one would over-rewind by one,
-            # a rare edge case for those old games)
-            for seg in segs.values():
-                for t in seg.get("turns") or []:
-                    for m in t.get("moves") or []:
-                        if (m.get("mode") or "") != "move":
-                            continue
-                        for cid in m.get("cards") or []:
-                            row = _card_row(cid)
-                            if row and row.get("condition") == "cataclysm":
-                                k += 1
-        k %= len(final_pile)
-        if k:
-            final_pile = final_pile[-k:] + final_pile[:-k]   # rewind the rotations
+                    for n in (e.get("notes") or []):
+                        n = str(n)
+                        if n.startswith("⚡ cataclysm —"):
+                            biome = n.split("—", 1)[1].strip().split(" ", 1)[0]
+                            events.append(("strike", biome))
+                        elif n.startswith("☄️ Apocalypticritual"):
+                            events.append(("ritual", None))
+        first_ritual = next((i for i, (kind, _) in enumerate(events) if kind == "ritual"), None)
+        if first_ritual is None:
+            # no ritual: the pile only rotated — rewind it (the original logic)
+            k = sum(1 for kind, _ in events if kind == "strike")
+            if k == 0 and not (state_dict.get("log") or []):
+                # no stored log (game predates the log feature): best effort —
+                # count the cataclysm move cards (a blocked one would over-rewind
+                # by one, a rare edge case for those old games)
+                for seg in segs.values():
+                    for t in seg.get("turns") or []:
+                        for m in t.get("moves") or []:
+                            if (m.get("mode") or "") != "move":
+                                continue
+                            for cid in m.get("cards") or []:
+                                row = _card_row(cid)
+                                if row and row.get("condition") == "cataclysm":
+                                    k += 1
+            k %= len(final_pile)
+            if k:
+                final_pile = final_pile[-k:] + final_pile[:-k]   # rewind the rotations
+        else:
+            # ritual played: the initial pile is pinned by the pre-ritual strikes
+            pre_strikes = [biome for kind, biome in events[:first_ritual] if kind == "strike"]
+            prefix = [b for b in pre_strikes[:len(final_pile)] if b in set(final_pile)]
+            final_pile = prefix + [b for b in ge.BIOMES if b not in prefix]
     game.cataclysm_pile = final_pile or None   # None -> trigger is a no-op (pre-cataclysm rules)
     return game, ctxs
 
@@ -849,17 +907,23 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
             # advancement (pos_after - pos_before), so the two copies don't recurse.
             f = row.get(first_name)
             s = row.get(second_name)
+            f_entry = _entry_at(chain_f, p) if f else None
+            s_entry = _entry_at(chain_s, p) if s else None
             # the engine returns IMMEDIATELY on a mid-chain win (before any
             # grappling copy) - so a copy must not fire when the game ended on the
             # facing card (mirrors the game-over checks around apply_grappling_copy
-            # in ge.process_trip_chain)
+            # in ge.process_trip_chain).
+            # nobodymoves (engine_version 23): a movement-locked copier does NOT
+            # copy its facing advancement (the copy is movement); an UNSTOPPABLE
+            # copier (condition met) still copies. (For landmine the card was
+            # canceled, so grappling_activated is False and this is never reached.)
             if game.state != "game over" and f and f.get("grappling_activated") and \
-                    not ge._player_blocked(game.players[first_name], game):
+                    f_entry and not ge._is_movement_locked(game, game.players[first_name], f_entry.get("action") or {}):
                 s_adv = (s.get("pos_after", 0) - s.get("pos_before", 0)) if s else 0
                 ge.apply_grappling_copy(game, game.players[first_name],
                                        ge.grappling_copy_amount(game, s_adv))
             if game.state != "game over" and s and s.get("grappling_activated") and \
-                    not ge._player_blocked(game.players[second_name], game):
+                    s_entry and not ge._is_movement_locked(game, game.players[second_name], s_entry.get("action") or {}):
                 f_adv = (f.get("pos_after", 0) - f.get("pos_before", 0)) if f else 0
                 ge.apply_grappling_copy(game, game.players[second_name],
                                        ge.grappling_copy_amount(game, f_adv))
@@ -877,14 +941,21 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                 c_info, o_info = row.get(copier_nm), row.get(facing_nm)
                 if not (c_info and o_info and c_info.get("copy_activated") and o_info.get("effect_activated")):
                     continue
-                # landmine (engine_version 12): a blocked player does not copy
-                if ge._player_blocked(game.players[copier_nm], game):
-                    continue
                 # both entries at this position must be PLAYS (rooted entries
                 # never fire an effect - a copy never fires when facing a rooted card)
                 c_entry = _entry_at(chain_f if copier_nm == first_name else chain_s, p)
                 o_entry = _entry_at(chain_f if facing_nm == first_name else chain_s, p)
                 if not (c_entry and o_entry and c_entry['kind'] == 'play' and o_entry['kind'] == 'play'):
+                    continue
+                # landmine (engine_version 12): a blocked player does not copy (for
+                # landmine the card was canceled, so copy_activated is False and this
+                # is never reached - kept for clarity).
+                # nobodymoves (engine_version 23): a movement-locked copier copies ONLY
+                # a non-movement (zone) effect; a movement-effect copy is suppressed.
+                # An UNSTOPPABLE copier (condition met) copies regardless (it still
+                # moves, so its copy fires).
+                if ge._is_movement_locked(game, game.players[copier_nm], c_entry.get("action") or {}) \
+                        and o_info.get("effect") in ge.MOVEMENT_EFFECTS:
                     continue
                 # pin the cards the copy will move (the facing card's zone-moving
                 # effect, applied with the copier as the actor) before the engine pops them
@@ -995,6 +1066,13 @@ def analyze_game(state_dict: dict) -> dict:
     turns_out: list[dict] = []
     turn_order = list(game.turn_order)
     day_night = "day"
+    day_night_fixed = False   # Mages Celestial_reversal (engine_version 22): once a
+    # Celestial_reversal card is played, the day/night is FIXED (set to the player's
+    # choice) and no longer flips each turn - the flip below is then skipped.
+    nobodymoves_active = False  # Mages nobodymoves (engine_version 23): once a
+    # nobodymoves card is played, ALL players' MOVEMENT is LOCKED for the rest of the turn
+    # (their MOVE cards are canceled, only unstoppable may advance). Reset every turn
+    # (the block lasts until the end of the turn, like landmine).
     ended: dict | None = None
 
     for t in range(1, total_turns + 1):
@@ -1050,7 +1128,23 @@ def analyze_game(state_dict: dict) -> dict:
                 # chain - they resolved immediately at play time (mirror of ge.player_play).
                 if m.get("to") == "dwelling" and (game.engine_version or 0) >= 12:
                     if m.get("mode") == "dwelling_activation":
-                        if p.dwelling == "laboratory" and (game.engine_version or 0) >= 16:
+                        if p.dwelling == ge.MAGE_BLACK_HOLE and (game.engine_version or 0) >= 26 \
+                                and m.get("rotation") in ("cw", "ccw"):
+                            # black_hole tap (Mages, engine_version 26): ROTATES THE EARTH 3
+                            # CELLS in the player's chosen direction. A QUICK action (no trip
+                            # chain) processed in the play-phase message loop, BEFORE the trip
+                            # chain resolves — mirroring the engine (the tap is a quick action,
+                            # so the rotation is applied before the chain's biome conditions /
+                            # biome bonus / cataclysm knockback are evaluated). The 4 biomes
+                            # shift position in game.earth; every token stays on its cell index.
+                            _buf_bh = io.StringIO()
+                            with contextlib.redirect_stdout(_buf_bh):
+                                ge.rotate_earth(game, +3 if m["rotation"] == "cw" else -3)
+                            if p.dwelling:
+                                p.dwelling_tapped = True
+                                events.append({"player": n, "type": "black_hole_tap",
+                                              "card": "black_hole", "rotation": m["rotation"]})
+                        elif p.dwelling == "laboratory" and (game.engine_version or 0) >= 16:
                             # laboratory tap (doctors, v16): adds an 'epo' pending card (NOT a draw)
                             if p.pendings is None: p.pendings = []
                             if p.pending_slots is None: p.pending_slots = []
@@ -1142,6 +1236,51 @@ def analyze_game(state_dict: dict) -> dict:
                 # at play time on the message's 'cell' - record the event for the UI
                 if (game.engine_version or 0) >= 12 and cid in ge.ENGINEER_DROPS and m.get("cell") is not None:
                     events.append({"player": n, "type": "drop_place", "card": cid, "cell": int(m["cell"])})
+                # Mages Celestial_reversal (engine_version 22): the INSTANT effect fired
+                # at play time (BEFORE the trip chain) - the day/night is FIXED to the
+                # player's choice (message 'day_night') for the rest of the game. The
+                # card itself is a no-op on the chain (support card: advancing 0).
+                if ((game.engine_version or 0) >= 22 and cid == ge.MAGE_CELASTIAL_REVERSAL
+                        and m.get("day_night") in ("day", "night")):
+                    day_night = m["day_night"]
+                    day_night_fixed = True
+                    game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
+                    events.append({"player": n, "type": "celestial_reversal", "card": cid, "day_night": day_night})
+                # Mages thermic_flux (engine_version 24): the INSTANT effect fired at
+                # play time (BEFORE the trip chain) - the planet temperature changes by
+                # ±4 °C to the player's choice (message 'temp_change': 'up'/'down'),
+                # CLAMPED to 1..20, PERMANENTLY. The card itself is a no-op on the chain
+                # (support card: advancing 0). Mutate game.temperature so the temp_*
+                # conditions read the new value at resolution time.
+                if ((game.engine_version or 0) >= 24 and cid == ge.MAGE_THERMIC_FLUX
+                        and m.get("temp_change") in ("up", "down")):
+                    _old_temp = game.temperature
+                    _delta = 4 if m["temp_change"] == "up" else -4
+                    _new_temp = max(1, min(20, (_old_temp or 0) + _delta))
+                    game.temperature = _new_temp   # keep the ENGINE state in sync (is_condition_met reads it)
+                    events.append({"player": n, "type": "thermic_flux", "card": cid,
+                                   "from": _old_temp, "to": _new_temp})
+                # Mages nobodymoves (engine_version 23): the INSTANT effect fired at play
+                # time (BEFORE the trip chain) - ALL players are BLOCKED for the rest of
+                # the turn (MOVE cards canceled, only unstoppable may advance). The card
+                # itself is a no-op on the chain (support card: advancing 0). The block
+                # is game-level and applies to the trip chain resolution below.
+                if (game.engine_version or 0) >= 23 and cid == ge.MAGE_NOBODYMOVES:
+                    nobodymoves_active = True
+                    game.nobodymoves_active = True   # keep the ENGINE state in sync (process_card reads it)
+                    events.append({"player": n, "type": "nobodymoves", "card": cid})
+                # Mages Apocalypticritual (engine_version 25): the INSTANT effect fired
+                # at play time (BEFORE the trip chain) - the ORDER OF ALL 4 CATACLYSM
+                # CARDS is SET to the player's choice (message 'cataclysm_order': a
+                # permutation of the 4 biomes, index 0 strikes next), PERMANENTLY
+                # (until the next ritual). The card itself is a no-op on the chain
+                # (support card: advancing 0). Mutate game.cataclysm_pile so the
+                # real trigger_cataclysm (called by process_card) reads the new order.
+                if ((game.engine_version or 0) >= 25 and cid == ge.MAGE_APOCALYPTICRITUAL
+                        and isinstance(m.get("cataclysm_order"), list)):
+                    game.cataclysm_pile = list(m["cataclysm_order"])   # keep the ENGINE state in sync (trigger_cataclysm reads it)
+                    events.append({"player": n, "type": "apocalypticritual", "card": cid,
+                                   "order": list(m["cataclysm_order"])})
                 if cid in (p.hand or []):
                     p.hand.remove(cid)
                 p.mana_spend += _card_cost(cid)
@@ -1215,8 +1354,17 @@ def analyze_game(state_dict: dict) -> dict:
 
         # prepare next turn (engine order: flip order, reset spend/chains, flip day/night)
         turn_order = list(reversed(turn_order))
-        day_night = "night" if day_night == "day" else "day"
-        game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
+        # flip day/night each new turn - SKIPPED once a Mages Celestial_reversal card
+        # (engine_version 22) fixed it (day_night_fixed set above; the engine skips the
+        # same flip in _end_turn when game.day_night_fixed is True).
+        if not day_night_fixed:
+            day_night = "night" if day_night == "day" else "day"
+            game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
+        # nobodymoves (engine_version 23): the movement lock lasts until the end of
+        # the turn - reset the game-level flag (the engine clears it in _end_turn).
+        # A no-op for games < 23 (the field defaults to False and is never set).
+        nobodymoves_active = False
+        game.nobodymoves_active = False
         for n in names:
             game.players[n].mana_spend = 0
             game.players[n].action_chain = []
@@ -1294,6 +1442,33 @@ def analyze_game(state_dict: dict) -> dict:
         sp_d = state_dict["players"][n].get("dwelling") or None
         if rp_d != sp_d:
             warnings.append(f"{n}: dwelling diverges (replayed {rp_d}, stored {sp_d})")
+
+    # thermic_flux (engine_version 24): the replay tracks the temperature from the
+    # initial rolled value + the thermic_flux changes; the final tracked value must
+    # match the stored `temperature`. (For games < 24 the replay uses the stored value
+    # as-is, so this is always equal.)
+    stored_temp = state_dict.get("temperature")
+    replayed_temp = game.temperature
+    if stored_temp != replayed_temp:
+        warnings.append(f"temperature diverges (replayed {replayed_temp}, stored {stored_temp})")
+
+    # Apocalypticritual (engine_version 25) + cataclysm triggers: the replay tracks
+    # the pile from the reconstructed initial order + the ritual reorders + the
+    # trigger rotations; the final tracked pile must match the stored one.
+    stored_pile = list(state_dict.get("cataclysm_pile") or [])
+    replayed_pile = list(game.cataclysm_pile or [])
+    if stored_pile != replayed_pile:
+        warnings.append(f"cataclysm pile diverges (replayed {replayed_pile}, stored {stored_pile})")
+
+    # black_hole (engine_version 26): the replay reconstructs the INITIAL earth (the
+    # stored final earth reversed by the total rotation) and applies each black_hole tap
+    # in order; the final biome codes must match the stored final earth. (Tokens are
+    # addressed by cell index and are checked separately via the final positions.)
+    if (game.engine_version or 0) >= 26:
+        stored_earth_codes = [c[0] for c in (state_dict.get("earth") or []) if c]
+        replayed_earth_codes = [c[0] for c in (game.earth or []) if c]
+        if stored_earth_codes != replayed_earth_codes:
+            warnings.append(f"earth biomes diverge (replayed {replayed_earth_codes}, stored {stored_earth_codes})")
 
     verified = positions_ok and (state_dict.get("state") != "game over" or ended is not None)
     if not positions_ok:

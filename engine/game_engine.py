@@ -54,6 +54,65 @@ ENGINEER_DWELLING = 'refinery'   # tap effect: draw 1 card
 DOCTOR_PENDING = ('epo', 'virus', 'bloodtest', 'mercurochrome')
 DOCTOR_DWELLING = 'laboratory'   # tap effect: add an 'epo' pending card
 
+# Mages (support faction, engine_version 22 — first card implemented, card by card)
+# Celestial_reversal (mana_cost 2): an INSTANT play-time effect — the player CHOOSES
+# day or night (message 'day_night': 'day' or 'night') and it is FIXED for the rest
+# of the game (game.day_night set to the choice, game.day_night_fixed = True, so the
+# day/night no longer flips each turn). The card is played in MOVE mode onto a stopover
+# (it occupies a position) and resolves as a NO-OP (not in the main pool: no advance,
+# no effect) — like a placeholder.
+MAGE_CELASTIAL_REVERSAL = 'Celestial_reversal'
+# nobodymoves (mana_cost 3): an INSTANT play-time effect — it LOCKS ALL PLAYERS'
+# MOVEMENT for the rest of the TURN. Their MOVE cards still RESOLVE (condition check,
+# non-movement effects like draw/ramp/discard/taxation still fire, and the defend/block
+# race still happens) but their MOVEMENT is suppressed: no basic advancing, no movement
+# effects (advancing/backward/jump/advancing_oppo/backward_oppo/avalanche), no pending
+# epo/virus, and no grappling/copy copies. The only exception is an "unstoppable" card
+# whose condition is met (it still moves) — the same exception as the landmine, but the
+# landmine CANCELS the card while nobodymoves LOCKS its movement. DEFEND cards are
+# unaffected (they never advance). The lock is game-level (game.nobodymoves_active = True),
+# set at play time (cannot be blocked / canceled / conditioned) and cleared in the cleaning
+# phase. The card is played in MOVE mode onto a stopover and resolves as a NO-OP (not in
+# the main pool: no advance, no effect) — like a placeholder.
+MAGE_NOBODYMOVES = 'nobodymoves'
+# thermic_flux (mana_cost 2, engine_version 24): an INSTANT play-time effect — the
+# player CHOOSES to INCREASE (+4 °C) or DECREASE (−4 °C) the planet temperature
+# (message 'temp_change': 'up' or 'down') and the engine applies that delta to
+# game.temperature, CLAMPED to 1..20, PERMANENTLY (mutated at play time, so it cannot
+# be blocked / canceled / conditioned). The new value is the FINAL temperature for the
+# rest of the game (it is read by the temp_inf_6 / temp_inf_11 / temp_sup_9 /
+# temp_sup_15 conditions at resolution time). The card is played in MOVE mode onto a
+# stopover (it occupies a position) and resolves as a NO-OP (not in the main pool: no
+# advance, no effect) — like a placeholder. The other Mage card (black_hole) is
+# still a no-op (implemented card by card, later).
+MAGE_THERMIC_FLUX = 'thermic_flux'
+# Apocalypticritual (mana_cost 3, engine_version 25): an INSTANT play-time effect —
+# the player CHOOSES THE ORDER OF ALL 4 CATACLYSM CARDS: a permutation of the 4
+# biomes (message 'cataclysm_order': e.g. ['OC','DE','JU','MO']) and the engine SETS
+# the cataclysm pile to exactly that order (index 0 = the biome that strikes NEXT),
+# PERMANENTLY (until the next Apocalypticritual reorders it — mutated at play time,
+# so it cannot be blocked / canceled / conditioned). The new order is read by
+# trigger_cataclysm at resolution time (a 'cataclysm'-condition card strikes the top
+# of the pile, then rotates it). The card is played in MOVE mode onto a stopover
+# (it occupies a position) and resolves as a NO-OP (not in the main pool: no
+# advance, no effect) — like a placeholder. black_hole (the last Mage card) is
+# still a no-op (implemented later).
+MAGE_APOCALYPTICRITUAL = 'Apocalypticritual'
+# black_hole (mana_cost 3, engine_version 26): a DWELLING card (like the Engineers'
+# refinery and the Doctors' laboratory) — NOT an instant-at-play card. It is PLACED in
+# the dwelling zone (to: 'dwelling', 1 card, costs its mana_cost, stopover placeholder,
+# removed by wrecking_ball) and its effect fires on a TAP (mode 'dwelling_activation',
+# free + once per turn, gated by dwelling_tapped). The tap ROTATES THE EARTH 3 CELLS in
+# the player's chosen direction (message 'rotation': 'cw' or 'ccw'): the 4 biomes shift
+# position in current_game.earth (the biome codes at earth[i][0] rotate by 3 cells) while
+# EVERY TOKEN — both players' positions, the pet_trap drop tokens, and the engineer board
+# drops — STAYS on its own cell index (the cells are addressed by index, so a rotation
+# changes which BIOME a given cell belongs to, not where the tokens are). The rotation is
+# cumulative (each tap rotates from the current order; 8 distinct states since 24/3 = 8).
+# earth_rotation (signed cumulative cells, drives the frontend background CSS) and
+# earth_initial_b0 (cell-0 biome at game init, the base for the background art) record it.
+MAGE_BLACK_HOLE = 'black_hole'
+
 DB_PATH = os.path.join(os.path.dirname(__file__), '../games/games.db')
 
 start_cards_in_hand = 6
@@ -203,6 +262,11 @@ def p2_connect_to_game(player: PlayerState, game_id):
             current_game.earth[i * n_cells_by_biome + j] = [biome]
     current_game.earth[0].append(current_game.turn_order[0])   # first player starts at position 0
     current_game.earth[0].append(current_game.turn_order[1])   # second player starts at position 0
+    # black_hole (Mages, engine_version 26): record cell-0's biome at init — the base for
+    # the background art (the frontend pins the base image to this biome and ROTATES it
+    # by earth_rotation * 15deg so the art tracks the engine's rotated biomes).
+    current_game.earth_initial_b0 = biomes_order[0]
+    current_game.earth_rotation = 0
 
     # 4.5 Cataclysm pile: one card per biome (4 cards), shuffled at board init.
     #     Top = first element. Each cataclysm trigger takes the top card, strikes
@@ -212,6 +276,7 @@ def p2_connect_to_game(player: PlayerState, game_id):
 
     # 5. Roll planet temperature (2x d20, keep value closest to 10); day/night always starts on "day" and flips each turn
     current_game.temperature = roll_temperature()
+    current_game.temperature_initial = current_game.temperature   # Mages thermic_flux (engine_version 24): record the rolled value (the stored `temperature` may later be changed by a thermic_flux — the replay uses this to evaluate temp_* conditions correctly)
     current_game.day_night = 'day'
     print(f'Planet initialized: temperature = {current_game.temperature}, {current_game.day_night}')
 
@@ -247,7 +312,7 @@ def p2_connect_to_game(player: PlayerState, game_id):
     #         positions, then their plays); play_count tracks each player's plays this
     #         turn; games < 15 keep the shared stopover columns (v14) / action-index
     #         chain (v13 and below)
-    current_game.engine_version = 20   # rule version: + the placeholder of a pending card that is ATTACHED to a main card this same turn STAYS IN PLACE (v19 and below removed it — the freed position desynced the frontend's next-slot suggestion, which offered the main card's own slot for the next play). pending_slots is a list of [card, slot] pairs (v19: attachment removed the pair BY CARD NAME; the laboratory TAP's 'epo' gets no slot entry, v19+). Board-furniture placeholders (doctor pending / dwelling) OCCUPY a trip-chain position (v17)
+    current_game.engine_version = 27   # rule version: + the CATACLYSM KNOCKBACK is MOVEMENT — while nobodymoves is active (engine_version 23), the cataclysm TRIGGER still fires (the pile rotates and the biome is announced) but NO TOKEN IS KNOCKED BACK (the knockback is the suppressed movement; log note "nobodymoves — cataclysm knockback suppressed (movement locked)"); games 23-26 keep the old behavior (the knockback fires even during a nobodymoves turn — the observed case in game 26_09_19_17_30_27_KEVVF turn 6). 26 = + Mages support faction, FIFTH card — black_hole: a DWELLING card (placed in the dwelling zone like refinery/laboratory, to: 'dwelling') whose TAP (mode 'dwelling_activation', free + once per turn) ROTATES THE EARTH 3 CELLS in the player's chosen direction (message 'rotation': 'cw' or 'ccw') — the 4 biomes shift position in current_game.earth (the biome codes at earth[i][0] rotate by 3 cells) while EVERY TOKEN (both players' positions, the pet_trap drop tokens, the engineer board drops) STAYS on its own cell index (a rotation changes which biome a given cell belongs to, not where the tokens are); the rotation is cumulative (8 distinct states, 24/3). earth_rotation (signed cumulative cells — drives the frontend background CSS rotation) and earth_initial_b0 (cell-0 biome at game init — the base background image) record it. Games < 26 keep the old behavior (black_hole dwelling placement is rejected, its tap is a no-op, and the earth biomes never rotate). 25 = + Mages support faction, fourth card — Apocalypticritual: an INSTANT play-time effect that CHOOSES THE ORDER OF ALL 4 CATACLYSM CARDS (message 'cataclysm_order': a permutation of the 4 biomes, e.g. ['OC','DE','JU','MO']) and SETS the cataclysm pile to exactly that order (index 0 = the biome that strikes NEXT — trigger_cataclysm pops the top and rotates it), PERMANENTLY (until the next Apocalypticritual reorders it; the pile is mutated at play time, so it cannot be blocked/canceled/conditioned). The card is played in MOVE mode on the trip chain and resolves as a no-op (occupies a stopover position, costs its mana_cost). Games < 25 keep the old behavior (Apocalypticritual is a no-op and the pile order is never changed). 24 = + Mages support faction, third card — thermic_flux: an INSTANT play-time effect that CHOOSES +4/−4 °C (message 'temp_change': 'up' or 'down') and changes the planet temperature by that amount, CLAMPED to 1..20, PERMANENTLY (game.temperature mutated at play time — cannot be blocked/canceled/conditioned; the new value is read by the temp_* conditions at resolution time). The card is played in MOVE mode on the trip chain and resolves as a no-op (occupies a stopover position, costs its mana_cost). temperature_initial records the value rolled at game start (for the replay). Games < 24 keep the old behavior (thermic_flux is a no-op, temperature never changes). 23 = + Mages support faction, second card — nobodymoves: an INSTANT play-time effect that LOCKS ALL PLAYERS' MOVEMENT for the rest of the turn (their MOVE cards still RESOLVE — condition check + non-movement effects like draw/ramp/discard/taxation still fire + the defend/block race still happens — but their MOVEMENT is suppressed: no basic advancing, no movement effects (advancing/backward/jump/advancing_oppo/backward_oppo/avalanche), no pending epo/virus, no grappling/copy copies; the only exception is an "unstoppable" card whose condition is met, which still moves; DEFEND cards unaffected); game-level flag game.nobodymoves_active, set at play time (cannot be blocked/canceled/conditioned), cleared in the cleaning phase; the card resolves as a no-op on the trip chain (occupies a stopover position, costs its mana_cost). Games < 23 keep the old behavior (nobodymoves is a no-op, no lock). 22 = + Mages support faction, first card — Celestial_reversal: an INSTANT play-time effect that CHOOSES day or night (message 'day_night') and FIXES it for the rest of the game (game.day_night set to the choice, game.day_night_fixed = True; the day/night no longer flips each turn); the card is played in MOVE mode on the trip chain and resolves as a no-op (occupies a stopover position, costs its mana_cost). Games < 22 keep the old behavior (Celestial_reversal is a no-op, day/night still flips). 21 = + the `pending` CONDITION is implemented (met iff the player has ≥1 pending card in their OWN pending zone). 20 = + the placeholder of a pending card ATTACHED to a main card this same turn STAYS IN PLACE. Board-furniture placeholders (doctor pending / dwelling) OCCUPY a trip-chain position (v17)
 
     # Update the game state in the database
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (current_game.to_json(), game_id))
@@ -339,7 +404,14 @@ def _end_turn(current_game, message):
     current_game.first_player_passed = False                    # reset first player passed
     current_game.second_player_passed = False                   # reset second player passed
     current_game.turn += 1                                      # increment turn
-    current_game.day_night = 'night' if current_game.day_night == 'day' else 'day'   # flip day/night each new turn
+    # nobodymoves (engine_version 23): the movement lock lasts until the end of the
+    # turn — clear the game-level flag so the next turn starts unlocked (like landmine).
+    current_game.nobodymoves_active = False
+    # flip day/night each new turn — SKIPPED once a Mages Celestial_reversal card
+    # (engine_version 22) fixed it (game.day_night_fixed = True, day_night already set
+    # to the chosen value at play time). Default False, so old games keep flipping.
+    if not current_game.day_night_fixed:
+        current_game.day_night = 'night' if current_game.day_night == 'day' else 'day'
 
     for p in current_game.players.values():                     # reset necessary players state
         p.mana_spend = 0
@@ -646,6 +718,37 @@ def message_check(message):
         if isinstance(cell, bool) or not isinstance(cell, int) or not (0 <= cell < 24):
             return False, "'cell' must be an integer between 0 and 23"
 
+    # optional day/night choice (Mages Celestial_reversal, engine_version 22):
+    # a Celestial_reversal played in MOVE mode must carry the chosen phase ('day'/'night')
+    if 'day_night' in message and message['day_night'] is not None:
+        if message['day_night'] not in ('day', 'night'):
+            return False, "'day_night' must be 'day' or 'night'"
+
+    # optional temperature direction (Mages thermic_flux, engine_version 24):
+    # a thermic_flux played in MOVE mode must carry the chosen direction ('up'/+4 or 'down'/−4)
+    if 'temp_change' in message and message['temp_change'] is not None:
+        if message['temp_change'] not in ('up', 'down'):
+            return False, "'temp_change' must be 'up' or 'down'"
+
+    # optional cataclysm order (Mages Apocalypticritual, engine_version 25):
+    # an Apocalypticritual played in MOVE mode must carry the chosen order —
+    # a PERMUTATION of the 4 biomes (each exactly once; index 0 strikes next)
+    if 'cataclysm_order' in message and message['cataclysm_order'] is not None:
+        order = message['cataclysm_order']
+        if (not isinstance(order, list) or len(order) != len(BIOMES)
+                or any(not isinstance(b, str) or b not in BIOMES for b in order)
+                or len(set(order)) != len(order)):
+            return False, "'cataclysm_order' must be a permutation of the 4 biomes (OC, MO, DE, JU)"
+
+    # optional rotation direction (Mages black_hole dwelling tap, engine_version 26):
+    # a black_hole tap (mode 'dwelling_activation') must carry the chosen direction
+    # ('cw' clockwise / 'ccw' counter-clockwise). The field is only validated when
+    # present here; the "required for a black_hole tap" check is in the dwelling tap
+    # branch of player_play (refinery/laboratory taps carry no direction and stay valid).
+    if 'rotation' in message and message['rotation'] is not None:
+        if message['rotation'] not in ('cw', 'ccw'):
+            return False, "'rotation' must be 'cw' or 'ccw'"
+
     return True, "Message is valid"
 
 def player_play(first_second: str, player: PlayerState, current_game: GameState):
@@ -686,6 +789,27 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 else:
                     message = f"{player.name} taps the refinery — nothing left to draw"
                 print(f'\t\t\tDWELLING tap: {player.name} taps the refinery, drew {drawn}')
+            elif player.dwelling == MAGE_BLACK_HOLE and (current_game.engine_version or 0) >= 26:
+                # Mages black_hole (engine_version 26): the tap ROTATES THE EARTH 3 CELLS
+                # in the player's chosen direction (message 'rotation': 'cw' or 'ccw').
+                # The 4 biomes shift position in current_game.earth; every token (both
+                # players, pet_trap drops, engineer board drops) stays on its own cell
+                # index. Free + once per turn (dwelling_tapped), a quick action like the
+                # other dwelling taps (no alternation). The direction is validated in
+                # message_check (a black_hole tap without a valid direction is rejected).
+                _rot = player.message.get('rotation')
+                if _rot == 'cw':
+                    rotate_earth(current_game, +3)
+                    message = f"{player.name} taps the black_hole — the earth rotates 3 cells clockwise"
+                elif _rot == 'ccw':
+                    rotate_earth(current_game, -3)
+                    message = f"{player.name} taps the black_hole — the earth rotates 3 cells counter-clockwise"
+                else:
+                    return player, current_game, False, (
+                        f"{player.name}'s black_hole tap requires a direction (message 'rotation': 'cw' or 'ccw')")
+                player.dwelling_tapped = True
+                player.message['black_hole_rotation'] = _rot
+                print(f'\t\t\tDWELLING tap: {player.name} taps the black_hole, earth rotated ({_rot})')
             elif player.dwelling == 'laboratory' and (current_game.engine_version or 0) >= 16:
                 # Doctors laboratory: tap adds an "epo" pending card to the pending zone
                 if player.pendings is None:
@@ -729,10 +853,13 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 return player, current_game, False, f"{player.name} already has a dwelling card on the board ({player.dwelling})"
             if card_id not in (player.hand or []):
                 return player, current_game, False, f"{card_id} is not in {player.name}'s hand"
-            # Accept engineer dwelling (refinery) or doctor dwelling (laboratory, v16+)
+            # Accept engineer dwelling (refinery), doctor dwelling (laboratory, v16+) or
+            # mage dwelling (black_hole, v26+)
             valid_dwelling = {ENGINEER_DWELLING}
             if (current_game.engine_version or 0) >= 16:
                 valid_dwelling.add(DOCTOR_DWELLING)
+            if (current_game.engine_version or 0) >= 26:
+                valid_dwelling.add(MAGE_BLACK_HOLE)
             if card_id not in valid_dwelling:
                 return player, current_game, False, f"{card_id} is not a dwelling card"
             if cost > mana_available:
@@ -878,7 +1005,7 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 return player, current_game, False, f"{pcard} is not in your pending zone"
             if cards_id:
                 main_card = cards_id[0]
-                if main_card in DOCTOR_PENDING or main_card in DOCTOR_DWELLING or main_card in ENGINEER_DROPS or main_card == ENGINEER_DWELLING:
+                if main_card in DOCTOR_PENDING or main_card in DOCTOR_DWELLING or main_card in ENGINEER_DROPS or main_card == ENGINEER_DWELLING or main_card == MAGE_CELASTIAL_REVERSAL or main_card == MAGE_NOBODYMOVES:
                     return player, current_game, False, "You cannot attach a pending card to a support card"
 
     # engineers' drops (engine_version 12): a MOVE play of a drop card must carry
@@ -890,6 +1017,42 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
                 if isinstance(cell, bool) or not isinstance(cell, int) or not (0 <= cell < 24):
                     return player, current_game, False, (
                         f"engineer drop {cid} must target a cell of the earth (message 'cell', 0..23)")
+
+    # Mages Celestial_reversal (engine_version 22): a MOVE play must carry the
+    # chosen phase (message 'day_night': 'day' or 'night') - it is applied INSTANTLY
+    # at play time (see _apply_instant_effects) and the card is a no-op on the chain.
+    # A DEFEND play is a plain no-op (like every support card) - no choice required.
+    if (current_game.engine_version or 0) >= 22 and player.message['mode'] == 'move':
+        for cid in cards_id[:1]:
+            if cid == MAGE_CELASTIAL_REVERSAL and player.message.get('day_night') not in ('day', 'night'):
+                return player, current_game, False, (
+                    f"{cid} requires a day/night choice (message 'day_night': 'day' or 'night')")
+
+    # Mages thermic_flux (engine_version 24): a MOVE play must carry the chosen
+    # direction (message 'temp_change': 'up' or 'down') - it is applied INSTANTLY at
+    # play time (see _apply_instant_effects) and the card is a no-op on the chain.
+    # A DEFEND play is a plain no-op (like every support card) - no choice required.
+    if (current_game.engine_version or 0) >= 24 and player.message['mode'] == 'move':
+        for cid in cards_id[:1]:
+            if cid == MAGE_THERMIC_FLUX and player.message.get('temp_change') not in ('up', 'down'):
+                return player, current_game, False, (
+                    f"{cid} requires a +4/−4 choice (message 'temp_change': 'up' or 'down')")
+
+    # Mages Apocalypticritual (engine_version 25): a MOVE play must carry the chosen
+    # ORDER OF ALL 4 CATACLYSM BIOMES (message 'cataclysm_order': a permutation of
+    # OC/MO/DE/JU, index 0 strikes next) - it is applied INSTANTLY at play time (see
+    # _apply_instant_effects) and the card is a no-op on the chain. A DEFEND play is
+    # a plain no-op (like every support card) - no order required.
+    if (current_game.engine_version or 0) >= 25 and player.message['mode'] == 'move':
+        for cid in cards_id[:1]:
+            if cid == MAGE_APOCALYPTICRITUAL:
+                _order = player.message.get('cataclysm_order')
+                if (not isinstance(_order, list) or len(_order) != len(BIOMES)
+                        or any(not isinstance(b, str) or b not in BIOMES for b in _order)
+                        or len(set(_order)) != len(_order)):
+                    return player, current_game, False, (
+                        f"{cid} requires a cataclysm order choice (message 'cataclysm_order': "
+                        f"a permutation of the 4 biomes OC/MO/DE/JU)")
 
     if total_cost <= mana_available:
         for card_id in cards_id:
@@ -1034,6 +1197,65 @@ def _apply_instant_effects(player, current_game, msg):
                 msg['drop_kind'] = card_id
                 print(f'\t\t\tINSTANT engineer drop: {card_id} token placed on cell {cell} (owner {player.name})')
             continue
+        # Mages Celestial_reversal (support card, engine_version 22): the day/night is
+        # FIXED to the player's choice (message 'day_night', validated in player_play)
+        # for the rest of the game. INSTANT - applied at play time, so it cannot be
+        # blocked / canceled / conditioned. The card itself resolves as a no-op below.
+        if card_id == MAGE_CELASTIAL_REVERSAL and (current_game.engine_version or 0) >= 22:
+            choice = msg.get('day_night')
+            if choice in ('day', 'night'):
+                current_game.day_night = choice
+                current_game.day_night_fixed = True
+                print(f'\t\t\tINSTANT Celestial_reversal: day/night FIXED to {choice} (for the rest of the game)')
+            continue
+        # Mages thermic_flux (support card, engine_version 24): the planet temperature
+        # changes by ±4 °C to the player's choice (message 'temp_change', validated in
+        # player_play), CLAMPED to 1..20, PERMANENTLY (mutated at play time, so it
+        # cannot be blocked / canceled / conditioned). The new value is read by the
+        # temp_* conditions at resolution time. The card itself resolves as a no-op
+        # below (advancing 0, like a placeholder).
+        if card_id == MAGE_THERMIC_FLUX and (current_game.engine_version or 0) >= 24:
+            direction = msg.get('temp_change')
+            if direction in ('up', 'down'):
+                old_temp = current_game.temperature
+                delta = 4 if direction == 'up' else -4
+                new_temp = max(1, min(20, (old_temp or 0) + delta))
+                current_game.temperature = new_temp
+                msg['thermic_flux_from'] = old_temp
+                msg['thermic_flux_to'] = new_temp
+                print(f'\t\t\tINSTANT thermic_flux: temperature {old_temp} -> {new_temp} ({direction} 4, clamped 1..20)')
+            continue
+        # Mages nobodymoves (support card, engine_version 23): LOCKS ALL PLAYERS'
+        # MOVEMENT for the rest of the turn — their MOVE cards still resolve (condition
+        # + non-movement effects fire) but their basic advancing + movement effects are
+        # suppressed, except an "unstoppable" card whose condition is met (it still
+        # moves). DEFEND cards are unaffected (they never advance). INSTANT - applied at
+        # play time, so it cannot be blocked / canceled / conditioned. The lock is
+        # game-level and cleared in the cleaning phase. The card itself resolves as a
+        # no-op below (advancing 0, like a placeholder).
+        if card_id == MAGE_NOBODYMOVES and (current_game.engine_version or 0) >= 23:
+            current_game.nobodymoves_active = True
+            print(f'\t\t\tINSTANT nobodymoves: ALL PLAYERS MOVEMENT LOCKED for the rest of the turn (only unstoppable may move)')
+            continue
+        # Mages Apocalypticritual (support card, engine_version 25): the ORDER OF
+        # ALL 4 CATACLYSM CARDS is set to the player's choice (message
+        # 'cataclysm_order', validated in player_play) - a permutation of the 4
+        # biomes, index 0 = the biome that strikes NEXT (trigger_cataclysm pops the
+        # top and rotates it). PERMANENT - it is the pile order read at resolution
+        # time until the next Apocalypticritual reorders it (mutated at play time,
+        # so it cannot be blocked / canceled / conditioned). The card itself
+        # resolves as a no-op below (advancing 0, like a placeholder).
+        if card_id == MAGE_APOCALYPTICRITUAL and (current_game.engine_version or 0) >= 25:
+            order = msg.get('cataclysm_order')
+            if (isinstance(order, list) and len(order) == len(BIOMES)
+                    and all(isinstance(b, str) and b in BIOMES for b in order)
+                    and len(set(order)) == len(order)):
+                current_game.cataclysm_pile = list(order)
+                # engine annotation on the action (shared dict: also lands in
+                # action_chain / messages_history): the turn log reads it
+                msg['cataclysm_order_set'] = list(order)
+                print(f'\t\t\tINSTANT Apocalypticritual: cataclysm order SET to {order} (index 0 strikes next)')
+            continue
         rows = CARDS_DB.filter(pl.col('card_id') == card_id)
         if rows.is_empty():
             continue
@@ -1063,10 +1285,67 @@ def _cell_has_drop(current_game, cell_index):
      (drop_tokens defaults to {}), so this is a no-op for them. """
     return (current_game.drop_tokens or {}).get(cell_index, 0) > 0
 
+# Movement effects (nobodymoves, engine_version 23): the effects whose
+# apply_effect actually moves a token. During a nobodymoves turn these are
+# SUPPRESSED (unless the card is unstoppable), along with the basic advancing.
+# Non-movement effects (draw, ramp, discard, taxation, rooted-token, pet_trap,
+# wrecking_ball, effect_canceled, unstoppable, copy_effect, grappling_hook) are
+# unaffected. grappling_hook / copy_effect COPIES are gated separately in the trip
+# chain (see apply_grappling_copy / apply_copy_effect).
+MOVEMENT_EFFECTS = {'advancing', 'backward', 'jump', 'advancing_oppo', 'backward_oppo', 'avalanche'}
+
+def _card_is_unstoppable(card_id, player, current_game, pcard=None):
+    """ True when the card `card_id` (played with pending card `pcard`, if any) is
+     UNSTOPPABLE for `player` right now: its effect is 'unstoppable' (or it carries
+     a mercurochrome pending) AND its condition is met. A support card (not in the
+     main pool) is never unstoppable. """
+    rows = CARDS_DB.filter(pl.col('card_id') == card_id)
+    if rows.is_empty():
+        return False
+    row = rows.row(0, named=True)
+    return (row['effect'] == 'unstoppable' or pcard == 'mercurochrome') \
+        and is_condition_met(row['condition'], player, current_game)
+
+def _is_movement_locked(current_game, player, action):
+    """ nobodymoves (engine_version 23): True when the MOVE card in `action` (the
+     player's message dict) has its MOVEMENT locked — i.e. nobodymoves is active
+     this turn and the card is NOT unstoppable (an unstoppable card with its
+     condition met still moves). Used to suppress the card's basic advancing, its
+     movement effects (MOVEMENT_EFFECTS), its pending epo/virus, and its
+     grappling/copy copies. Non-movement effects and the defend/block race are
+     UNAFFECTED (the card still resolves them). """
+    if (current_game.engine_version or 0) < 23 or not current_game.nobodymoves_active:
+        return False
+    cards = action.get('cards') or []
+    if not cards:
+        return True   # no card to check — treat as locked (defensive)
+    return not _card_is_unstoppable(cards[0], player, current_game, action.get('pending_card'))
+
+def _facing_effect_name(action):
+    """ The `effect` column value of the card in `action` (the facing card's
+     message dict), or None if it is a support card / has no card. Used to decide
+     whether a copy_effect copy is movement (suppressed during a nobodymoves turn)
+     or a zone effect (still fires). """
+    cards = action.get('cards') or []
+    if not cards:
+        return None
+    rows = CARDS_DB.filter(pl.col('card_id') == cards[0])
+    if rows.is_empty():
+        return None
+    return rows.row(0, named=True)['effect']
+
 def _player_blocked(player, current_game):
-    """ landmine (engine_version 12): True while the player is blocked by a
-     landmine (its move cards, grappling copies and effect copies are canceled
-     for the rest of the turn - except unstoppable cards with their condition met). """
+    """ landmine (engine_version 12) / nobodymoves (engine_version 23): True while
+     the player is FULLY BLOCKED (its move cards are CANCELED for the rest of the
+     turn - except unstoppable cards with their condition met). Used for the
+     FULL-CANCEL blocks (landmine) and for ROOTED cards on the trip chain (a rooted
+     card is pure movement, so it is inert during a nobodymoves turn). nobodymoves
+     is a GAME-LEVEL block (all players) set at play time and cleared in the cleaning
+     phase; landmine is PER-PLAYER (the arriving player only).
+     NOTE: for non-rooted move cards, nobodymoves now LOCKS movement only (the card
+     still resolves its non-movement effects) — see _is_movement_locked. """
+    if (current_game.engine_version or 0) >= 23 and current_game.nobodymoves_active:
+        return True
     return (current_game.engine_version or 0) >= 12 and bool(player.landmine_blocked)
 
 def _trigger_board_drops(current_game, player, log_entry=None):
@@ -1227,6 +1506,34 @@ def new_log_entry(player, action, order):
         entry['notes'].append(
             f'💥 wrecking_ball — removed {((action or {}).get("dwelling_removed_from") or "opponent")}\'s '
             f'dwelling card {action["dwelling_removed"]}')
+    # Mages Celestial_reversal (engine_version 22): the day/night was FIXED at PLAY
+    # TIME to the player's choice (the message carries 'day_night'). The card itself
+    # is a no-op on the trip chain — this note is its only resolution trace.
+    _c = (action or {}).get('cards') or []
+    if _c and _c[0] == MAGE_CELASTIAL_REVERSAL and (action or {}).get('day_night') in ('day', 'night'):
+        entry['notes'].append(
+            f'🔮 Celestial_reversal — day/night FIXED to {(action)["day_night"]} for the rest of the game')
+    # Mages thermic_flux (engine_version 24): the planet temperature was CHANGED at
+    # PLAY TIME (±4 °C, clamped 1..20, permanent) to the player's choice. The card
+    # itself is a no-op on the trip chain — this note is its only resolution trace.
+    if _c and _c[0] == MAGE_THERMIC_FLUX and (action or {}).get('thermic_flux_to') is not None:
+        entry['notes'].append(
+            f'🌡️ thermic_flux — temperature {action.get("thermic_flux_from")} → {action["thermic_flux_to"]} °C (permanent)')
+    # Mages nobodymoves (engine_version 23): ALL PLAYERS' movement was LOCKED for the
+    # rest of the turn (basic advancing + movement effects suppressed, non-movement
+    # effects still fire, only unstoppable may move) at PLAY TIME. The card itself is
+    # a no-op on the trip chain — this note is its only resolution trace.
+    if _c and _c[0] == MAGE_NOBODYMOVES:
+        entry['notes'].append(
+            '🚫 nobodymoves — ALL PLAYERS MOVEMENT LOCKED for the rest of the turn (no advancing / movement effects; only unstoppable may move)')
+    # Mages Apocalypticritual (engine_version 25): the ORDER OF ALL 4 CATACLYSM
+    # CARDS was SET at PLAY TIME to the player's choice (the message carries
+    # 'cataclysm_order_set' — a permutation of the 4 biomes, index 0 strikes next).
+    # The card itself is a no-op on the trip chain — this note is its only
+    # resolution trace (and the source the replay parses for pile reconstruction).
+    if _c and _c[0] == MAGE_APOCALYPTICRITUAL and (action or {}).get('cataclysm_order_set'):
+        entry['notes'].append(
+            '☄️ Apocalypticritual — cataclysm order set: ' + ' → '.join(action['cataclysm_order_set']))
     return entry
 
 def _log_stopover(sv, turn_log, resolved):
@@ -1462,13 +1769,15 @@ def process_trip_chain(current_game, resume=None):
             # grappling_hook (first player): copies the total advancement of its
             # facing card (the second player's entry at this same position) - applied
             # AFTER both cards have resolved so the facing advancement is known.
-            # A landmine-blocked player (engine_version 12) does not copy.
-            if ctx['first_grapple'] and not _player_blocked(first_player, current_game):
+            # A landmine-blocked player (engine_version 12) does not copy (its card
+            # was canceled, so first_grapple is False). A nobodymoves-locked player
+            # (engine_version 23) does not copy UNLESS the card is unstoppable.
+            if ctx['first_grapple'] and not _is_movement_locked(current_game, first_player, e_f['action']):
                 current_game = apply_grappling_copy(current_game, first_player,
                                                     grappling_copy_amount(current_game, ctx['second_adv']), entry_f)
             ctx['stage'] = 'grapple_s'
         elif stage == 'grapple_s':
-            if ctx['second_grapple'] and not _player_blocked(second_player, current_game):
+            if ctx['second_grapple'] and not _is_movement_locked(current_game, second_player, e_s['action']):
                 current_game = apply_grappling_copy(current_game, second_player,
                                                     grappling_copy_amount(current_game, ctx['first_adv']), entry_s)
             ctx['stage'] = 'copy_f'
@@ -1478,15 +1787,20 @@ def process_trip_chain(current_game, resume=None):
             # position / stopover), applied with the copier as the actor. Only when
             # the facing card's effect actually fired (condition met, not blocked,
             # not effect_canceled) and the facing entry is a PLAY (a rooted card has
-            # no effect to copy) and the copier is not landmine-blocked.
+            # no effect to copy).
+            # nobodymoves (engine_version 23): a movement-locked copier copies ONLY
+            # a non-movement (zone) effect; a movement-effect copy is suppressed.
+            # An unstoppable copier (condition met) copies regardless.
             if ctx['first_effect_ok'] and ctx['second_effect_ok'] and e_s is not None and e_s['kind'] == 'play' \
-                    and not _player_blocked(first_player, current_game):
+                    and (not _is_movement_locked(current_game, first_player, e_f['action'])
+                         or _facing_effect_name(e_s['action']) not in MOVEMENT_EFFECTS):
                 current_game = apply_copy_effect(current_game, first_player, e_f['action'],
                                                  second_player, e_s['action'], entry_f)
             ctx['stage'] = 'copy_s'
         elif stage == 'copy_s':
             if ctx['second_effect_ok'] and ctx['first_effect_ok'] and e_f is not None and e_f['kind'] == 'play' \
-                    and not _player_blocked(second_player, current_game):
+                    and (not _is_movement_locked(current_game, second_player, e_s['action'])
+                         or _facing_effect_name(e_f['action']) not in MOVEMENT_EFFECTS):
                 current_game = apply_copy_effect(current_game, second_player, e_s['action'],
                                                  first_player, e_f['action'], entry_s)
             ctx['stage'] = 'log'
@@ -1593,18 +1907,14 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         # doctors (engine_version 16): the attached pending card may be
         # mercurochrome (unstoppable) — check it alongside the card's own effect
         _pending_card = cards_dict.get('pending_card')
-        _is_unstoppable = (
-            (row['effect'] == 'unstoppable' or _pending_card == 'mercurochrome')
-            and is_condition_met(row['condition'], player, current_game)
-        )
+        _is_unstoppable = _card_is_unstoppable(card_id, player, current_game, _pending_card)
 
-        # LANDMINE block (engine_version 12): a player blocked by a landmine cannot
-        # advance for the rest of the turn - its MOVE cards are canceled (no effect,
-        # no advancing). The only exception is an "unstoppable" card whose condition
-        # is met (like the unstoppable exception to the defend block). Defend cards
-        # are NOT affected (they never advance - their shields / block effects work).
-        # The card is already in the discard pile (top of process_card) - canceling
-        # just means it does nothing.
+        # landmine (engine_version 12): a landmine-blocked player cannot advance for
+        # the rest of the turn - its MOVE cards are CANCELED (no effect, no advancing).
+        # The only exception is an "unstoppable" card whose condition is met (like the
+        # unstoppable exception to the defend block). Defend cards are NOT affected
+        # (they never advance - their shields / block effects work). The card is already
+        # in the discard pile (top of process_card) - canceling just means it does nothing.
         if (current_game.engine_version or 0) >= 12 and player.landmine_blocked:
             if _is_unstoppable:
                 print(f'\t\t	card {card_id} is unstoppable (condition met) -> ignores the landmine block')
@@ -1614,8 +1924,26 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
                 print(f'\t\t	card {card_id} CANCELED by the landmine block (no effect, no advancing)')
                 if log_entry is not None:
                     log_entry['negatives'].append('landmine — blocked (no effect, no advancing)')
-                current_game.message = {'success': True, 'message': f'{player.name} is blocked by a landmine'}
+                current_game.message = {'success': True, 'message': f'{player.name} is blocked by landmine'}
                 continue
+
+        # nobodymoves (engine_version 23): GAME-LEVEL movement LOCK (all players) —
+        # the card is NOT canceled. Its MOVEMENT is suppressed (basic advancing +
+        # movement effects + pending epo/virus + grappling/copy copies), but it STILL
+        # RESOLVES: its condition is checked, its non-movement effects (draw, ramp,
+        # discard, taxation, rooted-token, ...) still fire, and the defend/block race
+        # still happens. An UNSTOPPABLE card with its condition met ignores the lock
+        # and still moves. (Unlike the landmine, this is a movement lock, not a cancel.)
+        movement_locked = _is_movement_locked(current_game, player, cards_dict)
+        if movement_locked:
+            print(f'\t\t	card {card_id} is MOVEMENT-LOCKED by nobodymoves (no advancing / movement effects; non-movement effects still fire)')
+            if log_entry is not None:
+                log_entry['notes'].append('🚫 nobodymoves — movement locked (no advancing / movement effects)')
+        elif (current_game.engine_version or 0) >= 23 and current_game.nobodymoves_active:
+            # nobodymoves is active but this card is unstoppable (condition met) -> still moves
+            print(f'\t\t	card {card_id} is unstoppable (condition met) -> ignores the nobodymoves movement lock (still advances)')
+            if log_entry is not None:
+                log_entry['notes'].append('unstoppable — ignored the nobodymoves movement lock (still advances)')
 
         # BLOCK check: is the opponent playing defend card(s) on this same stopover?
         oppo = _get_oppo(player, current_game)
@@ -1644,15 +1972,18 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
                 if log_entry is not None:
                     log_entry['notes'].append(f'block broken — shields {shields} < cost {row["mana"]}')
 
-        current_game, grappling_activated, effect_activated = _resolve_card(row, player, current_game, stopover, log_entry)
+        current_game, grappling_activated, effect_activated = _resolve_card(row, player, current_game, stopover, log_entry, movement_locked=movement_locked)
 
         # doctors (engine_version 16): apply the attached pending card's effect.
         # Fires only if the main card's condition was met and its effect was not
         # canceled (effect_activated is True). mercurochrome is a no-op here (it
         # was already applied at block-check time as an unstoppable modifier).
+        # nobodymoves (engine_version 23): the pending epo (+1) / virus (-1) are
+        # MOVEMENT and are suppressed when the card is movement-locked; bloodtest
+        # (discard 1) is a zone effect and still fires.
         _pcard = cards_dict.get('pending_card')
         if _pcard and effect_activated and (current_game.engine_version or 0) >= 16 and current_game.state != "game over":
-            current_game = _apply_pending_effect(_pcard, player, current_game, log_entry)
+            current_game = _apply_pending_effect(_pcard, player, current_game, log_entry, movement_locked=movement_locked)
 
     # doctors (engine_version 16): move the attached pending card to the discard
     # pile (it was consumed from the pending zone at play time; it is not in any
@@ -1688,10 +2019,15 @@ def process_rooted_card(card_id, player, current_game, log_entry=None, oppo_entr
         log_entry['condition_met'] = None
         log_entry['notes'].append('🌱 rooted card — basic advancing only (no condition, no effect)')
     stopover = _rooted_stopover_of(current_game, card_id, player.name)
-    if (current_game.engine_version or 0) >= 12 and player.landmine_blocked:
-        print(f'\t\t\trooted card {card_id} CANCELED by the landmine block (no advancing)')
+    _rb_source = None
+    if (current_game.engine_version or 0) >= 23 and current_game.nobodymoves_active:
+        _rb_source = 'nobodymoves'
+    elif (current_game.engine_version or 0) >= 12 and player.landmine_blocked:
+        _rb_source = 'landmine'
+    if _rb_source:
+        print(f'\t\t\trooted card {card_id} CANCELED by the {_rb_source} block (no advancing)')
         if log_entry is not None:
-            log_entry['negatives'].append('landmine — rooted card blocked (no advancing)')
+            log_entry['negatives'].append(f'{_rb_source} — rooted card blocked (no advancing)')
         return current_game, 0, False
     oppo = _get_oppo(player, current_game)
     if oppo is not None and _oppo_defend_actions(oppo, stopover):
@@ -1778,7 +2114,13 @@ def trigger_cataclysm(current_game, log_entry=None):
         back to the FIRST cell of that biome (the start of the 6-cell segment).
         Tokens not on the biome are untouched.
      3. The drawn cataclysm card goes to the BOTTOM of the pile (the pile only rotates).
-     A game without a pile (pre-cataclysm rules) is a safe no-op. """
+     A game without a pile (pre-cataclysm rules) is a safe no-op.
+
+     nobodymoves (engine_version 27): the knockback is a MOVEMENT, so while
+     nobodymoves is active the trigger still FIRES (step 3: the pile rotates, the
+     biome is announced) but step 2 is SUPPRESSED — no token is knocked back.
+     Games 23-26 keep the old behavior (the knockback fires even during a
+     nobodymoves turn — the observed case: game 26_09_19_17_30_27_KEVVF, turn 6). """
     pile = current_game.cataclysm_pile or []
     if not pile:
         return current_game
@@ -1788,6 +2130,16 @@ def trigger_cataclysm(current_game, log_entry=None):
 
     if log_entry is not None:
         log_entry['notes'].append(f'⚡ cataclysm — {biome} strikes')
+
+    # nobodymoves (engine_version 27): the cataclysm KNOCKBACK is a MOVEMENT, so it
+    # is SUPPRESSED while nobodymoves is active (the trigger still fired — the pile
+    # rotated above and the biome was announced — but no token moves).
+    if (current_game.engine_version or 0) >= 27 and current_game.nobodymoves_active:
+        print(f'\t\t\tcataclysm knockback SUPPRESSED (nobodymoves movement lock)')
+        if log_entry is not None:
+            log_entry['notes'].append('nobodymoves — cataclysm knockback suppressed (movement locked)')
+        return current_game
+
     return _knockback_biome(biome, current_game, f'cataclysm: {biome} strikes', log_entry)
 
 def _knockback_biome(biome, current_game, label='strike', log_entry=None):
@@ -1816,17 +2168,53 @@ def _knockback_biome(biome, current_game, label='strike', log_entry=None):
             current_game.earth[start].append(p.name)
     return current_game
 
+def rotate_earth(current_game, n, log_entry=None):
+    """ black_hole (Mages, engine_version 26): rotate the EARTH's biomes by `n` cells.
+    Positive n = CLOCKWISE (the board's cell 0 → cell n direction, i.e. a feature at the
+    top moves toward the right / 3 o'clock). The 4 biomes shift POSITION in
+    current_game.earth — only the biome CODES at earth[i][0] are rotated; EVERY TOKEN
+    (both players' current_position, the pet_trap drop tokens, the engineer board drops)
+    STAYS on its own cell index, because all tokens are addressed BY CELL INDEX, so a
+    rotation changes which BIOME a given cell belongs to (biome conditions, the faction
+    biome bonus, and the cataclysm/avalanche knockback all re-read earth[i][0] and keep
+    working) but NOT where the tokens are. The rotation is CUMULATIVE — each tap rotates
+    from the current order (8 distinct states, 24/3 = 8). earth_rotation (signed
+    cumulative cells) is updated so the frontend can rotate the background art by
+    earth_rotation * 15deg (1 cell = 15deg on the 24-cell ring). """
+    earth = current_game.earth
+    if not earth or len(earth) != n_cells_by_biome * len(BIOMES):
+        return current_game
+    codes = [cell[0] for cell in earth if cell is not None]
+    if len(codes) != n_cells_by_biome * len(BIOMES):
+        return current_game
+    # content moves clockwise by n: cell (j) → cell (j + n)  ⇒  new[i] = old[(i - n) mod 24]
+    n24 = n_cells_by_biome * len(BIOMES)   # 24
+    shifted = [codes[(i - n) % n24] for i in range(n24)]
+    for i in range(n24):
+        earth[i][0] = shifted[i]
+    current_game.earth_rotation = (current_game.earth_rotation or 0) + n
+    direction = 'clockwise' if n > 0 else 'counter-clockwise'
+    print(f'\t\t\tblack_hole: earth rotated {n} cells {direction} (earth_rotation = {current_game.earth_rotation})')
+    if log_entry is not None:
+        log_entry['notes'].append(f'\U0001fa93 black_hole — earth rotated {abs(n)} cells {direction}')
+    return current_game
 
-def _resolve_card(row, player, current_game, stopover=None, log_entry=None):
+
+def _resolve_card(row, player, current_game, stopover=None, log_entry=None, movement_locked=False):
     """ resolve ONE card of the trip chain: condition -> effect -> advancing
      (movement effects handle their own advancing inside apply_effect).
      stopover: the stopover this card was played on (e.g. 'stopover_4') - needed for
      the effect_canceled check (opponent cancel card on the SAME stopover).
      log_entry: the player's log entry (filled with condition_met / negatives / notes).
-     Returns (current_game, grappling_activated) - grappling_activated is True when
-     this is a grappling_hook card whose condition was met (rule active); the trip
-     chain then applies the copy of the facing card's advancing after that card
-     has resolved. """
+     movement_locked: nobodymoves (engine_version 23) - True when the card's MOVEMENT
+     is locked (basic advancing + movement effects suppressed, non-movement effects
+     and the condition still fire; an unstoppable card is NOT locked).
+     Returns (current_game, grappling_activated, effect_activated) - grappling_activated
+     is True when this is a grappling_hook card whose condition was met (rule active);
+     the trip chain then applies the copy of the facing card's advancing after that card
+     has resolved (the copy itself is gated on movement_locked in the trip chain).
+     effect_activated is True when the card's effect actually fired (condition met, not
+     canceled) - used by the trip chain for copy_effect. """
     condition = row['condition']
     effect = row['effect']
     basic_advancing = int(row['advancing'])
@@ -1870,44 +2258,80 @@ def _resolve_card(row, player, current_game, stopover=None, log_entry=None):
     if condition_met:
         if effect_cancelled:
             # the effect is canceled: only the basic advancing is applied
-            current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
+            # (suppressed if the card is movement-locked by nobodymoves)
+            if movement_locked:
+                if log_entry is not None:
+                    log_entry['notes'].append('nobodymoves — basic advancing suppressed')
+            else:
+                current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
         else:
-            print(f'\t\t\tapplying effect: {effect}')
-            current_game = apply_effect(effect, row['effect_number'], basic_advancing, player, current_game, log_entry)
+            if movement_locked and effect in MOVEMENT_EFFECTS:
+                # nobodymoves: the movement effect is SUPPRESSED (the card is
+                # movement-locked). Non-movement effects still fire below.
+                print(f'\t\t\teffect {effect} SUPPRESSED (nobodymoves movement lock)')
+                if log_entry is not None:
+                    log_entry['notes'].append(f'nobodymoves — {effect} suppressed (movement locked)')
+            else:
+                print(f'\t\t\tapplying effect: {effect}')
+                current_game = apply_effect(effect, row['effect_number'], basic_advancing, player, current_game, log_entry)
 
             # rooted (engine_version 10): grant the card a rooted token (it survives
             # the cleaning phase and stays on a free stopover). One-shot, 1-turn
-            # cooldown. The card still applies its basic advancing below.
+            # cooldown. The token is NOT movement, so it is granted even during a
+            # nobodymoves turn. The card still applies its basic advancing below
+            # (unless movement-locked).
             if effect == 'rooted' and (current_game.engine_version or 0) >= 10:
                 current_game = _grant_rooted_token(row['card_id'], player, current_game, log_entry)
 
-            # Apply basic advancing (movement effects already moved the player inside apply_effect)
+            # Apply basic advancing (movement effects already moved the player inside
+            # apply_effect). Suppressed if the card is movement-locked by nobodymoves.
             if effect not in ('advancing', 'backward', 'jump'):
-                current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
+                if movement_locked:
+                    if log_entry is not None:
+                        log_entry['notes'].append('nobodymoves — basic advancing suppressed')
+                else:
+                    current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
     else:
-        # condition not met: reduced advancing (card mana - 1)
-        basic_advancing = int(row['mana']) - 1
-        print(f'\t\t\tcondition not met, reduced advancing: {basic_advancing}')
-        current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
+        # condition not met: reduced advancing (card mana - 1) — suppressed if
+        # the card is movement-locked by nobodymoves
+        reduced_advancing = int(row['mana']) - 1
+        if movement_locked:
+            print(f'\t\t\tcondition not met, reduced advancing {reduced_advancing} SUPPRESSED (nobodymoves)')
+            if log_entry is not None:
+                log_entry['notes'].append('nobodymoves — reduced advancing suppressed')
+        else:
+            print(f'\t\t\tcondition not met, reduced advancing: {reduced_advancing}')
+            current_game = process_advancing(reduced_advancing, player, current_game, log_entry=log_entry)
 
     return current_game, grappling_activated, effect_activated
 
-def _apply_pending_effect(pcard, player, current_game, log_entry=None):
+def _apply_pending_effect(pcard, player, current_game, log_entry=None, movement_locked=False):
     """ doctors (engine_version 16): apply the effect of a pending card attached
      to a main card. Fires only when the main card's condition was met and its
      effect was not canceled. The pending card has already been consumed from
      the pending zone and is moved to the discard pile by the caller.
      mercurochrome is a no-op here (it was already applied at block-check time
-     as an unstoppable modifier). """
+     as an unstoppable modifier).
+     nobodymoves (engine_version 23): `movement_locked` suppresses the MOVEMENT
+     pending effects (epo +1, virus -1); bloodtest (discard 1) is a zone effect
+     and still fires. """
     print(f'\t\t\tapplied pending card effect: {pcard}')
     if pcard == 'epo':
-        current_game = process_advancing(1, player, current_game, allow_bonus=False, log_entry=log_entry)
-        if log_entry is not None:
-            log_entry['notes'].append('pending epo — +1 advancing')
+        if movement_locked:
+            if log_entry is not None:
+                log_entry['notes'].append('nobodymoves — pending epo suppressed (movement locked)')
+        else:
+            current_game = process_advancing(1, player, current_game, allow_bonus=False, log_entry=log_entry)
+            if log_entry is not None:
+                log_entry['notes'].append('pending epo — +1 advancing')
     elif pcard == 'virus':
-        current_game = process_advancing(-1, player, current_game, allow_bonus=False, log_entry=log_entry)
-        if log_entry is not None:
-            log_entry['notes'].append('pending virus — -1 knockback')
+        if movement_locked:
+            if log_entry is not None:
+                log_entry['notes'].append('nobodymoves — pending virus suppressed (movement locked)')
+        else:
+            current_game = process_advancing(-1, player, current_game, allow_bonus=False, log_entry=log_entry)
+            if log_entry is not None:
+                log_entry['notes'].append('pending virus — -1 knockback')
     elif pcard == 'bloodtest':
         if player.hand:
             discarded = player.hand.pop()
@@ -2314,6 +2738,18 @@ def is_condition_met(condition, player, current_game):
             if cell and ('trap' in cell or 'drop' in cell):
                 return True
         return False
+
+    # pending (rule of engine_version 21): met if the player has at least one pending
+    # card in their OWN pending zone (the doctors' pending zone, engine_version 16+).
+    # Pure evaluation - no side effects. Old games (< 21) keep the canonical default:
+    # an unimplemented condition is treated as met (no pending zone for < 16; games
+    # 16-20 were actually played with the "assume met" catch-all). The gate lives in
+    # the engine, so the replay pins old games automatically (it preserves the stored
+    # engine_version and calls this function directly).
+    if condition == 'pending':
+        if (current_game.engine_version or 0) < 21:
+            return True   # canonical default: unimplemented in those games
+        return len(player.pendings or []) >= 1
 
     # any other not-yet-implemented condition: assume met so the card can still advance
     print(f'\t\t\tcondition {condition} not implemented, assuming met')

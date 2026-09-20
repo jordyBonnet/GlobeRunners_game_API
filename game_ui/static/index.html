@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
-<link rel="stylesheet" href="/static/style.css?v=22">
+<link rel="stylesheet" href="/static/style.css?v=31">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
 
       <div class="deck-source-tabs">
         <button id="tab-starter" class="tab active">Starter decks</button>
-        <button id="tab-csv" class="tab">Load a CSV</button>
+        <button id="tab-csv" class="tab">Load a text file</button>
       </div>
 
       <!-- starter decks -->
@@ -35,11 +35,11 @@
       <!-- csv -->
       <div id="csv-panel" class="deck-source hidden">
         <label class="file-btn">
-          <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
-          📂 Choose a CSV file
+          <input type="file" id="csv-input" accept=".txt,.csv,text/plain" hidden>
+          📂 Choose a text file
         </label>
         <span id="csv-filename" class="hint"></span>
-        <p class="hint small">Expected format: a single <code>card_id</code> column (with or without a header), 20 cards.</p>
+        <p class="hint small">Expected format: a single <code>card_id</code> per line (a header is fine), 20 cards.</p>
       </div>
 
       <!-- deck preview -->
@@ -205,7 +205,7 @@
       <img class="panel-ico" src="/assets/marker_card_p.png" alt="">
       <span class="panel-count" id="my-deck-count">0</span>
     </div>
-    <div class="side-panel discard" id="dz-discard" title="Discard pile — throw a card away (drop it here)">
+    <div class="side-panel discard" id="dz-discard" title="Discard pile">
       <img class="panel-ico" src="/assets/marker_bin.png" alt="">
       <div class="panel-cards" id="my-discard"></div>
       <span class="panel-count" id="my-discard-count">0</span>
@@ -232,9 +232,9 @@
     <div class="band-hand" id="my-hand"></div>
     <div id="action-bar">
       <button id="btn-play" class="primary-btn small-btn" disabled>Play the card</button>
-      <button id="btn-defend" class="defend-btn small-btn" disabled title="Play the card in defense (engaged at 90°): it blocks the opponent's card on the same stopover if the shields are enough">⛨ Play in defense</button>
+      <button id="btn-defend" class="defend-btn small-btn" disabled title="Play 1–5 cards in defense at once (engaged at 90°): pick them in the popup — your total shield (sum) blocks the opponent's card on that stopover if it's ≥ their cost">⛨ Play in defense</button>
       <button id="btn-tap" class="tap-btn small-btn hidden" title="Tap the dwelling card (refinery): draw 1 card — once per turn">⚗ Tap dwelling</button>
-      <button id="btn-discard" class="discard-btn small-btn hidden" title="Discard selection (engine_version 13): discard the selected cards">🗑 DISCARD</button>
+
       <button id="btn-pass" class="ghost-btn small-btn" disabled>Pass</button>
       <span id="action-hint"></span>
     </div>
@@ -265,6 +265,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/app.mjs?v=22"></script>
+<script type="module" src="/static/app.mjs?v=31"></script>
 </body>
 </html>

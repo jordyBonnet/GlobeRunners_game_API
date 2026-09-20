@@ -100,14 +100,31 @@ export function renderBoard(st, me, oppoName) {
   const earth = st.earth || [];
 
   // Earth background: pick the config image that matches this board's biome order
-  // (derived from earth[0][0] = the biome of cell 0 — see cards.mjs earthBgSrc).
-  // Only touch the src when it actually changes: the image is ~10 MB, and the
-  // board re-renders on every state poll, so a naive set would re-trigger the
+  // (see cards.mjs earthBgSrc) and, for black_hole rotations (Mages, engine_version
+  // 26), ROTATE the art about the board center so it tracks the engine's biome
+  // positions. Only touch the src when it actually changes: the image is ~10 MB, and
+  // the board re-renders on every state poll, so a naive set would re-trigger the
   // download each time.
+  //   pre-v26: biomes are static -> base image = current cell-0 biome (earth[0][0]),
+  //     no rotation (earth_rotation defaults to 0).
+  //   v26+: the black_hole TAP rotates the earth, so the biomes in `st.earth` shift.
+  //     We PIN the base image to the INITIAL cell-0 biome (`st.earth_initial_b0`) and
+  //     rotate the art by `st.earth_rotation * 15deg` (15deg = one cell; 3 cells per
+  //     tap = 45deg). Every token stays on its cell index (they are positioned by
+  //     POS24, independent of the art), so only the art rotates.
   const bg = $("#board-bg");
   if (bg) {
-    const src = earthBgSrc(earth);
+    const baseBiome = (st.earth_initial_b0)
+      || (earth && earth[0] && earth[0][0])
+      || null;
+    const src = earthBgSrc(baseBiome ? [[baseBiome]] : earth);
     if (bg.getAttribute("src") !== src) bg.setAttribute("src", src);
+    // rotation: earth_rotation is signed cumulative cells (positive = clockwise),
+    // and CSS rotate() positive = clockwise, so the signs match. Mod 360 to keep
+    // the value small (and to animate the shortest sensible way across 360).
+    const rotCells = (st.earth_rotation != null) ? st.earth_rotation : 0;
+    const rotDeg = ((rotCells * 15) % 360 + 360) % 360;
+    bg.style.transform = rotDeg ? `rotate(${rotDeg}deg)` : "none";
   }
 
   // players' advance tokens, between the radial lines of the Earth.
@@ -228,20 +245,36 @@ export function renderBoard(st, me, oppoName) {
       const num = actionStopoverNum(a);
       if (num == null) continue;
       const col = num % N_STOPOVERS;
+      let defendIdx = 0;   // index within THIS defend group (a multi-card defend play)
       for (const id of a.cards) {     // a 'defend' action may group several cards
         const el = makeStaticCard(id, name);
         el.classList.add("played");
-        if (a.mode === "defend") {
+        const isDefend = a.mode === "defend";
+        if (isDefend) {
           el.classList.add("defend");   // engaged at 90° to the right
           el.title = `Defense by ${name} (blocks the card facing it)` + (el.title ? " — " + el.title : "");
         } else {
           el.title = `Played by ${name}` + (el.title ? " — " + el.title : "");
         }
-        // several cards on the SAME slot (only possible in old games): nudge each
-        // additional one up so they all stay visible
         const key = row + ":" + col;
         const k = (slotFill[key] = (slotFill[key] || 0) + 1);
-        if (k > 1) el.style.marginTop = `${-(k - 1) * 8}px`;
+        if (isDefend) {
+          // Multi-card defense fan: the 2nd+ card of the group peeks out diagonally
+          // (up + right) from the previous one so ALL engaged cards stay visible
+          // (they are landscape cards centered in the slot — a pure vertical offset
+          // would hide them). z-index rises so the last one sits on top.
+          if (defendIdx > 0) {
+            const off = defendIdx * 10;
+            el.style.left = `calc(50% + ${off}px)`;
+            el.style.top = `calc(50% - ${off}px)`;
+            el.style.zIndex = 2 + defendIdx;
+          }
+          defendIdx++;
+        } else if (k > 1) {
+          // several cards on the SAME slot (only possible in old games): nudge each
+          // additional one up so they all stay visible
+          el.style.marginTop = `${-(k - 1) * 8}px`;
+        }
         slotEls[row][col].appendChild(el);
       }
     }

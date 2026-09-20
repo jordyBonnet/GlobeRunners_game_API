@@ -2,12 +2,12 @@
 "use strict";
 
 import { toast } from "./utils.mjs";
-import { isEngineerDrop, isEngineerDwelling, isDoctorPending, isDoctorDwelling, DOCTOR_PENDING } from "./cards.mjs";
+import { cardImg, cardTitle, cardInfo, cardCost, isSupportPlay, isEngineerDrop, isEngineerDwelling, isDoctorPending, isDoctorDwelling, DOCTOR_PENDING, isMageCelestial, isMageThermicFlux, isMageApocalypticritual, isMageBlackHole } from "./cards.mjs";
 import { myTurn } from "./phase.mjs";
 import { game, enterCellSelect } from "./game.mjs";
 import { sendAction } from "./comm.mjs";
 import { checkMana } from "./state.mjs";
-import { N_STOPOVERS } from "./board.mjs";
+import { N_STOPOVERS, BIOME_NAMES } from "./board.mjs";
 
 /* -------- ordering rule: PER-PLAYER stopovers (engine_version 15) --------
    Each player has their OWN 5 positions (1..5, columns 4,3,2,1,0). A player's ROOTED
@@ -149,6 +149,52 @@ export function dispatchPlay(cardId, col = null) {
     game.selected = new Set();
     return;
   }
+  // Mages black_hole (engine_version 26): a DWELLING card (like refinery/laboratory) —
+  // goes to the dwelling zone, not a stopover. Its TAP (the #btn-tap direction popup)
+  // rotates the earth 3 cells; placement is identical to the other dwellings.
+  if (isMageBlackHole(cardId)) {
+    if (col == null) {
+      const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
+      if (meNow.dwelling) { toast("You already have a dwelling — the slot is full"); return; }
+      if (freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
+    }
+    if (!checkMana(cardId)) return;
+    sendAction([cardId], "dwelling", "");
+    game.selected = new Set();
+    return;
+  }
+  // Mages Celestial_reversal (engine_version 22): a MOVE play onto a stopover, but it
+  // needs a day/night CHOICE (the INSTANT effect fixes the day/night for the rest of
+  // the game). The player picks day or night in a popup; the card is a no-op chain.
+  if (isMageCelestial(cardId)) {
+    if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
+    if (!checkMana(cardId)) return;
+    const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
+    showDayNightPopup(cardId, slotCol);
+    return;
+  }
+  // Mages thermic_flux (engine_version 24): a MOVE play onto a stopover, but it needs
+  // a +4/−4 °C CHOICE (the INSTANT effect changes the planet temperature, clamped
+  // 1..20, permanently). The player picks +4 or −4 in a popup; the card is a no-op
+  // chain (like Celestial_reversal).
+  if (isMageThermicFlux(cardId)) {
+    if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
+    if (!checkMana(cardId)) return;
+    const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
+    showThermicFluxPopup(cardId, slotCol);
+    return;
+  }
+  // Mages Apocalypticritual (engine_version 25): a MOVE play onto a stopover, but it
+  // needs an ORDER CHOICE (the INSTANT effect sets the cataclysm pile to the chosen
+  // permutation of the 4 biomes — 1st = strikes next). The player arranges the 4
+  // biomes in a popup; the card is a no-op chain (like Celestial_reversal).
+  if (isMageApocalypticritual(cardId)) {
+    if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
+    if (!checkMana(cardId)) return;
+    const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
+    showApocalypticritualPopup(cardId, slotCol);
+    return;
+  }
   // normal move card onto the stopover (the player's next position when col is absent)
   if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
   if (!checkMana(cardId)) return;
@@ -162,6 +208,113 @@ export function dispatchPlay(cardId, col = null) {
   } else {
     sendAction([cardId], `stopover_${slotCol}`, "move");
   }
+}
+
+/* popup: choose day or night for Celestial_reversal (Mages, engine_version 22).
+   The choice is sent with the action message (the `day_night` field) and applied
+   INSTANTLY at play time — it fixes the day/night for the rest of the game. */
+function showDayNightPopup(cardId, col) {
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup";
+  const cur = (game.state && game.state.day_night) === "day" ? "day" : "night";
+  const options = [
+    `<button class="pending-opt" data-dn="day">☀️ Day</button>`,
+    `<button class="pending-opt" data-dn="night">🌙 Night</button>`,
+  ];
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>Celestial reversal</h3>
+      <p class="hint">Pick the day/night for the rest of the game (currently <b>${cur}</b> — it will stop flipping).</p>
+      <div class="pending-options">${options.join("")}</div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll(".pending-opt").forEach(btn => {
+    btn.onclick = () => {
+      sendAction([cardId], `stopover_${col}`, "move", [], null, btn.dataset.dn);
+      game.selected = new Set();
+      modal.remove();
+    };
+  });
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* popup: choose +4 °C or −4 °C for thermic_flux (Mages, engine_version 24).
+   The choice is sent with the action message (the `temp_change` field: "up"|"down")
+   and applied INSTANTLY at play time — the planet temperature changes by ±4 °C,
+   clamped to 1..20, permanently. */
+function showThermicFluxPopup(cardId, col) {
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup";
+  const cur = (game.state && game.state.temperature != null) ? game.state.temperature : "?";
+  const options = [
+    `<button class="pending-opt" data-dir="up">🔥 +4 °C</button>`,
+    `<button class="pending-opt" data-dir="down">❄️ −4 °C</button>`,
+  ];
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>Thermic flux</h3>
+      <p class="hint">Change the planet temperature by ±4 °C (currently <b>${cur} °C</b>, clamped 1–20) — permanent.</p>
+      <div class="pending-options">${options.join("")}</div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll(".pending-opt").forEach(btn => {
+    btn.onclick = () => {
+      // sendAction(cards, to, mode, pendings, cell, dayNight, tempChange)
+      sendAction([cardId], `stopover_${col}`, "move", [], null, null, btn.dataset.dir);
+      game.selected = new Set();
+      modal.remove();
+    };
+  });
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* popup: arrange the 4 cataclysm biomes for Apocalypticritual (Mages, engine_version 25).
+   The order is sent with the action message (the `cataclysm_order` field: a permutation
+   of ["OC","MO","DE","JU"], index 0 = strikes next) and applied INSTANTLY at play time
+   — the cataclysm pile is set to that order, permanently (until the next ritual).
+   Uniqueness: picking a biome already used in another row SWAPS the two rows, so the
+   selection is always a valid permutation. Pre-filled with the current pile order. */
+function showApocalypticritualPopup(cardId, col) {
+  const BIOMES = ["OC", "MO", "DE", "JU"];
+  const pile = (game.state && Array.isArray(game.state.cataclysm_pile)
+      && game.state.cataclysm_pile.length === 4) ? game.state.cataclysm_pile : BIOMES;
+  const values = [...pile];   // source of truth (slot order)
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup";
+  const rowHtml = (i) => `
+    <div class="cata-order-row">
+      <span class="cata-order-pos">${i + 1}.</span>
+      <select data-slot="${i}">
+        ${BIOMES.map(x => `<option value="${x}"${x === values[i] ? " selected" : ""}>${BIOME_NAMES[x] || x}</option>`).join("")}
+      </select>
+    </div>`;
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>☄️ Apocalyptic ritual</h3>
+      <p class="hint">Choose the order the 4 cataclysm biomes will strike (1st = next to strike) — permanent until the next ritual. Currently: <b>${values.map(b => BIOME_NAMES[b] || b).join(" → ")}</b></p>
+      <div class="cata-order">${[0, 1, 2, 3].map(rowHtml).join("")}</div>
+      <div class="pending-options"><button class="pending-opt" data-confirm="1">☄️ Set this order</button></div>
+    </div>`;
+  document.body.appendChild(modal);
+  const selects = [...modal.querySelectorAll(".cata-order-row select")];
+  selects.forEach((sel, i) => {
+    sel.onchange = () => {
+      const old = values[i];
+      values[i] = sel.value;
+      const dup = values.indexOf(sel.value);
+      if (dup !== -1 && dup !== i) { values[dup] = old; selects[dup].value = old; }   // swap
+    };
+  });
+  modal.querySelector("[data-confirm]").onclick = () => {
+    // sendAction(cards, to, mode, pendings, cell, dayNight, tempChange, cataclysmOrder)
+    sendAction([cardId], `stopover_${col}`, "move", [], null, null, null, [...values]);
+    game.selected = new Set();
+    modal.remove();
+  };
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 
 /* popup: choose a pending card to attach to the main card (or none) */
@@ -186,6 +339,199 @@ function showPendingPopup(cardId, col, pendings) {
       const pending = btn.dataset.pending;
       const pendingsArr = pending ? [pending] : [];
       sendAction([cardId], `stopover_${col}`, "move", pendingsArr);
+      game.selected = new Set();
+      modal.remove();
+    };
+  });
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* popup: DISCARD SELECTION (engine_version ≥ 13). When the engine pauses the trip
+   chain on "waiting for NAME to discard K card(s)", this modal lists ALL of the player's
+   hand cards; the player toggles exactly N of them (cap N, toast on overflow) and presses
+   the red DISCARD button at the bottom, which sends {cards:[…N…], to:"discard_pile",
+   mode:""}. The selection is LOCAL to the popup (not game.selected) — the hand behind
+   the backdrop is untouched. Idempotent: renderAll runs on every 2.5 s poll, so the
+   .discard-popup guard prevents a second instance. Backdrop click closes it (the engine
+   stays paused — a hand-card click reopens it, and renderAll re-opens it on the next
+   state too). A rejected answer (wrong count / not in hand / not my turn) toasts and
+   keeps the popup + selection open; on success the modal is removed (the state change
+   also sweeps it in renderAll). */
+export function showDiscardPopup(n) {
+  if (document.querySelector(".discard-popup")) return;   // already open (polling re-render)
+  const st = game.state;
+  if (!st || !st.players) return;
+  const me = st.players[game.me];
+  const hand = (me && me.hand) || [];
+  const selected = new Set();
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup discard-popup";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>🗑 Discard ${n} card(s)</h3>
+      <p class="hint">Select exactly ${n} card(s) from your hand, then press DISCARD.</p>
+      <div class="discard-cards"></div>
+      <div class="discard-count">0 / ${n} selected</div>
+      <div class="pending-options"><button class="discard-btn" disabled>🗑 DISCARD</button></div>
+    </div>`;
+  const grid = modal.querySelector(".discard-cards");
+  const countEl = modal.querySelector(".discard-count");
+  const confirm = modal.querySelector(".discard-btn");
+  for (const id of hand) {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.dataset.hoverId = id;   // delegated 3x hover preview (modals.mjs)
+    el.title = cardTitle(id);
+    el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+    el.onclick = () => {
+      if (selected.has(id)) selected.delete(id);
+      else {
+        if (selected.size >= n) { toast(`Select exactly ${n} card(s) to discard`); return; }
+        selected.add(id);
+      }
+      el.classList.toggle("selected", selected.has(id));
+      countEl.textContent = `${selected.size} / ${n} selected`;
+      confirm.disabled = selected.size !== n;
+    };
+    grid.appendChild(el);
+  }
+  confirm.onclick = async () => {
+    if (selected.size !== n) return;
+    confirm.disabled = true;   // in flight (sends are serialized anyway)
+    const resp = await sendAction([...selected], "discard_pile", "");
+    if (resp && resp.success === false) {
+      toast(resp.message || "Action refused");   // rejected: keep popup + selection
+      confirm.disabled = false;
+      return;
+    }
+    modal.remove();   // success (the state change's renderAll sweep double-covers)
+  };
+  document.body.appendChild(modal);
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* Popup: DEFENSE SELECTION. When the player clicks "Play in defense", this modal
+   lists all cards in the player's hand; the player toggles 1–5 MAIN cards (max 5,
+   toast on overflow) and presses the ⛨ DEFEND button at the bottom, which sends
+   {cards:[…1..5…], to:"stopover_N", mode:"defend"} to the player's NEXT stopover
+   position. Rules (engine): the cost is the SUM of the selected cards' mana, and
+   the SHIELD is the SUM of their shields — the block on the opponent's card on
+   that stopover only holds if Σ shield ≥ the opponent card's cost. Support cards
+   have no shield in the pool and CANNOT be defended — they are listed but marked
+   unselectable. The selection is LOCAL to the popup (not game.selected, so it does
+   not interfere with move/mana selection). Idempotent (.defend-popup guard).
+   Backdrop click closes; a rejected answer toasts and keeps the popup + selection
+   open; on success the modal is removed (the polling re-render also sweeps it). */
+export function showDefendPopup() {
+  if (document.querySelector(".defend-popup")) return;   // already open
+  const st = game.state;
+  if (!st || !st.players) return;
+  const me = st.players[game.me];
+  const hand = (me && me.hand) || [];
+  const main = hand.filter((id) => !isSupportPlay(id));
+  if (!main.length) { toast("No main-faction card in hand to defend with"); return; }
+  if (freeCols(st, game.me).length === 0) { toast(orderHint()); return; }
+  const avail = (me.mana || []).length - (me.mana_spend || 0);
+  const MAX_DEFEND = 5;
+  const selected = new Set();
+  const costOf  = (id) => cardCost(id) || 0;
+  const shieldOf = (id) => { const c = cardInfo(id); return c && c.shield != null ? c.shield : 0; };
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup defend-popup";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>⛨ Play in defense</h3>
+      <p class="hint">Pick 1–${MAX_DEFEND} card(s) to engage sideways (90°) on your next stopover. They block the opponent's card on that stopover: your <b>total shield</b> must be ≥ the cost of their card. Cost = the sum of the selected cards' mana (you have <b>${avail}</b>).</p>
+      <div class="defend-cards"></div>
+      <div class="defend-summary"><span class="defend-count">0 / ${MAX_DEFEND} selected</span> • <span class="defend-cost">cost 0</span> • <span class="defend-shield">shield 0</span></div>
+      <div class="pending-options"><button class="defend-confirm" disabled>⛨ DEFEND</button></div>
+    </div>`;
+  const grid = modal.querySelector(".defend-cards");
+  const countEl = modal.querySelector(".defend-count");
+  const costEl = modal.querySelector(".defend-cost");
+  const shieldEl = modal.querySelector(".defend-shield");
+  const confirm = modal.querySelector(".defend-confirm");
+  const refresh = () => {
+    let cost = 0, shield = 0;
+    for (const id of selected) { cost += costOf(id); shield += shieldOf(id); }
+    countEl.textContent = `${selected.size} / ${MAX_DEFEND} selected`;
+    costEl.textContent = `cost ${cost}`;
+    shieldEl.textContent = `shield ${shield}`;
+    confirm.disabled = selected.size === 0 || cost > avail;
+    confirm.title = cost > avail ? `Not enough mana: cost ${cost}, only ${avail} left` : "";
+  };
+  for (const id of hand) {
+    const support = isSupportPlay(id);   // support cards cannot be defended
+    const el = document.createElement("div");
+    el.className = "card" + (support ? " defend-disabled" : "");
+    el.dataset.hoverId = id;
+    let title = cardTitle(id);
+    if (support) title += " — support card (cannot be defended)";
+    else title += ` (cost ${cardCost(id)}, shield ${shieldOf(id)})`;
+    el.title = title;
+    el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
+    if (!support) {
+      el.onclick = () => {
+        if (selected.has(id)) { selected.delete(id); }
+        else {
+          if (selected.size >= MAX_DEFEND) { toast(`You can defend with at most ${MAX_DEFEND} card(s)`); return; }
+          selected.add(id);
+        }
+        el.classList.toggle("selected", selected.has(id));
+        refresh();
+      };
+    } else {
+      el.onclick = () => toast("Support cards cannot be played in defense");
+    }
+    grid.appendChild(el);
+  }
+  refresh();
+  confirm.onclick = async () => {
+    if (selected.size === 0) return;
+    const cost = [...selected].reduce((s, id) => s + costOf(id), 0);
+    if (cost > avail) { toast(`Not enough mana: cost ${cost}, only ${avail} left`); return; }
+    const st2 = game.state;
+    if (freeCols(st2, game.me).length === 0) { toast(orderHint()); return; }
+    confirm.disabled = true;
+    const col = nextSlotCol(st2, game.me);
+    const resp = await sendAction([...selected], `stopover_${col}`, "defend");
+    if (resp && resp.success === false) {
+      toast(resp.message || "Action refused");
+      confirm.disabled = false;
+      return;
+    }
+    game.selected = new Set();
+    modal.remove();
+  };
+  document.body.appendChild(modal);
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* popup: choose the earth-rotation direction for the black_hole DWELLING tap
+   (Mages, engine_version 26). The choice is sent with the tap message (the `rotation`
+   field: "cw"|"ccw") and rotates the earth 3 cells (the 4 biomes shift position; every
+   token stays on its cell). Free + once per turn, like the other dwelling taps. */
+export function showBlackHoleRotationPopup() {
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup";
+  const options = [
+    `<button class="pending-opt" data-rotation="cw">↻ Clockwise</button>`,
+    `<button class="pending-opt" data-rotation="ccw">↺ Counter-clockwise</button>`,
+  ];
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>🕳 Black hole</h3>
+      <p class="hint">Rotate the earth 3 cells (the biomes shift position — every token stays where it is).</p>
+      <div class="pending-options">${options.join("")}</div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll(".pending-opt").forEach(btn => {
+    btn.onclick = () => {
+      // sendAction(cards, to, mode, pendings, cell, dayNight, tempChange, cataclysmOrder, rotation)
+      sendAction([], "dwelling", "dwelling_activation", [], null, null, null, null, btn.dataset.rotation);
       game.selected = new Set();
       modal.remove();
     };

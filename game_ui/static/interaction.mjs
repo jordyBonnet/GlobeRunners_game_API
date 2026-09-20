@@ -7,6 +7,7 @@ import { detectPhase, myTurn, START_MANA_N } from "./phase.mjs";
 import { game } from "./game.mjs";
 import { renderAll } from "./state.mjs";
 import { showCardModal } from "./modals.mjs";
+import { showDiscardPopup } from "./actions.mjs";
 
 export function makeHandCard(id, interactive, me) {
   const el = document.createElement("div");
@@ -24,19 +25,18 @@ export function makeHandCard(id, interactive, me) {
   el.title = title;
   el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
 
-  // click: selection (1 card for play/mana-pass, up to 3 in init, exactly N in discard selection)
+  // click: selection (1 card for play/mana-pass, up to 3 in init);
+  // discard selection (engine_version ≥ 13) re-opens the discard popup (renderAll auto-opens it)
   if (interactive) {
     el.onclick = () => {
       const ph = detectPhase(game.state);
+      if (ph && ph.kind === "discard") { showDiscardPopup(ph.n); return; }
       const meNow = (game.state && game.state.players) ? game.state.players[game.me] : {};
-      const isDiscardSel = ph && ph.kind === "discard" && ph.actor === game.me;
-      const maxSel = ph === "init-mana" ? START_MANA_N - ((meNow.mana || []).length)
-                   : isDiscardSel ? ph.n : 1;
+      const maxSel = ph === "init-mana" ? START_MANA_N - ((meNow.mana || []).length) : 1;
       if (game.selected.has(id)) game.selected.delete(id);
       else {
-        if (ph !== "init-mana" && !isDiscardSel) game.selected.clear();
+        if (ph !== "init-mana") game.selected.clear();
         if (game.selected.size < maxSel) game.selected.add(id);
-        else if (isDiscardSel) toast(`Select exactly ${maxSel} card(s) to discard`);
       }
       renderAll();
     };
