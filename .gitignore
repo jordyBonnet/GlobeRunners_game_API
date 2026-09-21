@@ -11,3 +11,6 @@ wheels/
 
 # Windows reserved-name artifacts (e.g. `> nul` redirects)
 nul
+
+# Server / analysis run logs
+*.log

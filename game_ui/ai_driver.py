@@ -25,7 +25,7 @@ from player_ai.playerai import PlayerAI
 # "turn N - waiting for first/second player (NAME) to play"
 PLAY_TURN_RE = re.compile(r"turn \d+ - waiting for (first|second) player \((.+?)\) to play")
 
-# "turn N - waiting for NAME to discard K card(s)" (discard selection, engine_version 13)
+# "turn N - waiting for NAME to discard K card(s)" (discard selection)
 DISCARD_RE = re.compile(r"turn \d+ - waiting for (.+?) to discard (\d+) card\(s\)")
 
 # support faction pool (engineers / mages / doctors): 5 cards each, the deck is
@@ -121,7 +121,7 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
             return {"cards": [], "to": "", "mode": "pass", "pendings": []}
         return ai.put_mana(1, in_turn=True)
 
-    # 2.5 Discard selection (rule of engine_version 13): the trip chain is PAUSED
+    # 2.5 Discard selection: the trip chain is PAUSED
     #     waiting for the discarding player's choice -> pick the least valuable
     #     card(s) from the hand (to: 'discard_pile'). Deliberately NOT gated on
     #     st['acted']: the same state string can recur in a turn (two discard

@@ -12,9 +12,13 @@ Run from the project root:
 """
 import contextlib
 import io
+import os
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 import engine.game_engine as ge
 from models import GameState, PlayerState
@@ -32,7 +36,7 @@ def _mk_game(a_deck, b_deck):
     game = GameState(
         id="test_v15_mt", players={"Al": _mk_player("Al", a_deck), "Bo": _mk_player("Bo", b_deck)},
         turn_order=["Al", "Bo"], turn=1, state="turn 1 - waiting for first player (Al) to play",
-        day_night="day", temperature=10, engine_version=15, log=[],
+        day_night="day", temperature=10, engine_version="1.0", log=[],
         cataclysm_pile=["OC", "MO", "DE", "JU"],
         earth=[[ge.BIOMES[i // 6]] for i in range(24)],
     )

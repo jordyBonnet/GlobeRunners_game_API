@@ -78,7 +78,7 @@ c.close()
 print(f"game {gid} created (engine_version={gs.engine_version})")
 
 try:
-    assert gs.engine_version >= 15, f"expected engine_version >= 15, got {gs.engine_version}"
+    assert gs.engine_version == "1.0", f"expected engine_version '1.0', got {gs.engine_version}"
 
     # --- init: both put 3 cards in mana ------------------------------------
     # (A's hand = [refinery, CHEAP, main[1], main[2], main[3], main[4]])

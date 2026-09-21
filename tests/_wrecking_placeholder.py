@@ -49,7 +49,7 @@ def check(condition, msg):
         failed += 1
         print(f"  ✗ {msg}")
 
-def new_game(a_ids, b_ids, version=28):
+def new_game(a_ids, b_ids, version=None):
     """ create a game with deterministic hands/decks/mana and a given engine_version.
     layout: hand = ids[0:6], mana = ids[6:12], deck = ids[12:] """
     p1 = PlayerState(name='A', deck=list(a_ids))
@@ -103,7 +103,7 @@ def play_wreck(gid, gs):
 # ============================================================
 print("=== Test 1: v28 — wreck AFTER placement -> the placeholder STAYS, the card goes to discard ===")
 # ============================================================
-gs, gid = new_game(A_DECK, B_DECK, version=28)
+gs, gid = new_game(A_DECK, B_DECK)
 gs.players['A'].message = {'cards': [BLACK], 'to': 'dwelling', 'mode': '', 'pendings': []}
 p, gs, r, msg = ge.player_play('first', gs.players['A'], gs)
 check(r, f"A places the black_hole dwelling: {msg}")
@@ -127,26 +127,10 @@ check(gs.players['A'].dwelling_slot == 4, "the placeholder is still in place aft
 _delete(gid)
 
 # ============================================================
-print("=== Test 2: v27 pinning — the OLD behavior (placeholder VANISHES with the card) ===")
-# ============================================================
-gs, gid = new_game(A_DECK, B_DECK, version=27)
-gs.players['A'].message = {'cards': [BLACK], 'to': 'dwelling', 'mode': '', 'pendings': []}
-p, gs, r, msg = ge.player_play('first', gs.players['A'], gs)
-check(gs.players['A'].dwelling == BLACK, "v27: A places the black_hole")
-gs = play_wreck(gid, gs)
-check(gs.players['A'].dwelling is None, "v27: the wreck removes the card")
-check(gs.players['A'].dwelling_slot is None, f"v27 pin: the placeholder VANISHES with the card [slot={gs.players['A'].dwelling_slot}]")
-gs.players['A'].message = {'cards': [ADV2], 'to': 'stopover_3', 'mode': 'move', 'pendings': []}
-p, gs, r, msg = ge.player_play('first', gs.players['A'], gs)
-last_a = (gs.players['A'].action_chain or [{}])[-1]
-check(last_a.get('to') == 'stopover_3', f"v27: the next play also lands on stopover_3 (same placement as v28 — only the DISPLAY differs) [got {last_a.get('to')}]")
-_delete(gid)
-
-# ============================================================
 print("=== Test 3: v28 — re-place a dwelling after the wreck -> the new placeholder takes the NEXT position ===")
 # ============================================================
 A_DECK3 = [BLACK, REFINERY, ADV2, FILLER[21], FILLER[22], FILLER[23], FILLER[24], FILLER[25], FILLER[26], FILLER[27], FILLER[28], FILLER[29], FILLER[0]]
-gs, gid = new_game(A_DECK3, B_DECK, version=28)
+gs, gid = new_game(A_DECK3, B_DECK)
 gs.players['A'].message = {'cards': [BLACK], 'to': 'dwelling', 'mode': '', 'pendings': []}
 p, gs, r, msg = ge.player_play('first', gs.players['A'], gs)
 check(gs.players['A'].dwelling == BLACK and gs.players['A'].dwelling_slot == 4, "A places the black_hole (position 1)")
@@ -163,7 +147,7 @@ _delete(gid)
 print("=== Test 4: v28 — a pending card placed after the wreck lands AFTER the ghost placeholder ===")
 # ============================================================
 A_DECK4 = [BLACK, 'epo', ADV2, FILLER[21], FILLER[22], FILLER[23], FILLER[24], FILLER[25], FILLER[26], FILLER[27], FILLER[28], FILLER[29], FILLER[1]]
-gs, gid = new_game(A_DECK4, B_DECK, version=28)
+gs, gid = new_game(A_DECK4, B_DECK)
 gs.players['A'].message = {'cards': [BLACK], 'to': 'dwelling', 'mode': '', 'pendings': []}
 p, gs, r, msg = ge.player_play('first', gs.players['A'], gs)
 gs = play_wreck(gid, gs)
@@ -193,7 +177,7 @@ print("=== Test 5 (E2E): v28 through the REAL handle_websocket_message entry poi
 # ============================================================
 def setup_v28_game():
     """ create a v28 game with deterministic zones, persisted to the DB, state = play phase """
-    gs, gid = new_game(A_DECK, B_DECK, version=28)
+    gs, gid = new_game(A_DECK, B_DECK)
     conn, _, gs = ge.get_current_game(gid)
     gs.state = f"turn {gs.turn} - waiting for first player (A) to play"
     conn.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (gs.to_json(), gid))

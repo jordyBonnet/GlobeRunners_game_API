@@ -84,7 +84,7 @@ export function renderAll() {
     canAct = myTurn(st);
     hint = canAct ? "Put your card on the next stopover cell (in order 1→5), or “Pass”." : "Waiting for the opponent…";
   } else if (ph && ph.kind === "discard") {
-    // discard selection (engine_version 13): the trip chain is paused — the popup
+    // discard selection: the trip chain is paused — the popup
     // (showDiscardPopup, actions.mjs) is the interface; hand cards re-open it
     if (ph.actor === game.me) {
       phaseText = `Discard selection — choose ${ph.n} card(s) to discard`;
@@ -103,7 +103,7 @@ export function renderAll() {
   $("#action-hint").textContent = hint;
 
   const btnPlay = $("#btn-play"), btnDefend = $("#btn-defend"), btnPass = $("#btn-pass"), btnTap = $("#btn-tap");
-  // discard popup (engine_version ≥ 13): auto-open when the chain is paused on MY
+  // discard popup: auto-open when the chain is paused on MY
   // discard choice (idempotent — renderAll runs on every poll); sweep it away as
   // soon as the phase is over (the answer was accepted / the game moved on).
   const myDiscard = ph && ph.kind === "discard" && ph.actor === game.me;
@@ -136,7 +136,7 @@ export function renderAll() {
     btnDefend.classList.add("hidden");
     btnTap.classList.add("hidden");
   } else if (ph && ph.kind === "discard") {
-    // discard selection (engine_version 13): the POPUP is the only action — all
+    // discard selection: the POPUP is the only action — all
     // action-bar buttons stay hidden (the popup has its own red DISCARD button)
     btnPlay.classList.add("hidden");
     btnDefend.classList.add("hidden");

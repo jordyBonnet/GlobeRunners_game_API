@@ -210,25 +210,6 @@ print(f"5) NO STACKING (per-player): A={a_stops} B={b_stops} -> PASS")
 ok += 1
 
 # ============================================================
-# 6) OLD GAME (engine_version < 10): rooted is a NO-OP (no token, card discarded)
-# ============================================================
-gs5 = new_game([rooted1], [adv1])
-set_biomes(gs5, 'OC')
-gs5.engine_version = 9  # old game: rooted is a no-op
-force_hand(gs5, 'A', [rooted1]); force_hand(gs5, 'B', [adv1])
-gs5 = play(gs5, 'A', 'first', rooted1)
-gs5 = play(gs5, 'B', 'second', adv1)
-gs5 = ge.process_trip_chain(gs5)
-# the card should NOT be in rooted_this_turn (old game: no token)
-assert not any(e['card_id'] == rooted1 for e in gs5.rooted_this_turn), \
-    f"old game: card {rooted1} should NOT be in rooted_this_turn, got {gs5.rooted_this_turn}"
-# the card should be in the discard (discarded as usual)
-assert rooted1 in (gs5.players['A'].discard or []), \
-    f"old game: card {rooted1} should be in A's discard, got {gs5.players['A'].discard}"
-print(f"6) OLD GAME (v9): rooted is a no-op, card discarded -> PASS")
-ok += 1
-
-# ============================================================
 # 7) BLOCKED rooted card: no token (the effect does not fire)
 # ============================================================
 gs6 = new_game([rooted1], [adv1])

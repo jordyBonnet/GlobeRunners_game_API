@@ -137,7 +137,7 @@ def check(condition, msg):
 # ============================================================
 print("\n=== Test 1: Apocalypticritual SETS the pile to the chosen order (v25) ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 check(gs.cataclysm_pile == ['OC', 'MO', 'DE', 'JU'],
       f"pile starts at the fixed order: {gs.cataclysm_pile}")
@@ -162,7 +162,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2: INSTANT — a cataclysm card strikes the CHOSEn top biome ===")
 # ============================================================
-gs, gid = new_game([RITUAL, CATACLYSM, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, CATACLYSM, adv1], [adv1])
 # all cells = OC (player A is Miaous → no biome bonus on OC); A on cell 5
 set_biomes(gs, 'OC')
 a = gs.players['A']
@@ -197,7 +197,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 3: the chosen order is PERMANENT (persists across turn-ends) ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 chosen = ['DE', 'JU', 'OC', 'MO']
 force_hand(gs, 'A', [RITUAL])
@@ -220,7 +220,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 4: a MOVE play WITHOUT an order choice is REJECTED (v25) ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 start_pile = list(gs.cataclysm_pile)
 force_hand(gs, 'A', [RITUAL])
@@ -250,7 +250,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 5: a DEFEND play is a plain no-op (no order required, pile unchanged) ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 start_pile = list(gs.cataclysm_pile)
 force_hand(gs, 'A', [RITUAL])
@@ -261,24 +261,9 @@ check(gs.cataclysm_pile == start_pile, f"pile NOT changed by a defend play: {gs.
 _delete(gid)
 
 # ============================================================
-print("\n=== Test 6: old-game pinning (v24) — Apocalypticritual is a no-op, pile unchanged ===")
-# ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=24)   # pre-Apocalypticritual
-a = gs.players['A']
-start_pile = list(gs.cataclysm_pile)
-force_hand(gs, 'A', [RITUAL])
-# v24: the card is a no-op support card; the 'cataclysm_order' field is ignored
-gs, okk, msgtxt = play(gs, 'A', 'first', RITUAL, mode='move', to='stopover_4',
-                       order=['JU', 'OC', 'MO', 'DE'])
-check(okk, f"v24 play accepted (the card is a no-op support card) (msg: {msgtxt})")
-check(gs.cataclysm_pile == start_pile, f"v24: pile NOT changed (still {start_pile}): {gs.cataclysm_pile}")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 7: turn-log note records the chosen order ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 chosen = ['JU', 'OC', 'MO', 'DE']
 force_hand(gs, 'A', [RITUAL])
@@ -303,7 +288,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 8: card conservation — the ritual card ends in the discard ===")
 # ============================================================
-gs, gid = new_game([RITUAL, adv1], [adv1], version=25)
+gs, gid = new_game([RITUAL, adv1], [adv1])
 a = gs.players['A']
 chosen = ['MO', 'DE', 'JU', 'OC']
 force_hand(gs, 'A', [RITUAL])

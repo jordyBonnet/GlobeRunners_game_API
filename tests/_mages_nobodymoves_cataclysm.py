@@ -29,7 +29,7 @@ def _delete(gid):
     conn.commit()
     conn.close()
 
-def new_game(version):
+def new_game():
     filler = [c for c in DB.filter(pl.col('faction') == 'Miaous')['card_id'].to_list()
               if c != CAT][:18]
     a_deck = [NOBODY] + filler
@@ -41,7 +41,6 @@ def new_game(version):
     conn, _, gs = ge.get_current_game(gid)
     conn.close()
     gs.turn_order = ['A', 'B']
-    gs.engine_version = version
     # make the whole board MO so both tokens (placed on MO cells) are on the struck biome
     for cell in gs.earth:
         cell[0] = 'MO'
@@ -107,7 +106,7 @@ def check(cond, msg):
 # ============================================================
 print("\n=== Test 1 (v27): cataclysm knockback SUPPRESSED during nobodymoves; pile still rotates ===")
 # ============================================================
-gs, gid = new_game(version=27)
+gs, gid = new_game()
 a = gs.players['A']; b = gs.players['B']
 force_hand(gs, 'A', [NOBODY])
 force_hand(gs, 'B', [CAT])
@@ -129,7 +128,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2 (v27 control): WITHOUT nobodymoves the cataclysm knockback FIRES ===")
 # ============================================================
-gs, gid = new_game(version=27)
+gs, gid = new_game()
 a = gs.players['A']; b = gs.players['B']
 force_hand(gs, 'B', [CAT])
 gs, okk, m = play(gs, 'B', 'second', CAT, 'stopover_4')
@@ -142,43 +141,6 @@ check(a.current_position == 0, f"A (victim) knocked back 5 -> 0 (first MO cell):
 check(gs.cataclysm_pile == ['OC', 'DE', 'JU', 'MO'], f"pile rotated: {gs.cataclysm_pile}")
 _delete(gid)
 
-# ============================================================
-print("\n=== Test 3 (v26 pinning): OLD behavior — knockback FIRES during nobodymoves ===")
-# ============================================================
-gs, gid = new_game(version=26)
-a = gs.players['A']; b = gs.players['B']
-force_hand(gs, 'A', [NOBODY])
-force_hand(gs, 'B', [CAT])
-gs, okk, m = play(gs, 'A', 'first', NOBODY, 'stopover_4')
-check(okk, f"play nobodymoves accepted (msg: {m})")
-gs, okk, m = play(gs, 'B', 'second', CAT, 'stopover_3')
-check(okk, f"play cataclysm card accepted (msg: {m})")
-gs = pas(gs, 'A', 'first')
-gs = pas(gs, 'B', 'second')
-gs = ge.process_trip_chain(gs)
-check(gs.nobodymoves_active is True, f"lock was active: {gs.nobodymoves_active}")
-check(a.current_position == 0, f"v26: A (victim) WAS knocked back 5 -> 0 (old behavior): {a.current_position}")
-nt = notes_of(gs)
-check(not any('knockback suppressed' in n for n in nt), f"v26: no suppression note (old behavior)")
-_delete(gid)
-
-# ============================================================
-print("\n=== Test 4 (v23 pinning): OLD behavior — knockback FIRES during nobodymoves ===")
-# ============================================================
-gs, gid = new_game(version=23)
-a = gs.players['A']; b = gs.players['B']
-force_hand(gs, 'A', [NOBODY])
-force_hand(gs, 'B', [CAT])
-gs, okk, m = play(gs, 'A', 'first', NOBODY, 'stopover_4')
-gs, okk, m = play(gs, 'B', 'second', CAT, 'stopover_3')
-gs = pas(gs, 'A', 'first')
-gs = pas(gs, 'B', 'second')
-gs = ge.process_trip_chain(gs)
-check(a.current_position == 0, f"v23: A WAS knocked back 5 -> 0 (old behavior): {a.current_position}")
-check(gs.cataclysm_pile == ['OC', 'DE', 'JU', 'MO'], f"v23: pile rotated: {gs.cataclysm_pile}")
-_delete(gid)
-
-# ============================================================
 print(f"\n{'='*50}")
 print(f"RESULTS: {passed} passed, {failed} failed")
 print(f"{'='*50}")

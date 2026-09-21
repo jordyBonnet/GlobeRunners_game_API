@@ -187,23 +187,6 @@ assert b_pos == 0, b_pos                                 # 1 -> 0 (drop) -> max(
 assert gs.drop_tokens == {}, gs.drop_tokens
 ok += 1
 
-# 6) engine_version pinning: v7 game -> the INSTANT hook is off, no token at all
-gs = new_game([pt_adv0], [adv1])
-gs.engine_version = 7
-set_biomes(gs, 'OC')
-move_to(gs, 'A', 2); move_to(gs, 'B', 1)
-force_hand(gs, 'A', [pt_adv0]); force_hand(gs, 'B', [adv1])
-gs = play(gs, 'A', 'first', pt_adv0)
-print(f"6a) v7 play: tokens={gs.drop_tokens} (expected empty)  annotation={gs.players['A'].message.get('drop_placed_on')}")
-assert gs.drop_tokens == {}, gs.drop_tokens
-assert 'drop_placed_on' not in gs.players['A'].message
-gs = play(gs, 'B', 'second', adv1)
-gs = play_and_chain(gs)
-b_pos = gs.players['B'].current_position
-print(f"6b) v7 chain: B at {b_pos} (expected 2 - no drop to trigger)")
-assert b_pos == 2, b_pos
-ok += 1
-
 # 7) DEFEND mode: a pet_trap played sideways plays no effect -> no token
 gs = new_game([pt_adv0], [])
 set_biomes(gs, 'OC')

@@ -183,16 +183,14 @@ def all_zones(gs):
     return zones
 
 # ============================================================
-# 1) COST: support cards cost their mana_cost when played (v12)
+# 1) COST: support cards cost their mana_cost when played
 # ============================================================
 gs, _ = new_game([], [])
 assert ge._play_cost(gs, 'boost') == 1, "boost should cost 1"
 assert ge._play_cost(gs, 'landmine') == 3, "landmine should cost 3"
 assert ge._play_cost(gs, 'refinery') == 3, "refinery should cost 3"
 assert ge._play_cost(gs, adv1) >= 1, "main card should cost its pool mana"
-gs_old, _ = new_game([], [], version=11)
-assert ge._play_cost(gs_old, 'boost') == 0, "v11: support cards cost 0 (old behavior)"
-print("1) COST: support cards pay their mana_cost (v12), 0 (v<12) -> PASS")
+print("1) COST: support cards pay their mana_cost -> PASS")
 ok += 1
 
 # ============================================================
@@ -418,23 +416,6 @@ assert ge.is_condition_met('drop_on_board', gs.players['A'], gs) is False, "clea
 gs.board_drops.append({'cell': 5, 'kind': 'boost', 'owner': 'A'})
 assert ge.is_condition_met('drop_on_board', gs.players['A'], gs) is True, "engineer drop -> met"
 print("13) drop_on_board: engineer drops count -> PASS")
-ok += 1
-
-# ============================================================
-# 14) OLD GAME (engine_version < 12): drops inert, dwelling rejected
-# ============================================================
-gs_old, _ = new_game([], [], version=11)
-set_biomes(gs_old, 'OC')
-gs_old.board_drops.append({'cell': 2, 'kind': 'boost', 'owner': 'B'})   # hypothetical leftover
-put_at(gs_old, 'A', 1)
-gs_old = ge.process_advancing(1, gs_old.players['A'], gs_old)   # 1 -> 2: the drop must NOT fire
-assert gs_old.players['A'].current_position == 2, "v11: the drop must not fire"
-assert gs_old.board_drops, "v11: the token must stay on the board"
-# dwelling actions are rejected
-force_hand(gs_old, 'A', ['refinery'])
-gs_old, okk, msgtxt = dwelling(gs_old, 'A', 'first', cards=['refinery'])
-assert not okk, "v11: dwelling placement must be rejected"
-print("14) OLD GAME (v11): drops inert, dwelling rejected -> PASS")
 ok += 1
 
 # ============================================================

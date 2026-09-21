@@ -163,7 +163,7 @@ def check(condition, msg, extra=''):
 # ============================================================================
 print("=== 1) Mages instant cards land in the turn's 'instant' section ===")
 # ============================================================================
-gs, gid = new_game([ge.MAGE_CELASTIAL_REVERSAL, ge.MAGE_THERMIC_FLUX, adv1], [adv1], version=27)
+gs, gid = new_game([ge.MAGE_CELASTIAL_REVERSAL, ge.MAGE_THERMIC_FLUX, adv1], [adv1])
 set_biomes(gs, 'OC')
 force_hand(gs, 'A', [ge.MAGE_CELASTIAL_REVERSAL, ge.MAGE_THERMIC_FLUX])
 force_hand(gs, 'B', [adv1])
@@ -182,7 +182,7 @@ check(not any('Celestial_reversal' in n for n in all_entry_notes(gs)),
 # ============================================================================
 print("=== 2) nobodymoves + Apocalypticritual in the 'instant' section ===")
 # ============================================================================
-gs2, gid2 = new_game([ge.MAGE_NOBODYMOVES, adv1], [ge.MAGE_APOCALYPTICRITUAL, adv1], version=27)
+gs2, gid2 = new_game([ge.MAGE_NOBODYMOVES, adv1], [ge.MAGE_APOCALYPTICRITUAL, adv1])
 set_biomes(gs2, 'OC')
 force_hand(gs2, 'A', [ge.MAGE_NOBODYMOVES])
 force_hand(gs2, 'B', [ge.MAGE_APOCALYPTICRITUAL])
@@ -209,7 +209,7 @@ pt = q(effect='pet_trap')['card_id'].to_list()
 pt = pt[0] if pt else None
 wb = q(effect='wrecking_ball')['card_id'].to_list()
 wb = wb[0] if wb else None
-gs3, gid3 = new_game([pt, wb, adv1], ['refinery', adv1], version=27)
+gs3, gid3 = new_game([pt, wb, adv1], ['refinery', adv1])
 set_biomes(gs3, 'OC')
 if pt:
     force_hand(gs3, 'A', [pt])
@@ -233,7 +233,7 @@ check(not any('wrecking_ball' in n and 'dwelling' in n for n in all_entry_notes(
 # ============================================================================
 print("=== 4) dwelling taps (refinery / laboratory / black_hole) in the 'instant' section ===")
 # ============================================================================
-gs4, gid4 = new_game(['refinery', 'laboratory', 'black_hole', adv1], [adv1], version=26)
+gs4, gid4 = new_game(['refinery', 'laboratory', 'black_hole', adv1], [adv1])
 set_biomes(gs4, ['OC', 'MO', 'DE', 'JU'])
 gs4.earth_initial_b0 = 'OC'
 gs4.earth_rotation = 0
@@ -263,7 +263,7 @@ check(any('laboratory' in w and 'epo' in w for w in instant_whats(gs4)),
 # ============================================================================
 print("=== 5) a TAP-ONLY turn keeps its log entry (instant, no stopovers) ===")
 # ============================================================================
-gs5, gid5 = new_game(['refinery', adv1], [adv1], version=26)
+gs5, gid5 = new_game(['refinery', adv1], [adv1])
 set_biomes(gs5, 'OC')
 force_hand(gs5, 'A', ['refinery'])
 force_hand(gs5, 'B', [adv1])
@@ -289,22 +289,6 @@ for t in (gs5.log or []):
 check(found is not None, f"the tap-only turn {n_turn} log entry exists")
 check(bool(found) and (found.get('instant') or []) and not (found.get('stopovers') or []),
       f"the tap-only turn has an 'instant' section and no stopovers: {found}")
-
-# ============================================================================
-print("=== 6) old game (engine_version 21): NO 'instant' section ===")
-# ============================================================================
-gs6, gid6 = new_game([ge.MAGE_CELASTIAL_REVERSAL, adv1], [adv1], version=21)
-set_biomes(gs6, 'OC')
-force_hand(gs6, 'A', [ge.MAGE_CELASTIAL_REVERSAL])
-force_hand(gs6, 'B', [adv1])
-gs6, ok, _ = play(gs6, 'A', 'first', ge.MAGE_CELASTIAL_REVERSAL, day_night='night')
-# v21: Celestial_reversal is a no-op -> it must NOT create an instant note
-check(not any('Celestial_reversal' in w for w in instant_whats(gs6)),
-      f"v21: no Celestial_reversal instant note: {instant_whats(gs6)}")
-gs6, ok, _ = play(gs6, 'B', 'second', adv1)
-gs6 = ge.process_trip_chain(gs6)
-check(not any('Celestial_reversal' in w for w in instant_whats(gs6)),
-      "v21: the instant section has no Celestial_reversal (old behavior)")
 
 # ============================================================================
 print("=== 7) replay reconstructs the Apocalypticritual pile from 'instant' ===")
@@ -378,7 +362,7 @@ else:
     print("  (no cataclysm card in the pool — skipping the replay check)")
 
 # --- cleanup the other games ---
-for g in (gid, gid2, gid3, gid4, gid5, gid6):
+for g in (gid, gid2, gid3, gid4, gid5):
     try:
         _delete(g)
     except Exception:

@@ -21,8 +21,6 @@ in **Parquet** (polars), vanilla JS/CSS/HTML frontend.
 │   └── analysis/      #   dedicated web app for replay/analysis (see its README)
 ├── cards/             # cardpool.parquet — the pool of ~7600 cards (source of truth)
 ├── tests/             # E2E / smoke tests and diagnostic scripts
-├── main.py            # (reserved — empty)
-├── debug_player.ipynb # Debug notebook
 └── pyproject.toml     # Dependencies (uv): fastapi, uvicorn, polars, numpy, pillow, websockets
 ```
 
@@ -60,7 +58,7 @@ state_json = ge.handle_websocket_message(game_id, player)  # 1 action -> JSON st
      effect can **pause** the chain: the state becomes
      *"turn N - waiting for NAME to discard K card(s)"*, the discarding player sends
      `{"cards": […K…], "to": "discard_pile", "mode": ""}` to choose which cards, and the
-     chain resumes (engine_version ≥ 13; older games auto-discard the last K cards).
+     chain resumes.
   5. End of turn: play order reversed, day ↔ night, draw of 3 cards (re-shuffle
      of the discard pile if the deck is empty), back to phase 2.
 - **Main functions**:
@@ -194,7 +192,6 @@ msg = ai.play_card()                     # or ai.put_mana(n, in_turn=...)
 
 - **`games.db`**: SQLite, table `games(game_id, state_json)` — the **final** state
   of every game, populated automatically by the engine (no action required).
-- **`games_db_debug.ipynb`**: database exploration notebook.
 - **`games/analysis/`**: web application that **replays** a stored game —
   turn-by-turn segmentation, replay through the real engine, reliability badge
   ("replay verified" / "approximate"). See **`games/analysis/README.md`** which

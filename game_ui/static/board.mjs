@@ -100,14 +100,13 @@ export function renderBoard(st, me, oppoName) {
   const earth = st.earth || [];
 
   // Earth background: pick the config image that matches this board's biome order
-  // (see cards.mjs earthBgSrc) and, for black_hole rotations (Mages, engine_version
-  // 26), ROTATE the art about the board center so it tracks the engine's biome
-  // positions. Only touch the src when it actually changes: the image is ~10 MB, and
-  // the board re-renders on every state poll, so a naive set would re-trigger the
-  // download each time.
-  //   pre-v26: biomes are static -> base image = current cell-0 biome (earth[0][0]),
-  //     no rotation (earth_rotation defaults to 0).
-  //   v26+: the black_hole TAP rotates the earth, so the biomes in `st.earth` shift.
+  // (see cards.mjs earthBgSrc) and, for black_hole rotations (Mages), ROTATE the art
+  // about the board center so it tracks the engine's biome positions. Only touch the
+  // src when it actually changes: the image is ~10 MB, and the board re-renders on
+  // every state poll, so a naive set would re-trigger the download each time.
+  //   When no black_hole tap has happened, the biomes are static -> base image =
+  //     current cell-0 biome (earth[0][0]), no rotation (earth_rotation = 0).
+  //   The black_hole TAP rotates the earth, so the biomes in `st.earth` shift.
   //     We PIN the base image to the INITIAL cell-0 biome (`st.earth_initial_b0`) and
   //     rotate the art by `st.earth_rotation * 15deg` (15deg = one cell; 3 cells per
   //     tap = 45deg). Every token stays on its cell index (they are positioned by
@@ -271,7 +270,7 @@ export function renderBoard(st, me, oppoName) {
           }
           defendIdx++;
         } else if (k > 1) {
-          // several cards on the SAME slot (only possible in old games): nudge each
+          // several cards on the SAME slot (a legacy/edge case): nudge each
           // additional one up so they all stay visible
           el.style.marginTop = `${-(k - 1) * 8}px`;
         }
@@ -281,14 +280,13 @@ export function renderBoard(st, me, oppoName) {
     // dwelling placeholder: a faction-specific placeholder image in the stopover
     // slot that the refinery would have occupied (stored in p.dwelling_slot)
     // — purely visual, fills the slot to show the dwelling card is on the board
-    // (engine_version 12+). The engine sets it at placement time and CLEARS it in
+    // (the dwelling zone). The engine sets it at placement time and CLEARS it in
     // the cleaning phase, so the placeholder only shows during the placement turn
     // and must not reappear at every new turn.
-    // engine_version 28: when a wrecking_ball removes the dwelling card, the
-    // placeholder STAYS in place (only the card goes to the discard) — the gate
-    // is on p.dwelling_slot ALONE (no longer requiring p.dwelling). In games < 28
-    // the engine cleared dwelling_slot on the wreck, so a slot-without-card can
-    // only occur in v28+ (the tooltip adapts to the missing card).
+    // when a wrecking_ball removes the dwelling card, the placeholder STAYS in
+    // place (only the card goes to the discard) — the gate is on p.dwelling_slot
+    // ALONE (not requiring p.dwelling), so a slot-without-card means the card was
+    // wrecked this turn (the tooltip adapts to the missing card).
     // ALWAYS remove any stale placeholder first (it would otherwise stick in the
     // DOM once the engine clears the slot - the slots are built once, not rebuilt
     // on each render).
@@ -304,18 +302,18 @@ export function renderBoard(st, me, oppoName) {
       el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
       slot.appendChild(el);
     }
-    // pending placeholders (doctors, engine_version 16): a pending card placed
-    // THIS turn creates a placeholder in a stopover slot (like the refinery dwelling).
+    // pending placeholders (doctors): a pending card placed THIS turn creates a
+    // placeholder in a stopover slot (like the refinery dwelling).
     // p.pending_slots is the per-turn placeholder list (cleared in the cleaning
-    // phase — NOT parallel to the persistent p.pendings zone). Entry shapes:
-    // engine_version 19+ = [card, slot] pair; v16-18 = bare slot index (null = skip).
+    // phase — NOT parallel to the persistent p.pendings zone). Entries are
+    // [card, slot] pairs (or a bare slot index, null = skip).
     // Cleared in the cleaning phase, so placeholders only show during the placement turn.
     slotEls[row].forEach(s => s.querySelectorAll(".pending-placeholder").forEach(e => e.remove()));
     for (const entry of (p.pending_slots || [])) {
       const [phCard, phCol] = Array.isArray(entry) ? entry : [null, entry];
       if (phCol == null || phCol < 0 || phCol >= N_STOPOVERS) continue;
       const slot = slotEls[row][phCol];
-      // v20: when the attached pending card was placed THIS turn, the placeholder
+      // when the attached pending card was placed THIS turn, the placeholder
       // STAYS (the engine keeps the [card, slot] pair — it marks the consumed
       // trip-chain position). The action_chain records the attachment
       // (pending_card), so the tooltip can say "attached" instead of "waiting".
@@ -328,7 +326,7 @@ export function renderBoard(st, me, oppoName) {
       el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
       slot.appendChild(el);
     }
-    // rooted (engine_version 10): a card that earned a rooted token LAST turn survives
+    // rooted: a card that earned a rooted token LAST turn survives
     // the cleaning phase — it sits on a free stopover (game.rooted_on_board:
     // [{card_id, owner, stopover}]) and is discarded at the end of the FOLLOWING turn.
     // Render it in its owner's row, at the stored stopover, with the rooted-token
@@ -370,7 +368,7 @@ export function renderBoard(st, me, oppoName) {
         if (chip) { chip.classList.add("chip-float"); s.appendChild(chip); }
       }
     }
-    // visual states: filled slots / next slot (PER-PLAYER position, v15) / not-yet-accessible slots
+    // visual states: filled slots / next slot (PER-PLAYER position) / not-yet-accessible slots
     const free = freeCols(st, name);
     const next = free.length > 0 ? nextSlotCol(st, name) : -1;
     for (let col = 0; col < N_STOPOVERS; col++) {

@@ -71,7 +71,7 @@ def send(gid, name, message):
     conn.close()
     return gs, resp
 
-def new_game(a_special, version=13):
+def new_game(a_special):
     """ deterministic game. Mana starts EMPTY; init() places exactly 3 per player
        (the init check requires len(mana)==3). After init, A's hand = a_special +
        [f(3), f(4), f(5)] (f0..f2 moved to mana) and the mana pool is 3 (turn-1 budget).
@@ -95,8 +95,6 @@ def new_game(a_special, version=13):
     ga, gb = gs.players['A'], gs.players['B']
     ga.hand, ga.mana, ga.deck, ga.discard = a_hand, [], a_deck, []
     gb.hand, gb.mana, gb.deck, gb.discard = b_hand, [], b_deck, []
-    if version != 13:
-        gs.engine_version = version
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (gs.to_json(), gid))
     c.commit()
     c.close()
@@ -276,33 +274,6 @@ try:
     # A total = 2 special + 6 hand fillers + 6 deck = 14
     check('card conservation for A (14 cards)', len(all_cards(zA2)) == 14, f"({len(all_cards(zA2))})")
     print(f"4) chain continuation (second discard resolves after the first choice) -> PASS")
-    ok += 1
-finally:
-    _delete(gid)
-
-# ============================================================
-# 5) engine_version < 13: legacy auto-discard (last N of hand), NO pause
-# ============================================================
-gid = new_game([D1], version=12)
-try:
-    init(gid)
-    gs, _ = send(gid, 'A', {'cards': [D1], 'to': 'stopover_4', 'mode': 'move', 'pendings': []})
-    gs, _ = send(gid, 'B', {'cards': [], 'to': '', 'mode': 'pass', 'pendings': []})
-    # capture the LAST hand card (the one the legacy auto-discard removes)
-    zA = zones(gs, 'A')
-    last_hand = zA['hand'][-1]
-    gs, _ = send(gid, 'A', {'cards': [], 'to': '', 'mode': 'pass', 'pendings': []})
-
-    check('v12: NO discard-selection pause (turn went straight to 2)',
-          gs.state.startswith('turn 2') or gs.state == 'waiting for both players to mana or pass',
-          f"(state={gs.state})")
-    check('v12: pending_discard never set', gs.pending_discard is None)
-    zA2 = zones(gs, 'A')
-    check('v12: legacy auto-discard removed the LAST hand card', last_hand in zA2['discard'] and last_hand not in zA2['hand'],
-          f"(last_hand={last_hand}, discard={zA2['discard']})")
-    # A total = 1 special + 6 hand fillers + 6 deck = 13
-    check('v12: card conservation for A (13 cards)', len(all_cards(zA2)) == 13, f"({len(all_cards(zA2))})")
-    print(f"5) engine_version 12 keeps the legacy auto-discard -> PASS")
     ok += 1
 finally:
     _delete(gid)

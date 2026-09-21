@@ -116,16 +116,6 @@ print(f"4) 'drop' cell content (v9): engine={engine_met} ai={ai_met} (both expec
 assert engine_met is True and ai_met is True, (engine_met, ai_met)
 ok += 1
 
-# 5) OLD game (engine_version 8) -> canonical default: MET even on a clean board
-gs = new_game(dob, adv1)
-set_biomes(gs, 'OC')
-gs.engine_version = 8
-engine_met = ge.is_condition_met('drop_on_board', gs.players['A'], gs)
-ai_met = ai_condition_met(gs, 'A', 'drop_on_board')
-print(f"5) old game v8, clean board: engine={engine_met} ai={ai_met} (both expected True)")
-assert engine_met is True and ai_met is True, (engine_met, ai_met)
-ok += 1
-
 # 6) FULL RESOLUTION, no drop/trap -> NOT met: no draw, reduced advancing (mana-1 = 1)
 gs = new_game(dob, adv1)
 set_biomes(gs, 'OC')

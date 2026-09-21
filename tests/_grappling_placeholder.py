@@ -74,7 +74,7 @@ def _delete(gid):
     conn.commit()
     conn.close()
 
-def new_game(version):
+def new_game():
     p1 = PlayerState(name='A', deck=['epo', A_GRAP] + FILLER_A)
     p2 = PlayerState(name='B', deck=[B_GRAP, B_PLAIN] + FILLER_B)
     gid = ge.create_new_game(player=p1.model_dump())
@@ -82,7 +82,6 @@ def new_game(version):
     conn, _, gs = ge.get_current_game(gid)
     conn.close()
     gs.turn_order = ['A', 'B']
-    gs.engine_version = version   # pin: 16 = buggy behavior, 17 = fixed
     # JU is a home biome for neither Dwarves (MO/OC) nor Demons (OC/DE) -> no biome bonus
     for cell in gs.earth:
         cell[0] = 'JU'
@@ -108,9 +107,9 @@ def act(gs, name, first_second, **msg):
     assert ok, f"rejected: {txt} (msg={p.message})"
     return gs
 
-def run_scenario(version):
+def run_scenario():
     """ A: pending epo (NOT attached), then grappling | B: grappling, then plain. """
-    gs, gid = new_game(version)
+    gs, gid = new_game()
     a, b = gs.players['A'], gs.players['B']
     force_hand(gs, 'A', ['epo', A_GRAP])
     force_hand(gs, 'B', [B_GRAP, B_PLAIN])
@@ -151,22 +150,8 @@ def run_scenario(version):
         'a_pend': a_pend, 'a_slots': a_slots,
     }
 
-print("\n=== v16 (pre-fix): grappling vs placeholder copies the NEXT row (bug) ===")
-r16 = run_scenario(16)
-print(f"  A (grappling)      delta: {r16['a_delta']:+d}  to={r16['a_to']}  notes={r16['a_notes']}")
-print(f"  B (grappling)      delta: {r16['b_delta']:+d}  to={r16['b_to']}  notes={r16['b_notes']}")
-# v16 buggy expectation (placeholder ignored -> both grappling face each other
-# at chain position 1 and copy each other's base +1):
-#   A = 1 base + 1 (copies B grap base 1) = 2
-#   B = (1 base + 1 (copies A grap base 1)) + 4 (plain card 3+1) = 6
-check(r16['a_delta'] == 2, f"v16 A delta == 2 (mutual copy): got {r16['a_delta']:+d}")
-check(r16['b_delta'] == 6, f"v16 B delta == 6 (mutual copy + plain 4): got {r16['b_delta']:+d}")
-check(any('copied' in n for n in r16['b_notes']), "v16 B grappling COPIED (the reported bug)")
-check(r16['a_pend'] == ['epo'] and r16['a_slots'] == [4],
-      f"v16 placeholder on stopover_4 (pending zone intact): {r16['a_pend']} {r16['a_slots']}")
-
 print("\n=== v17 (fixed): grappling vs placeholder copies NOTHING ===")
-r17 = run_scenario(17)
+r17 = run_scenario()
 print(f"  A (grappling)      delta: {r17['a_delta']:+d}  to={r17['a_to']}  notes={r17['a_notes']}")
 print(f"  B (grappling)      delta: {r17['b_delta']:+d}  to={r17['b_to']}  notes={r17['b_notes']}")
 # v17 fixed expectation: B = 1 base, NO copy (faces A's placeholder)
@@ -177,8 +162,8 @@ check(r17['b_delta'] == 5, f"v17 B delta == 5 (grap 1 NO-copy + plain 4): got {r
 check(not any('copied' in n for n in r17['b_notes']), "v17 B grappling did NOT copy")
 check(r17['a_delta'] == 5, f"v17 A delta == 5 (base 1 + copy 4): got {r17['a_delta']:+d}")
 check(any('copied +4' in n for n in r17['a_notes']), f"v17 A copied +4 from B's plain card: {r17['a_notes']}")
-check(r17['a_pend'] == ['epo'] and r17['a_slots'] == [4],
-      f"v17 placeholder on stopover_4 (pending zone intact): {r17['a_pend']} {r17['a_slots']}")
+check(r17['a_pend'] == ['epo'] and r17['a_slots'] == [['epo', 4]],
+      f"placeholder on stopover_4 (pending zone intact): {r17['a_pend']} {r17['a_slots']}")
 
 # ---------------------------------------------------------------------------
 # Scenario 2: pending card ATTACHED to the play -> the placeholder is consumed,
@@ -189,8 +174,8 @@ check(r17['a_pend'] == ['epo'] and r17['a_slots'] == [4],
 #   B (Demons, second)  : one plain card (net 4) -> position 1
 # ---------------------------------------------------------------------------
 
-def run_gap_scenario(version):
-    gs, gid = new_game(version)
+def run_gap_scenario():
+    gs, gid = new_game()
     a, b = gs.players['A'], gs.players['B']
     force_hand(gs, 'A', ['epo', A_GRAP])
     force_hand(gs, 'B', [B_PLAIN])
@@ -225,14 +210,14 @@ def run_gap_scenario(version):
     }
 
 print("\n=== GAP (attached pending) - max_pos must reach the play past the gap ===")
-g17 = run_gap_scenario(17)
+g17 = run_gap_scenario()
 print(f"  A (grappling+epo)  delta: {g17['a_delta']:+d}  to={g17['a_to']}  notes={g17['a_notes']}")
 print(f"  B (plain)          delta: {g17['b_delta']:+d}")
 # v17 fixed: A's grappling is at position 2 (gap@1 from the attached epo). max_pos
 # must be 2 (max position), not 1 (max len), or A's play is never resolved (A=0).
 # A = 1 base + 1 (epo) = 2, NO copy (faces nothing at position 2). B = 4 (plain net).
-check(g17['a_pend'] == [] and g17['a_slots'] == [],
-      f"pending consumed (attached): pendings={g17['a_pend']} slots={g17['a_slots']}")
+check(g17['a_pend'] == [] and g17['a_slots'] == [['epo', 4]],
+      f"pending consumed (attached), placeholder stays: pendings={g17['a_pend']} slots={g17['a_slots']}")
 check(g17['a_delta'] == 2, f"v17 A delta == 2 (base 1 + epo 1, RESOLVED past the gap): got {g17['a_delta']:+d} (0 = max_pos bug)")
 check(any('pending epo' in n for n in g17['a_notes']), f"v17 A epo applied: {g17['a_notes']}")
 check(not any('copied' in n for n in g17['a_notes']), "v17 A grappling did NOT copy (faces nothing at pos 2)")

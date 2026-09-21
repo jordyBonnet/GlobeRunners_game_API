@@ -9,7 +9,7 @@ import { sendAction } from "./comm.mjs";
 import { checkMana } from "./state.mjs";
 import { N_STOPOVERS, BIOME_NAMES } from "./board.mjs";
 
-/* -------- ordering rule: PER-PLAYER stopovers (engine_version 15) --------
+/* -------- ordering rule: PER-PLAYER stopovers --------
    Each player has their OWN 5 positions (1..5, columns 4,3,2,1,0). A player's ROOTED
    cards occupy the leading positions of that player's chain (position 1, 2, …), and
    the player's PLAYS (move OR defend) go AFTER the rooted cards (position R+1, …).
@@ -27,29 +27,28 @@ export function playedCount(st, name) {
   const p = (st && st.players) ? st.players[name] : null;
   if (!p) return 0;
   let n = ((p.action_chain) || []).filter((a) => a && (a.mode === "move" || a.mode === "defend") && a.cards && a.cards.length).length;
-  // the dwelling placeholder occupies one position. engine_version 28: it STAYS after
-  // the dwelling card is wrecked (only the card goes to the discard) — so the gate is
-  // on p.dwelling_slot ALONE (no longer requiring p.dwelling). In games < 28 the engine
-  // cleared dwelling_slot on the wreck, so a slot-without-card can only occur in v28+.
+  // the dwelling placeholder occupies one position. It STAYS after the dwelling
+  // card is wrecked (only the card goes to the discard) — so the gate is on
+  // p.dwelling_slot ALONE (not requiring p.dwelling); a slot-without-card means the
+  // card was wrecked this turn.
   if (p.dwelling_slot != null) n += 1;
-  // pending placeholders (doctors, v16): ONLY non-null slots occupy a position.
-  // Entry shapes: engine_version 19+ = [card, slot] pair (the per-turn placeholder
-  // list — NOT parallel to the persistent pendings zone); v18 = bare int or null
-  // (the laboratory TAP's 'epo' had a null slot — no position). Count the slot part.
+  // pending placeholders (doctors): ONLY non-null slots occupy a position.
+  // Entry shapes: [card, slot] pair (the per-turn placeholder list — NOT parallel
+  // to the persistent pendings zone) or a bare int / null. Count the slot part.
   if (p.pending_slots) n += p.pending_slots.filter((e) => (Array.isArray(e) ? e[1] : e) != null).length;
   return n;
 }
 // number of ROOTED cards this player has on the board (they occupy the leading
-// positions of that player's chain, engine_version 15)
+// positions of that player's chain)
 export function rootedCount(st, name) {
   const stb = (st && st.rooted_on_board) || [];
   return stb.filter((r) => r && r.owner === name).length;
 }
-// the player's next POSITION (1..N): rooted cards first, then plays (v15 per-player)
+// the player's next POSITION (1..N): rooted cards first, then plays (per-player)
 export function nextPosition(st, name) {
   return rootedCount(st, name) + playedCount(st, name) + 1;
 }
-// the player's next STOPOVER column (0..4) for their next play (v15 per-player):
+// the player's next STOPOVER column (0..4) for their next play (per-player):
 // position p -> column 5-p (position 1 -> stopover_4, …, position 5 -> stopover_0)
 export function nextSlotCol(st, name) {
   const pos = nextPosition(st, name);
@@ -70,14 +69,14 @@ export function freeCols(st, name) {
   }
   return out;
 }
-// (kept for board.mjs which imports it; per-player v15 has no shared occupancy)
+// (kept for board.mjs which imports it; per-player has no shared occupancy)
 export function occupiedCols(st, name) {
   const occ = new Set();
   const r = rootedCount(st, name);
   for (let pos = 1; pos <= Math.max(r, N_STOPOVERS); pos++) if (pos <= r) occ.add(N_STOPOVERS - pos);
   if (st && st.players && st.players[name]) {
     const p = st.players[name];
-    if (p.dwelling_slot != null) occ.add(p.dwelling_slot % N_STOPOVERS);   // v28: also after a wreck (placeholder stays)
+    if (p.dwelling_slot != null) occ.add(p.dwelling_slot % N_STOPOVERS);   // also after a wreck (placeholder stays)
   }
   return occ;
 }
@@ -101,7 +100,7 @@ export function playCardToStopover(cardId, col) {
   dispatchPlay(cardId, col);
 }
 
-// help message if the player drops on a not-yet-accessible slot (per-player v15)
+// help message if the player drops on a not-yet-accessible slot (per-player)
 export function orderHint() {
   const st = game.state;
   if (freeCols(st, game.me).length === 0) return "All 5 of your stopover positions are full this turn.";
@@ -153,7 +152,7 @@ export function dispatchPlay(cardId, col = null) {
     game.selected = new Set();
     return;
   }
-  // Mages black_hole (engine_version 26): a DWELLING card (like refinery/laboratory) —
+  // Mages black_hole: a DWELLING card (like refinery/laboratory) —
   // goes to the dwelling zone, not a stopover. Its TAP (the #btn-tap direction popup)
   // rotates the earth 3 cells; placement is identical to the other dwellings.
   if (isMageBlackHole(cardId)) {
@@ -167,7 +166,7 @@ export function dispatchPlay(cardId, col = null) {
     game.selected = new Set();
     return;
   }
-  // Mages Celestial_reversal (engine_version 22): a MOVE play onto a stopover, but it
+  // Mages Celestial_reversal: a MOVE play onto a stopover, but it
   // needs a day/night CHOICE (the INSTANT effect fixes the day/night for the rest of
   // the game). The player picks day or night in a popup; the card is a no-op chain.
   if (isMageCelestial(cardId)) {
@@ -177,7 +176,7 @@ export function dispatchPlay(cardId, col = null) {
     showDayNightPopup(cardId, slotCol);
     return;
   }
-  // Mages thermic_flux (engine_version 24): a MOVE play onto a stopover, but it needs
+  // Mages thermic_flux: a MOVE play onto a stopover, but it needs
   // a +4/−4 °C CHOICE (the INSTANT effect changes the planet temperature, clamped
   // 1..20, permanently). The player picks +4 or −4 in a popup; the card is a no-op
   // chain (like Celestial_reversal).
@@ -188,7 +187,7 @@ export function dispatchPlay(cardId, col = null) {
     showThermicFluxPopup(cardId, slotCol);
     return;
   }
-  // Mages Apocalypticritual (engine_version 25): a MOVE play onto a stopover, but it
+  // Mages Apocalypticritual: a MOVE play onto a stopover, but it
   // needs an ORDER CHOICE (the INSTANT effect sets the cataclysm pile to the chosen
   // permutation of the 4 biomes — 1st = strikes next). The player arranges the 4
   // biomes in a popup; the card is a no-op chain (like Celestial_reversal).
@@ -199,7 +198,7 @@ export function dispatchPlay(cardId, col = null) {
     showApocalypticritualPopup(cardId, slotCol);
     return;
   }
-  // swap_cards (engine_version 29): a MOVE play onto a stopover with an OPTIONAL
+  // swap_cards: a MOVE play onto a stopover with an OPTIONAL
   // position swap — the card SWAPS its trip-chain position with one of the
   // player's OWN chain entries (a play, a board placeholder, a rooted card). The
   // player sees their own stopover mirror and drag-and-drops the card onto the
@@ -224,7 +223,7 @@ export function dispatchPlay(cardId, col = null) {
   if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
   if (!checkMana(cardId)) return;
   const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
-  // Doctors (engine_version 16): if the player has pending cards, show a popup
+  // Doctors: if the player has pending cards, show a popup
   // to attach one (or none) to the main card before sending the action.
   const meP = (game.state && game.state.players) ? game.state.players[game.me] : null;
   const myPendings = (meP && meP.pendings) || [];
@@ -235,7 +234,7 @@ export function dispatchPlay(cardId, col = null) {
   }
 }
 
-/* popup: choose day or night for Celestial_reversal (Mages, engine_version 22).
+/* popup: choose day or night for Celestial_reversal (Mages).
    The choice is sent with the action message (the `day_night` field) and applied
    INSTANTLY at play time — it fixes the day/night for the rest of the game. */
 function showDayNightPopup(cardId, col) {
@@ -264,7 +263,7 @@ function showDayNightPopup(cardId, col) {
   modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 
-/* popup: choose +4 °C or −4 °C for thermic_flux (Mages, engine_version 24).
+/* popup: choose +4 °C or −4 °C for thermic_flux (Mages).
    The choice is sent with the action message (the `temp_change` field: "up"|"down")
    and applied INSTANTLY at play time — the planet temperature changes by ±4 °C,
    clamped to 1..20, permanently. */
@@ -295,7 +294,7 @@ function showThermicFluxPopup(cardId, col) {
   modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 
-/* popup: arrange the 4 cataclysm biomes for Apocalypticritual (Mages, engine_version 25).
+/* popup: arrange the 4 cataclysm biomes for Apocalypticritual (Mages).
    The order is sent with the action message (the `cataclysm_order` field: a permutation
    of ["OC","MO","DE","JU"], index 0 = strikes next) and applied INSTANTLY at play time
    — the cataclysm pile is set to that order, permanently (until the next ritual).
@@ -344,7 +343,7 @@ function showApocalypticritualPopup(cardId, col) {
 
 /* popup: choose a pending card to attach to the main card (or none) */
 /* showPendingPopup: pick a pending card to attach to the play (or none). With an
-   `onSend` callback (swap_cards, engine_version 29) the choice is passed to it
+   `onSend` callback (swap_cards) the choice is passed to it
    (cardId, col, pendingsArr) INSTEAD of sending — the callback opens the next
    popup in the chain (the swap target), which sends the single action message. */
 function showPendingPopup(cardId, col, pendings, onSend = null) {
@@ -379,7 +378,7 @@ function showPendingPopup(cardId, col, pendings, onSend = null) {
   modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 
-/* showSwapPopup: swap_cards position swap (engine_version 29). The card being
+/* showSwapPopup: swap_cards position swap. The card being
    played SWAPS its trip-chain position with ONE of the player's OWN chain
    entries (a play, a board placeholder — pending/dwelling — or a rooted card).
    The popup shows the player's own stopover mirror (positions 1..5): the card
@@ -466,7 +465,7 @@ function showSwapPopup(cardId, col, pendingsArr = []) {
   modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 
-/* popup: DISCARD SELECTION (engine_version ≥ 13). When the engine pauses the trip
+/* popup: DISCARD SELECTION. When the engine pauses the trip
    chain on "waiting for NAME to discard K card(s)", this modal lists ALL of the player's
    hand cards; the player toggles exactly N of them (cap N, toast on overflow) and presses
    the red DISCARD button at the bottom, which sends {cards:[…N…], to:"discard_pile",
@@ -630,7 +629,7 @@ export function showDefendPopup() {
 }
 
 /* popup: choose the earth-rotation direction for the black_hole DWELLING tap
-   (Mages, engine_version 26). The choice is sent with the tap message (the `rotation`
+   (Mages). The choice is sent with the tap message (the `rotation`
    field: "cw"|"ccw") and rotates the earth 3 cells (the 4 biomes shift position; every
    token stays on its cell). Free + once per turn, like the other dwelling taps. */
 export function showBlackHoleRotationPopup() {

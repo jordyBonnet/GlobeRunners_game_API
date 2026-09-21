@@ -11,7 +11,6 @@ class PlayerAI:
 		self.temperature = None     # planet temperature (set via update_player_state)
 		self.day_night = None       # current day/night phase (set via update_player_state)
 		self.drops_on_board = None  # any drop/trap on the earth (set via update_player_state)
-		self.engine_version = None  # rules version of the game (set via update_player_state)
 		CARDS_DB_PATH = os.path.join(os.path.dirname(__file__), '../cards/cardpool.parquet')
 		self.CARDS_DB = pl.read_parquet(CARDS_DB_PATH)
 		# support-faction cards (engineers/mages/doctors) - NOT in cardpool. The robot
@@ -97,19 +96,15 @@ class PlayerAI:
 		if condition in ('day', 'night'):
 			return self.day_night == condition
 		if condition == 'drop_on_board':
-			# any drop/trap on the earth (rule of engine_version 9), computed in
-			# update_player_state from the public board state (True for old games
-			# < 9: canonical default = met). Unknown (no board info) -> not met,
-			# like the other board-dependent conditions (biome).
+			# any drop/trap on the earth, computed in update_player_state from the
+			# public board state. Unknown (no board info) -> not met, like the other
+			# board-dependent conditions (biome).
 			return bool(self.drops_on_board)
 		if condition == 'pending':
-			# pending (rule of engine_version 21): met iff at least one pending card in
-			# the player's OWN pending zone (the doctors' pending zone). Old games
-			# (< 21) keep the canonical default = met (the condition was unimplemented
-			# in those games). The robot never plays support cards, so its pending zone
-			# is always empty -> the condition is correctly not met for it.
-			if self.engine_version is not None and self.engine_version < 21:
-				return True
+			# pending: met iff at least one pending card in the player's OWN pending
+			# zone (the doctors' pending zone). The robot never plays support cards,
+			# so its pending zone is always empty -> the condition is correctly not
+			# met for it.
 			return len(self.player_state.pendings or []) >= 1
 		dist_match = re.match(r'^dist_(ahead|behind)_sup_(\d+)$', condition)
 		if dist_match:
@@ -167,7 +162,7 @@ class PlayerAI:
 		}
 
 	def choose_discard(self, num_cards=1):
-		"""Discard selection (rule of engine_version 13): pick `num_cards` from the
+		"""Discard selection: pick `num_cards` from the
 		hand when a discard / discard_oppo effect triggers. Heuristic: discard the
 		LEAST valuable cards first (a card whose condition is met is worth keeping,
 		then high advancing / high shield / low cost). Support cards are low
@@ -201,14 +196,10 @@ class PlayerAI:
 		if game is not None:
 			self.temperature = game.temperature
 			self.day_night = game.day_night
-			# drop_on_board (engine_version 9): any drop token / trap on the earth
-			if (game.engine_version or 0) < 9:
-				self.drops_on_board = True   # old rules: unimplemented -> canonical default (met)
-			else:
-				self.drops_on_board = (
-					any(n > 0 for n in (game.drop_tokens or {}).values())
-					or any((c and ('trap' in c or 'drop' in c)) for c in (game.earth or []))
-					or any((d and d.get('cell') is not None) for d in (game.board_drops or []))   # engineers' drops (engine_version 12)
-				)
-			self.engine_version = game.engine_version
+			# drop_on_board: any drop token / trap on the earth
+			self.drops_on_board = (
+				any(n > 0 for n in (game.drop_tokens or {}).values())
+				or any((c and ('trap' in c or 'drop' in c)) for c in (game.earth or []))
+				or any((d and d.get('cell') is not None) for d in (game.board_drops or []))   # engineers' drops
+			)
 		

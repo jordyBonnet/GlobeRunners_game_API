@@ -113,7 +113,7 @@ def check(condition, msg):
 # ============================================================
 print("\n=== Test 1: thermic_flux +4 °C (v24) — temperature increases ===")
 # ============================================================
-gs, gid = new_game([THERMIC, adv1], [adv1], version=24)
+gs, gid = new_game([THERMIC, adv1], [adv1])
 set_biomes(gs)
 set_temp(gs, 10)
 a = gs.players['A']
@@ -140,7 +140,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2: thermic_flux −4 °C (v24) — temperature decreases ===")
 # ============================================================
-gs, gid = new_game([THERMIC, adv1], [adv1], version=24)
+gs, gid = new_game([THERMIC, adv1], [adv1])
 set_biomes(gs)
 set_temp(gs, 15)
 a = gs.players['A']
@@ -155,7 +155,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 3: clamping — up at high temp caps at 20 ===")
 # ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=24)
+gs, gid = new_game([THERMIC], [adv1])
 set_biomes(gs)
 set_temp(gs, 18)
 a = gs.players['A']
@@ -169,7 +169,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 4: clamping — down at low temp floors at 1 ===")
 # ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=24)
+gs, gid = new_game([THERMIC], [adv1])
 set_biomes(gs)
 set_temp(gs, 3)
 a = gs.players['A']
@@ -183,7 +183,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 5: the new temperature persists across turns (permanent) ===")
 # ============================================================
-gs, gid = new_game([THERMIC, adv1], [adv1], version=24)
+gs, gid = new_game([THERMIC, adv1], [adv1])
 set_biomes(gs)
 set_temp(gs, 10)
 a = gs.players['A']
@@ -208,7 +208,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 6: temp_* condition evaluates against the CHANGED value ===")
 # ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=24)
+gs, gid = new_game([THERMIC], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 # set the temperature to 12, then play thermic_flux 'down' (−4) -> 8
@@ -227,7 +227,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 7: MOVE play without a +4/−4 choice is REJECTED ===")
 # ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=24)
+gs, gid = new_game([THERMIC], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [THERMIC])
@@ -249,7 +249,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 8: a DEFEND play is a plain no-op (no choice required, no change) ===")
 # ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=24)
+gs, gid = new_game([THERMIC], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [THERMIC])
@@ -261,24 +261,9 @@ check(gs.temperature == 10, f"temperature NOT changed by a defend play: {gs.temp
 _delete(gid)
 
 # ============================================================
-print("\n=== Test 9: old-game pinning (v23) — thermic_flux is a no-op, temp unchanged ===")
-# ============================================================
-gs, gid = new_game([THERMIC], [adv1], version=23)   # pre-thermic_flux
-set_biomes(gs)
-a = gs.players['A']
-force_hand(gs, 'A', [THERMIC])
-set_temp(gs, 10)
-# v23: the card is a no-op support card; the 'temp_change' field is ignored
-gs, okk, msgtxt = play(gs, 'A', 'first', THERMIC, mode='move', to='stopover_4', temp_change='up')
-check(okk, f"v23 play accepted (the card is a no-op support card) (msg: {msgtxt})")
-check(gs.temperature == 10, f"v23: temperature NOT changed (still 10): {gs.temperature}")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 10: turn-log note on the thermic_flux line ===")
 # ============================================================
-gs, gid = new_game([THERMIC, adv1], [adv1], version=24)
+gs, gid = new_game([THERMIC, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 set_temp(gs, 10)

@@ -114,7 +114,7 @@ filler = [c for c in DB.filter(pl.col('faction') == 'Miaous')['card_id'].to_list
 gs, gid = new_game([SWAP, ADV] + filler, [ADV] + filler[:16])
 set_biomes(gs)
 a = gs.players['A']
-check(gs.engine_version == 29, f"new games are engine_version 29: {gs.engine_version}")
+check(gs.engine_version == "1.0", f"new games are engine_version '1.0': {gs.engine_version}")
 
 force_hand(gs, 'A', [ADV, SWAP])
 n_a_start = len(all_cards(gs.players['A']))   # snapshot BEFORE any play (conservation reference)
@@ -279,23 +279,6 @@ set_biomes(gs)
 gs, okk, msgtxt = play(gs, 'A', 'first', SWAP, mode='move', to='stopover_4', swap_with=1)  # its own position (empty before the play)
 check(not okk, f"self-swap (swap_with=1 on the first play) REJECTED: {msgtxt}")
 _delete(gid); _delete(gid2)
-
-# ============================================================
-print("\n=== Test 7: old game (v28) — swap_with is IGNORED (no swap) ===")
-# ============================================================
-gs, gid = new_game([SWAP, ADV] + filler, [ADV] + filler[:16], version=28)
-set_biomes(gs)
-force_hand(gs, 'A', [ADV, SWAP])
-gs, okk, msgtxt = play(gs, 'A', 'first', ADV, mode='move', to='stopover_4')   # position 1
-gs, okk, msgtxt = play(gs, 'A', 'first', SWAP, mode='move', to='stopover_3', swap_with=1)  # position 2
-check(okk, f"play SWAP (swap_with=1) accepted in a v28 game (the field is inert): {msgtxt}")
-chain = gs.players['A'].action_chain
-adv_act = [x for x in chain if ADV in (x.get('cards') or [])]
-swp_act = [x for x in chain if SWAP in (x.get('cards') or [])]
-check(adv_act and adv_act[0]['to'] == 'stopover_4', f"v28: ADV keeps its position (no swap): {adv_act and adv_act[0]['to']}")
-check(swp_act and swp_act[0]['to'] == 'stopover_3', f"v28: SWAP keeps its position (no swap): {swp_act and swp_act[0]['to']}")
-check(swp_act and 'swapped_with' not in swp_act[0], f"v28: no swap annotations")
-_delete(gid)
 
 # ============================================================
 print("\n=== Test 8: DEFEND mode -> NO swap ===")

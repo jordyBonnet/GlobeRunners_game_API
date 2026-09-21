@@ -60,7 +60,7 @@ def _delete(gid):
     conn.execute("DELETE FROM games WHERE game_id = ?", (gid,))
     conn.commit(); conn.close()
 
-def new_game(a_hand_specials, version=27):
+def new_game(a_hand_specials):
     # A: defend specials + 6 hand fillers (f0..f5) + deck (f6..f11)
     # B: move specials + 6 hand fillers (f22..f27) + deck (f28..f33)
     a_hand = list(a_hand_specials) + [f(i) for i in range(0, 6)]
@@ -77,7 +77,6 @@ def new_game(a_hand_specials, version=27):
     ga, gb = gs.players['A'], gs.players['B']
     ga.hand, ga.mana, ga.deck, ga.discard = a_hand, [], a_deck, []
     gb.hand, gb.mana, gb.deck, gb.discard = b_hand, [], b_deck, []
-    if version != 27: gs.engine_version = version
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (gs.to_json(), gid))
     c.commit(); c.close()
     return gid

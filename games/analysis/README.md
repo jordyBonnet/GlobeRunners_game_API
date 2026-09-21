@@ -64,15 +64,15 @@ Compatibility workarounds for older engine versions:
 
 ## Support factions (engineers / mages / doctors)
 
-Since `engine_version` 12 a player's deck mixes main-faction cards with 10
-support cards. The analysis handles them:
+A player's deck mixes main-faction cards with 10 support cards. The analysis
+handles them:
 
 - **Cards**: support cards resolve their real art (`card_path`, e.g.
   `Eng_boost.png`), name and support faction (shown in place of the biome — it
   identifies them as engineers / mages / doctors). A main card's faction label is
   replaced by the **biome** it stood on at the start of the resolution, but a
   support card keeps its support faction.
-- **Engineers (implemented, v12)**: the 4 drop cards (boost / trampoline /
+- **Engineers**: the 4 drop cards (boost / trampoline /
   gluetrap / landmine) and the refinery dwelling are described in place of a
   generic effect, and their **play-time actions** are shown as event chips in
   the turn: *dropped a … token on cell N*, *placed the refinery dwelling*,

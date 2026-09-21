@@ -78,14 +78,6 @@ print(f"4) mutual copy (no recursion): A {da:+d} (expected 0)  B {db:+d} (expect
 assert da == 0 and db == 0, (da, db)
 ok += 1
 
-# 5) engine_version pinning: v6 game -> copy_effect is a no-op
-gs = new_game(copy_nc[0], draw_nc[0])
-gs.engine_version = 6
-_, da, db = run(gs, [copy_nc[0]], [draw_nc[0]])
-print(f"5) engine_version 6: A {da:+d} (expected 0)  B {db:+d} (expected +{draw_n})")
-assert da == 0 and db == draw_n, (da, db)
-ok += 1
-
 # 6) facing card BLOCKED -> its effect never fired -> no copy
 gs = new_game(copy_nc[0], draw_nc[0])
 a, b = gs.players['A'], gs.players['B']

@@ -145,20 +145,6 @@ print(f"3) DEFEND: defend-mode wrecking_ball does not remove -> PASS")
 ok += 1
 
 # ============================================================
-# 4) OLD GAME (engine_version < 11): wrecking_ball is a no-op
-# ============================================================
-gs = new_game([wb1], [adv1], version=10)   # v10: rooted active, wrecking_ball NOT yet
-set_biomes(gs, 'OC')
-force_hand(gs, 'A', [wb1]); force_hand(gs, 'B', [adv1])
-gs.players['B'].dwelling = filler[2]
-dwelling_before = gs.players['B'].dwelling
-gs = play(gs, 'A', 'first', wb1)
-assert gs.players['B'].dwelling == dwelling_before, \
-    f"v10 wrecking_ball should NOT remove the dwelling, got {gs.players['B'].dwelling}"
-print(f"4) OLD GAME (v10): wrecking_ball is a no-op -> PASS")
-ok += 1
-
-# ============================================================
 # 5) CARD CONSERVATION: the dwelling card is in EXACTLY ONE zone after removal
 #    (it was "on the dwelling spot" = not in any zone; after removal it is in
 #    the opponent's discard, and nowhere else)

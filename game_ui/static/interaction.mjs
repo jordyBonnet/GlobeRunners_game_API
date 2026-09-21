@@ -26,7 +26,7 @@ export function makeHandCard(id, interactive, me) {
   el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
 
   // click: selection (1 card for play/mana-pass, up to 3 in init);
-  // discard selection (engine_version ≥ 13) re-opens the discard popup (renderAll auto-opens it)
+  // discard selection re-opens the discard popup (renderAll auto-opens it)
   if (interactive) {
     el.onclick = () => {
       const ph = detectPhase(game.state);

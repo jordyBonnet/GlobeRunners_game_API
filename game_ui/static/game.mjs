@@ -22,7 +22,7 @@ export const game = {
   logTurnsRendered: 0,   // how many turns of state.log are already in the DOM (incremental render)
 };
 
-/* ---------------- cell-selection mode (engineer drop placement, engine_version 12) ---------------- */
+/* ---------------- cell-selection mode (engineer drop placement) ---------------- */
 // When an engineer drop card is being played, the player must choose the earth cell the
 // token lands on. The 24 cells are not DOM elements (the Earth is one image + positioned
 // markers), so we overlay 24 invisible circular targets at the POS24 points, shown only
@@ -52,7 +52,7 @@ export function confirmCell(cellIndex) {
   const st = game.state;
   if (freeCols(st, game.me).length === 0) { toast(orderHint()); return; }
   if (!checkMana(id)) return;
-  // the drop occupies the player's next position (move mode, per-player v15) + carries its target cell
+  // the drop occupies the player's next position (move mode, per-player) + carries its target cell
   sendAction([id], `stopover_${nextSlotCol(st, game.me)}`, "move", [], cellIndex);
   game.selected = new Set();
 }

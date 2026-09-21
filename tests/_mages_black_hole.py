@@ -115,7 +115,7 @@ def check(condition, msg):
 # ============================================================
 print("\n=== Test 1: place the black_hole dwelling card (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 a = gs.players['A']
 force_hand(gs, 'A', [BLACK])
 gs, okk, msgtxt = place_dwelling(gs, 'A', 'first', BLACK)
@@ -128,7 +128,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2: tap CW rotates the earth 3 cells clockwise (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 # known initial order: OC, MO, DE, JU (6 cells each)
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_initial_b0 = 'OC'
@@ -151,7 +151,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 3: tap CCW rotates the earth 3 cells counter-clockwise (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_initial_b0 = 'OC'
 gs.earth_rotation = 0
@@ -170,7 +170,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 4: tokens (players, drops, board_drops) STAY on their cell index ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_initial_b0 = 'OC'
 gs.earth_rotation = 0
@@ -199,7 +199,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 5: rotation is CUMULATIVE (two taps) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_initial_b0 = 'OC'
 gs.earth_rotation = 0
@@ -227,7 +227,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 6: a tap WITHOUT a direction is REJECTED (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_rotation = 0
 force_hand(gs, 'A', [BLACK])
@@ -253,7 +253,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 7: once-per-turn — a 2nd tap the same turn is REJECTED (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_rotation = 0
 force_hand(gs, 'A', [BLACK])
@@ -269,23 +269,9 @@ check(gs.earth_rotation == 3, f"earth_rotation still 3 (only the 1st tap counted
 _delete(gid)
 
 # ============================================================
-print("\n=== Test 8: old-game pinning (v25) — black_hole placement is REJECTED ===")
-# ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=25)   # pre-black_hole
-set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
-a = gs.players['A']
-force_hand(gs, 'A', [BLACK])
-gs, okk, msgtxt = place_dwelling(gs, 'A', 'first', BLACK)
-check(not okk, f"v25: black_hole dwelling placement is rejected (msg: {msgtxt})")
-check(gs.players['A'].dwelling is None, f"v25: dwelling zone is empty: {gs.players['A'].dwelling}")
-check(BLACK in a.hand, f"v25: card still in hand after rejection: {a.hand}")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 9: biome conditions re-read the ROTATED earth (v26) ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 # initial: cell 0-5 = MO (so a 'biome_Dwa' (MO or OC) card is met at cell 0)
 set_biomes(gs, ['MO', 'DE', 'JU', 'OC'])
 gs.earth_initial_b0 = 'MO'
@@ -312,7 +298,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 10: turn-log note on the black_hole tap ===")
 # ============================================================
-gs, gid = new_game([BLACK, adv1], [adv1], version=26)
+gs, gid = new_game([BLACK, adv1], [adv1])
 set_biomes(gs, ['OC', 'MO', 'DE', 'JU'])
 gs.earth_initial_b0 = 'OC'
 gs.earth_rotation = 0

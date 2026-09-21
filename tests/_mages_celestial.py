@@ -106,7 +106,7 @@ def check(condition, msg):
 # ============================================================
 print("\n=== Test 1: Celestial_reversal FIXES the day/night (v22) ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL, adv1], [adv1], version=22)
+gs, gid = new_game([CELESTIAL, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 
@@ -140,7 +140,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2: the fixed day/night persists across several turns ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL, adv1], [adv1], version=22)
+gs, gid = new_game([CELESTIAL, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [CELESTIAL])
@@ -163,7 +163,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 3: day/night condition evaluates against the FIXED value ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL], [adv1], version=22)
+gs, gid = new_game([CELESTIAL], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [CELESTIAL])
@@ -178,7 +178,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 4: MOVE play without a day/night choice is REJECTED ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL], [adv1], version=22)
+gs, gid = new_game([CELESTIAL], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [CELESTIAL])
@@ -199,7 +199,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 5: a DEFEND play is a plain no-op (no choice required, no fix) ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL], [adv1], version=22)
+gs, gid = new_game([CELESTIAL], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [CELESTIAL])
@@ -213,7 +213,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 6: cannot attach a pending card to Celestial_reversal (support card) ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL], [adv1], version=22)
+gs, gid = new_game([CELESTIAL], [adv1])
 set_biomes(gs)
 gs.players['A'].pendings = ['epo']   # pretend A has a pending card
 p = gs.players['A']
@@ -227,28 +227,9 @@ check(not okk, f"attaching a pending card to Celestial_reversal is rejected (msg
 _delete(gid)
 
 # ============================================================
-print("\n=== Test 7: old-game pinning (v21) — Celestial_reversal is a no-op, day/night flips ===")
-# ============================================================
-gs, gid = new_game([CELESTIAL], [adv1], version=21)   # pre-Mages
-set_biomes(gs)
-a = gs.players['A']
-force_hand(gs, 'A', [CELESTIAL])
-# v21: the card is a no-op support card; the 'day_night' field is ignored
-gs, okk, msgtxt = play(gs, 'A', 'first', CELESTIAL, mode='move', to='stopover_4', day_night='night')
-check(okk, f"v21 play accepted (the card is a no-op support card) (msg: {msgtxt})")
-check(gs.day_night == 'day', f"v21: day/night NOT changed (still 'day'): {gs.day_night}")
-check(gs.day_night_fixed is False, f"v21: day_night_fixed stays False: {gs.day_night_fixed}")
-# and the flip still happens at the end of the turn
-gs.state = f"turn {gs.turn} - waiting for first player ({gs.turn_order[0]}) to play"
-gs, _s, _m = ge._end_turn(gs, "ok")
-check(gs.day_night == 'night', f"v21: day/night still flips at the turn end (now 'night'): {gs.day_night}")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 8: turn-log note on the Celestial_reversal line ===")
 # ============================================================
-gs, gid = new_game([CELESTIAL, adv1], [adv1], version=22)
+gs, gid = new_game([CELESTIAL, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [CELESTIAL])

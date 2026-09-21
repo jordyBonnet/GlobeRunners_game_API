@@ -208,7 +208,7 @@ def _recon_ctx(stored: dict, seg: dict) -> dict:
         for m in t["moves"]:
             if m.get("mode") == "pass":
                 continue
-            # discard selection (engine_version 13): the CHOICE message (to
+            # discard selection: the CHOICE message (to
             # 'discard_pile') is not a play - its cards were in the hand and are
             # removed by the discard effect (already counted in discard_capacity).
             if m.get("to") == "discard_pile":
@@ -372,13 +372,12 @@ def _pick_ramp(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
     return chosen
 
 
-def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int, arrange: bool = True) -> list[str]:
+def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int) -> list[str]:
     """Choose which n cards of the hand the discard effect will remove.
 
-    arrange (default True, engine_version < 13): move the chosen cards to the
-    END of the hand so the engine's auto-discard (hand[-n:]) removes exactly
-    those. For v13 (discard selection) the engine PAUSES (pending_discard) and
-    the replay applies the choice itself, so arrange=False (no reordering)."""
+    No hand reordering: the engine PAUSES (pending_discard) for the discard
+    selection and the replay applies the choice itself (see
+    _apply_discard_choice)."""
     hand = list(p.hand or [])
     n = min(n, len(hand))
     if n <= 0:
@@ -388,14 +387,12 @@ def _pick_discard(p: PlayerState, n: int, ctx: dict, cur_turn: int, arrange: boo
     chosen += [c for c in hand if c not in chosen and c not in needed_later]
     chosen += [c for c in hand if c not in chosen]
     chosen = chosen[:n]
-    if arrange:
-        _arrange_tail(p, chosen, "hand")
     ctx["discard_capacity"] = max(0, ctx["discard_capacity"] - n)
     return chosen
 
 
 def _apply_discard_choice(game: GameState, target: PlayerState, chosen: list[str]) -> None:
-    """ discard selection (engine_version 13): the engine PAUSED on
+    """ discard selection: the engine PAUSED on
      pending_discard instead of discarding (the real player's choice arrived as a
      to:'discard_pile' message). The replay applies the identity-reconstructed
      choice here: move the chosen cards hand -> discard and clear the pause
@@ -478,9 +475,9 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
         all_cards: set[str] = set()
         for z in ("hand", "deck", "discard", "mana"):
             all_cards.update(p.get(z) or [])
-        if p.get("dwelling"):   # dwelling (engine_version 12): the card sits in the dwelling slot, not a zone
+        if p.get("dwelling"):   # dwelling: the card sits in the dwelling slot, not a zone
             all_cards.add(p["dwelling"])
-        all_cards.update(p.get("pendings") or [])   # pending cards (doctors, engine_version 16)
+        all_cards.update(p.get("pendings") or [])   # pending cards (doctors)
         pool = [c for c in all_cards if c not in ctx["initial_mana"]]
         # at game start: 6 cards drawn to hand, then the initial mana put.
         # Cards played on turn 1 can ONLY come from the initial hand (no draw
@@ -523,16 +520,15 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
             action_chain=[],
         )
 
-    # biomes are static during a game (pre-v26) -> reuse final earth (strip player tokens)
     earth = [[cell[0]] for cell in state_dict.get("earth") or [] if cell]
-    # black_hole (Mages, engine_version 26): the stored FINAL earth is the POST-rotation
-    # order. Reconstruct the INITIAL earth (turn 1, pre-rotation) by reversing the total
+    # black_hole (Mages): the stored FINAL earth is the POST-rotation order.
+    # Reconstruct the INITIAL earth (turn 1, pre-rotation) by reversing the total
     # rotation (the sum of all black_hole tap directions, in chronological order). The
     # rotation is commutative (rotating by a then b == rotating by a+b), so only the total
     # matters: the engine's rotate_earth(n) gives final[i] = initial[(i - n) mod 24], so
     # the reversal is initial[i] = final[(i + R) mod 24] with R = sum of all tap deltas.
     # Tokens are addressed by cell index, so they are unaffected (re-added below).
-    if earth and (state_dict.get("engine_version") or 0) >= 26:
+    if earth:
         _R = 0
         for _n in names:
             for _t in (segs.get(_n, {}).get("turns") or []):
@@ -558,20 +554,20 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
         state="replay",
         earth=earth,
         winner=None,
-        # Mages thermic_flux (engine_version 24): seed the temperature from the INITIAL
-        # rolled value (temperature_initial) so temp_* conditions are evaluated against
-        # the pre-change value — the stored `temperature` is the FINAL value, which would
-        # be wrong for a temp_* condition resolved BEFORE a thermic_flux. Old games (< 24)
-        # have temperature_initial = None, so fall back to the stored `temperature` (the
-        # two are equal when no thermic_flux was played).
+        # Mages thermic_flux: seed the temperature from the INITIAL rolled value
+        # (temperature_initial) so temp_* conditions are evaluated against the pre-change
+        # value — the stored `temperature` is the FINAL value, which would be wrong for a
+        # temp_* condition resolved BEFORE a thermic_flux. Falls back to the stored
+        # `temperature` when temperature_initial is missing (the two are equal when no
+        # thermic_flux was played).
         temperature=state_dict.get("temperature_initial") or state_dict.get("temperature"),
         day_night="day",
         engine_version=state_dict.get("engine_version"),
     )
 
-    # --- cataclysm pile (rule of engine_version 3; reorderable since 25) ---
+    # --- cataclysm pile (reorderable by Apocalypticritual) ---
     # The stored FINAL state holds the pile AFTER all its rotations (and after all
-    # Apocalypticritual reorders, engine_version 25).
+    # Apocalypticritual reorders).
     #
     # NO RITUAL in the game (the common case): each trigger takes the top card
     # and puts it at the bottom (pure rotation), so the cycle order is identical
@@ -584,7 +580,7 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
     # Count k from the stored game log instead: the engine writes exactly one
     # '⚡ cataclysm — <biome> strikes' note per actual trigger.
     #
-    # RITUAL in the game (engine_version 25): Apocalypticritual SETS the pile to
+    # RITUAL in the game: Apocalypticritual SETS the pile to
     # the player's chosen order, so the final pile is NOT a rotation of the
     # initial one. But the initial pile only matters for the strikes BEFORE the
     # first ritual: strike i before the first ritual is the i-th element of the
@@ -595,17 +591,14 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
     # ritual match the log, the ritual sets the pile, the strikes after are fully
     # determined by the chosen order.)
     final_pile = list(state_dict.get("cataclysm_pile") or [])
-    if (game.engine_version or 0) >= 3 and final_pile:
+    if final_pile:
         # chronological event list from the log: ('strike', biome) /
         # ('ritual', None), in the order the engine wrote them (turn → stopover →
         # entry → note).
-        # NEW LOG FORMAT (current engine): instant effects (ritual included) are
-        # recorded in the turn's 'instant' section (list of {'player', 'what'}),
-        # which PRECEDES the stopovers of that turn. That is chronologically
-        # correct — a ritual fires at PLAY TIME, i.e. before any strike of the same
-        # turn. OLD LOG FORMAT (games saved before the 'instant' section existed):
-        # the ritual note sat on the card's stopover entry (entries[].notes) — the
-        # scan below still covers that (and old games have no 'instant' key).
+        # Instant effects (ritual included) are recorded in the turn's 'instant'
+        # section (list of {'player', 'what'}), which PRECEDES the stopovers of
+        # that turn. That is chronologically correct — a ritual fires at PLAY TIME,
+        # i.e. before any strike of the same turn.
         events = []
         for t in (state_dict.get("log") or []):
             for it in (t.get("instant") or []):
@@ -626,9 +619,9 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
             # no ritual: the pile only rotated — rewind it (the original logic)
             k = sum(1 for kind, _ in events if kind == "strike")
             if k == 0 and not (state_dict.get("log") or []):
-                # no stored log (game predates the log feature): best effort —
+                # defensive fallback (all current games have a log): best effort —
                 # count the cataclysm move cards (a blocked one would over-rewind
-                # by one, a rare edge case for those old games)
+                # by one, a rare edge case)
                 for seg in segs.values():
                     for t in seg.get("turns") or []:
                         for m in t.get("moves") or []:
@@ -670,7 +663,7 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
     # reconstruct the unknown cards the effect will move, so the real engine
     # code below moves exactly those cards (hand / deck / discard / mana)
     ev = _effect_events(row["effect"], row["effect_number"])
-    discard_choice = None   # (target, chosen) - discard selection (engine_version 13)
+    discard_choice = None   # (target, chosen) - discard selection
     if cond_met and msg.get("mode") != "defend" and ev:
         kind, n, own = ev
         target = p if own else _other_player(game, p)
@@ -681,14 +674,11 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
             elif kind == "ramp":
                 _pick_ramp(target, n, ctx, cur_turn)
             elif kind == "discard":
-                if (game.engine_version or 0) < 13:
-                    _pick_discard(target, n, ctx, cur_turn)
-                else:
-                    # discard selection (v13): the engine PAUSES (pending_discard)
-                    # instead of auto-discarding -> choose the identity-consistent
-                    # cards now (no hand arrangement) and apply them AFTER
-                    # process_card (mirroring the player's to:'discard_pile' choice)
-                    discard_choice = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
+                # discard selection: the engine PAUSES (pending_discard) instead of
+                # auto-discarding -> choose the identity-consistent cards now (no hand
+                # arrangement) and apply them AFTER process_card (mirroring the
+                # player's to:'discard_pile' choice)
+                discard_choice = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
             elif kind == "tax":
                 _pick_tax(target, n, ctx)
 
@@ -697,7 +687,7 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
     with contextlib.redirect_stdout(buf):
         _, grappling_activated, effect_activated = ge.process_card(msg, p, game)
 
-    # discard selection (v13): the engine PAUSED instead of discarding (a blocked /
+    # discard selection: the engine PAUSED instead of discarding (a blocked /
     # not-met card never sets pending_discard, so the guard is exact) -> apply the
     # choice (hand -> discard) and clear the pause marker. NOT applied when the
     # card's own advancing won the game (mid-chain win: the real engine clears the
@@ -721,7 +711,7 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
         "blocked": ("BLOCKED by" in out),
         # cancelled = the card's effect was CANCELED: either by the opponent's valid
         # effect_canceled card (same stopover, basic advancing still applied) or by a
-        # landmine (engine_version 12, the player is blocked for the rest of the turn)
+        # landmine (the player is blocked for the rest of the turn)
         "cancelled": ("CANCELED by" in out),
         "cancel_reason": ("landmine" if "landmine block" in out
                           else ("effect_canceled" if "effect_canceled" in out else None)),
@@ -733,25 +723,24 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
         # grappling_hook: this card will copy its facing card's advancement (applied
         # in _replay_trip_chain, mirroring ge.process_trip_chain)
         "grappling_activated": bool(grappling_activated),
-        # copy_effect (rule of engine_version 7): this card will copy its facing
-        # card's effect, applied with this player as the actor (applied in
-        # _replay_trip_chain, mirroring ge.process_trip_chain); the copy only happens
-        # when the FACING card's effect fired too (no recursion: a facing copy_effect
-        # has nothing to copy - enforced by ge.apply_copy_effect)
-        "copy_activated": bool(row["effect"] == "copy_effect" and effect_activated
-                               and (game.engine_version or 0) >= 7),
+        # copy_effect: this card will copy its facing card's effect, applied with
+        # this player as the actor (applied in _replay_trip_chain, mirroring
+        # ge.process_trip_chain); the copy only happens when the FACING card's effect
+        # fired too (no recursion: a facing copy_effect has nothing to copy - enforced
+        # by ge.apply_copy_effect)
+        "copy_activated": bool(row["effect"] == "copy_effect" and effect_activated),
         # effect_activated: this card's effect actually fired (condition met, not
         # blocked, not effect_canceled) - the gate for being COPYED by a facing
         # copy_effect card
         "effect_activated": bool(effect_activated),
         # kind: 'play' (a normal move/defend action) or 'rooted' (a rooted card on
-        # the board, engine_version 15 - basic advancing only, blockable, no effect)
+        # the board - basic advancing only, blockable, no effect)
         "kind": "play",
     }
 
 
 def _process_rooted_action(game: GameState, name: str, card_id: str) -> dict | None:
-    """Resolve a ROOTED card on the trip chain (engine_version 15): basic advancing
+    """Resolve a ROOTED card on the trip chain: basic advancing
     only (no condition, no effect), blockable by the opponent's defend at the same
     stopover. Mirrors ge.process_rooted_card. No pinning needed (rooted cards never
     fire a zone-moving effect - they only advance by their base value)."""
@@ -800,85 +789,65 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
     game.players[first_name].action_chain = list(chain_f)
     game.players[second_name].action_chain = list(chain_s)
 
-    # pet_trap (rule of engine_version 8): the INSTANT effect fired at PLAY TIME -
+    # pet_trap: the INSTANT effect fired at PLAY TIME -
     # every drop token was placed on its owner's cell BEFORE the trip chain
     # resolved (while both players were still at their pre-chain positions), so
     # the mirror places them all here, before any card has moved.
-    if (game.engine_version or 0) >= 8:
-        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
-            for m in chain:
-                if (m.get('mode') or '') != 'move':
-                    continue
-                for cid in (m.get('cards') or [])[:1]:
-                    row = _card_row(cid)
-                    if row and row.get('effect') == 'pet_trap':
-                        cell = game.players[nm].current_position or 0
-                        game.drop_tokens[cell] = game.drop_tokens.get(cell, 0) + 1
+    for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+        for m in chain:
+            if (m.get('mode') or '') != 'move':
+                continue
+            for cid in (m.get('cards') or [])[:1]:
+                row = _card_row(cid)
+                if row and row.get('effect') == 'pet_trap':
+                    cell = game.players[nm].current_position or 0
+                    game.drop_tokens[cell] = game.drop_tokens.get(cell, 0) + 1
 
-    # engineers' drops (rule of engine_version 12): the INSTANT effect fired at
-    # PLAY TIME - every drop token was placed on the cell CHOSEN by the player
-    # (message 'cell'), before the trip chain resolved. The mirror places them
-    # here, before any card has moved.
-    if (game.engine_version or 0) >= 12:
-        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
-            for m in chain:
-                if (m.get('mode') or '') != 'move':
-                    continue
-                for cid in (m.get('cards') or [])[:1]:
-                    if cid in ge.ENGINEER_DROPS and m.get('cell') is not None:
-                        game.board_drops.append({'cell': int(m['cell']), 'kind': cid, 'owner': nm})
+    # engineers' drops: the INSTANT effect fired at PLAY TIME - every drop token was
+    # placed on the cell CHOSEN by the player (message 'cell'), before the trip
+    # chain resolved. The mirror places them here, before any card has moved.
+    for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+        for m in chain:
+            if (m.get('mode') or '') != 'move':
+                continue
+            for cid in (m.get('cards') or [])[:1]:
+                if cid in ge.ENGINEER_DROPS and m.get('cell') is not None:
+                    game.board_drops.append({'cell': int(m['cell']), 'kind': cid, 'owner': nm})
 
-    # wrecking_ball (rule of engine_version 11): the INSTANT effect fired at PLAY
-    # TIME - it removed the opponent's dwelling card (if any), sending it to the
-    # opponent's discard and clearing the dwelling slot. A no-op today (no
-    # implemented effect places a dwelling card yet), but mirrored here so the
-    # replay stays faithful when dwelling cards are added later.
-    if (game.engine_version or 0) >= 11:
-        for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
-            for m in chain:
-                if (m.get('mode') or '') != 'move':
-                    continue
-                for cid in (m.get('cards') or [])[:1]:
-                    row = _card_row(cid)
-                    if row and row.get('effect') == 'wrecking_ball':
-                        oppo = game.players[second_name] if nm == first_name else game.players[first_name]
-                        if oppo.dwelling:
-                            dwelling_card = oppo.dwelling
-                            oppo.discard = (oppo.discard or []) + [dwelling_card]
-                            oppo.dwelling = None
-                            # the placeholder (dwelling_slot): engine_version 28+
-                            # KEEPS it in place (it still occupies the consumed
-                            # trip-chain position until the cleaning phase — the
-                            # replay's local state therefore keeps it too, so the
-                            # replayed chain has the same placeholder entries as
-                            # the engine's); games < 28 CLEARED it with the card
-                            # (the "stopover hole"), so the replay mirrors that
-                            # clear for those games.
-                            if (game.engine_version or 0) < 28:
-                                oppo.dwelling_slot = None
+    # wrecking_ball: the INSTANT effect fired at PLAY TIME - it removed the
+    # opponent's dwelling card (if any), sending it to the opponent's discard and
+    # clearing the dwelling slot. A no-op today (no implemented effect places a
+    # dwelling card yet), but mirrored here so the replay stays faithful when
+    # dwelling cards are added later.
+    for nm, chain in ((first_name, chain_f), (second_name, chain_s)):
+        for m in chain:
+            if (m.get('mode') or '') != 'move':
+                continue
+            for cid in (m.get('cards') or [])[:1]:
+                row = _card_row(cid)
+                if row and row.get('effect') == 'wrecking_ball':
+                    oppo = game.players[second_name] if nm == first_name else game.players[first_name]
+                    if oppo.dwelling:
+                        dwelling_card = oppo.dwelling
+                        oppo.discard = (oppo.discard or []) + [dwelling_card]
+                        oppo.dwelling = None
+                        # the placeholder (dwelling_slot) KEEPS its place: it still
+                        # occupies the consumed trip-chain position until the
+                        # cleaning phase (the replay's local state keeps it too, so
+                        # the replayed chain has the same placeholder entries as
+                        # the engine's).
 
     try:
-        # Build the per-player chains: v15 = that player's OWN rooted cards (from
-        # the previous turn, basic advancing + blockable) at the leading positions
-        # + this turn's plays; legacy (v<15) = plays only (rooted cards are inert
-        # and not part of the chain). The trip chain resolves by POSITION, and the
-        # facing (block / grappling / copy) is between the two players' entries at
-        # the SAME position.
-        if (game.engine_version or 0) >= 15:
-            chain_f = ge._player_chain(game, first_name)
-            chain_s = ge._player_chain(game, second_name)
-        else:
-            def _legacy_chain(nm):
-                out = []
-                for idx, a in enumerate(chains[nm]):
-                    if a and a.get('mode') in ('move', 'defend') and a.get('cards'):
-                        out.append({'kind': 'play', 'action': a, 'stopover': a.get('to'), 'position': idx + 1})
-                return out
-            chain_f = _legacy_chain(first_name)
-            chain_s = _legacy_chain(second_name)
-        # max POSITION (not len): since engine_version 17 the chain can have GAPS -
-        # a pending placeholder attached to a play is removed from the chain, leaving
-        # its position empty (mirror of the engine's max_pos)
+        # Build the per-player chains: that player's OWN rooted cards (from the
+        # previous turn, basic advancing + blockable) at the leading positions
+        # + this turn's plays. The trip chain resolves by POSITION, and the facing
+        # (block / grappling / copy) is between the two players' entries at the
+        # SAME position.
+        chain_f = ge._player_chain(game, first_name)
+        chain_s = ge._player_chain(game, second_name)
+        # max POSITION (not len): the chain can have GAPS - a pending placeholder
+        # attached to a play is removed from the chain, leaving its position empty
+        # (mirror of the engine's max_pos)
         _positions = [e.get('position') or 0 for e in (chain_f or [])] + [e.get('position') or 0 for e in (chain_s or [])]
         max_pos = max(_positions) if _positions else 0
 
@@ -894,7 +863,7 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
             if entry['kind'] == 'rooted':
                 return _process_rooted_action(game, nm, entry['card_id'])
             if entry['kind'] == 'placeholder':
-                # board-furniture placeholder (v17): an EMPTY position - no card,
+                # board-furniture placeholder: an EMPTY position - no card,
                 # no effect, nothing to copy / block (the live engine skips it)
                 return None
             return _process_action(game, nm, entry['action'], ctxs, cur_turn)
@@ -934,7 +903,7 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
             # grappling copy) - so a copy must not fire when the game ended on the
             # facing card (mirrors the game-over checks around apply_grappling_copy
             # in ge.process_trip_chain).
-            # nobodymoves (engine_version 23): a movement-locked copier does NOT
+            # nobodymoves: a movement-locked copier does NOT
             # copy its facing advancement (the copy is movement); an UNSTOPPABLE
             # copier (condition met) still copies. (For landmine the card was
             # canceled, so grappling_activated is False and this is never reached.)
@@ -968,10 +937,10 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                 o_entry = _entry_at(chain_f if facing_nm == first_name else chain_s, p)
                 if not (c_entry and o_entry and c_entry['kind'] == 'play' and o_entry['kind'] == 'play'):
                     continue
-                # landmine (engine_version 12): a blocked player does not copy (for
+                # landmine: a blocked player does not copy (for
                 # landmine the card was canceled, so copy_activated is False and this
                 # is never reached - kept for clarity).
-                # nobodymoves (engine_version 23): a movement-locked copier copies ONLY
+                # nobodymoves: a movement-locked copier copies ONLY
                 # a non-movement (zone) effect; a movement-effect copy is suppressed.
                 # An UNSTOPPABLE copier (condition met) copies regardless (it still
                 # moves, so its copy fires).
@@ -992,13 +961,10 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                         elif kind == "ramp":
                             _pick_ramp(target, n, ctx, cur_turn)
                         elif kind == "discard":
-                            if (game.engine_version or 0) < 13:
-                                _pick_discard(target, n, ctx, cur_turn)
-                            else:
-                                # discard selection (v13): the copied discard PAUSES
-                                # the engine (pending_discard) -> apply the choice
-                                # after apply_copy_effect (mirrors the real game)
-                                copy_discard = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
+                            # discard selection: the copied discard PAUSES the engine
+                            # (pending_discard) -> apply the choice after
+                            # apply_copy_effect (mirrors the real game)
+                            copy_discard = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
                         elif kind == "tax":
                             _pick_tax(target, n, ctx)
                 ge.apply_copy_effect(game, game.players[copier_nm], c_entry['action'],
@@ -1028,9 +994,9 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                                 if pl.discard is None:
                                     pl.discard = []
                                 pl.discard.extend(cards)
-                            # doctors (engine_version 16): flush the attached pending card too
+                            # doctors: flush the attached pending card too
                             _pc = (entry['action'] or {}).get('pending_card')
-                            if _pc and (game.engine_version or 0) >= 16:
+                            if _pc:
                                 pl.discard.append(_pc)
                 return actions
             if p >= max_pos:
@@ -1049,20 +1015,18 @@ def analyze_game(state_dict: dict) -> dict:
     final_turn = int(state_dict.get("turn") or 1)
     warnings: list[str] = []
 
-    # One-off historical artifact: a few OLD games (created before the mid-chain-win
-    # flush fix in ge.process_trip_chain) lost their unprocessed play cards - the
-    # cards are missing from ALL final zones. The current engine conserves every
-    # card (flushed to discard on a mid-chain win), so for those old games we
-    # reconstruct the missing cards in the discard to complete the identity pool.
+    # Defensive card-conservation: if any played card is missing from ALL final
+    # zones (a mid-chain win that was not flushed), reconstruct it in the discard
+    # to complete the identity pool.
     state_dict = dict(state_dict)
     fixed_players: dict[str, dict] = {}
     for n, p in state_dict["players"].items():
         final_set: set[str] = set()
         for z in ("hand", "deck", "discard", "mana"):
             final_set.update(p.get(z) or [])
-        if p.get("dwelling"):   # dwelling (engine_version 12): a card outside the four zones
+        if p.get("dwelling"):   # dwelling: a card outside the four zones
             final_set.add(p["dwelling"])
-        final_set.update(p.get("pendings") or [])   # pending cards (doctors, engine_version 16)
+        final_set.update(p.get("pendings") or [])   # pending cards (doctors)
         hist = {c for m in (p.get("messages_history") or []) for c in (m.get("cards") or [])}
         missing = sorted(hist - final_set)
         p = dict(p)
@@ -1077,20 +1041,13 @@ def analyze_game(state_dict: dict) -> dict:
 
     game, ctxs = _build_initial_state(state_dict, names, segs)
 
-    # rule version pinning: games created before engine_version 2 were played WITHOUT the
-    # faction biome bonus -> replay them without it, otherwise every forward move on a home
-    # biome drifts by +1 and the final positions can never verify against the stored state
-    _saved_on_home_biome = ge._on_home_biome
-    if (game.engine_version or 0) < 2:
-        ge._on_home_biome = lambda p, g: False
-
     turns_out: list[dict] = []
     turn_order = list(game.turn_order)
     day_night = "day"
-    day_night_fixed = False   # Mages Celestial_reversal (engine_version 22): once a
+    day_night_fixed = False   # Mages Celestial_reversal: once a
     # Celestial_reversal card is played, the day/night is FIXED (set to the player's
     # choice) and no longer flips each turn - the flip below is then skipped.
-    nobodymoves_active = False  # Mages nobodymoves (engine_version 23): once a
+    nobodymoves_active = False  # Mages nobodymoves: once a
     # nobodymoves card is played, ALL players' MOVEMENT is LOCKED for the rest of the turn
     # (their MOVE cards are canceled, only unstoppable may advance). Reset every turn
     # (the block lasts until the end of the turn, like landmine).
@@ -1138,20 +1095,20 @@ def analyze_game(state_dict: dict) -> dict:
             for m in seg_t[n]["moves"]:
                 if m.get("mode") == "pass":
                     continue
-                # discard selection (engine_version 13): the CHOICE message (to
+                # discard selection: the CHOICE message (to
                 # 'discard_pile') is NOT part of the trip chain - it was made DURING
                 # resolution (pause/resume) and its cards were already removed from
                 # the hand by the discard effect (applied in _replay_trip_chain).
                 if m.get("to") == "discard_pile":
                     continue
-                # dwelling actions (engine_version 12): PLACE (1 card -> the dwelling
+                # dwelling actions: PLACE (1 card -> the dwelling
                 # slot) or TAP (no cards -> draw 1). They are NOT part of the trip
                 # chain - they resolved immediately at play time (mirror of ge.player_play).
-                if m.get("to") == "dwelling" and (game.engine_version or 0) >= 12:
+                if m.get("to") == "dwelling":
                     if m.get("mode") == "dwelling_activation":
-                        if p.dwelling == ge.MAGE_BLACK_HOLE and (game.engine_version or 0) >= 26 \
+                        if p.dwelling == ge.MAGE_BLACK_HOLE \
                                 and m.get("rotation") in ("cw", "ccw"):
-                            # black_hole tap (Mages, engine_version 26): ROTATES THE EARTH 3
+                            # black_hole tap (Mages): ROTATES THE EARTH 3
                             # CELLS in the player's chosen direction. A QUICK action (no trip
                             # chain) processed in the play-phase message loop, BEFORE the trip
                             # chain resolves — mirroring the engine (the tap is a quick action,
@@ -1165,21 +1122,12 @@ def analyze_game(state_dict: dict) -> dict:
                                 p.dwelling_tapped = True
                                 events.append({"player": n, "type": "black_hole_tap",
                                               "card": "black_hole", "rotation": m["rotation"]})
-                        elif p.dwelling == "laboratory" and (game.engine_version or 0) >= 16:
-                            # laboratory tap (doctors, v16): adds an 'epo' pending card (NOT a draw)
+                        elif p.dwelling == "laboratory":
+                            # laboratory tap (doctors): adds an 'epo' pending card (NOT a
+                            # draw). A QUICK action — the 'epo' gets NO placeholder entry
+                            # (pending_slots is the per-turn list).
                             if p.pendings is None: p.pendings = []
-                            if p.pending_slots is None: p.pending_slots = []
                             p.pendings.append("epo")
-                            if (game.engine_version or 0) >= 19:
-                                # v19: the tap is a QUICK action — the 'epo' gets NO
-                                # placeholder entry (pending_slots is the per-turn list)
-                                pass
-                            elif (game.engine_version or 0) == 18:
-                                # v18: the tap is a QUICK action — the 'epo' occupies NO
-                                # trip-chain position (pending_slots stays parallel: None)
-                                p.pending_slots.append(None)
-                            else:
-                                p.pending_slots.append(int(ge._player_stopover(game, n, len(chain)).rsplit('_', 1)[-1]) if (game.engine_version or 0) >= 15 else 4 - min(len(p.pending_slots) - 1, 4))
                             p.dwelling_tapped = True
                             events.append({"player": n, "type": "laboratory_tap", "card": "epo"})
                         else:
@@ -1197,31 +1145,24 @@ def analyze_game(state_dict: dict) -> dict:
                         if cid_d and cid_d in (p.hand or []):
                             p.hand.remove(cid_d)
                             p.dwelling = cid_d
-                            # placeholder slot (stopover-skip rule, engine_version 14;
-                            # per-player positions, engine_version 15): must match the
-                            # engine's. v15: the dwelling placeholder takes the NEXT
-                            # position in this player's OWN chain — ge._player_stopover
-                            # (rooted count + plays so far + 1). v14: the k-th FREE stopover
-                            # (shared skip) — ge._next_free_stopover_v14. len(chain) = the
-                            # play messages this player sent BEFORE this dwelling message
-                            # this turn (= the engine's played_count at placement time).
-                            # Needed so the _process_rooted_cards mirror skips this column
-                            # exactly like the live engine did (rooted_on_board is compared
-                            # WITH stopovers at the end). For games with engine_version < 14
-                            # the skip rule did not exist (legacy plain convention), so the
-                            # slot is left unset and the placement stays plain.
-                            if (game.engine_version or 0) >= 15:
-                                p.dwelling_slot = int(ge._player_stopover(game, n, len(chain)).rsplit('_', 1)[-1])
-                            elif (game.engine_version or 0) >= 14:
-                                p.dwelling_slot = int(ge._next_free_stopover_v14(game, len(chain), n).rsplit('_', 1)[-1])
+                            # placeholder slot: must match the engine's. The dwelling
+                            # placeholder takes the NEXT position in this player's OWN
+                            # chain — ge._player_stopover (rooted count + plays so far +
+                            # 1). len(chain) = the play messages this player sent BEFORE
+                            # this dwelling message this turn (= the engine's
+                            # played_count at placement time). Needed so the
+                            # _process_rooted_cards mirror skips this column exactly
+                            # like the live engine did (rooted_on_board is compared
+                            # WITH stopovers at the end).
+                            p.dwelling_slot = int(ge._player_stopover(game, n, len(chain)).rsplit('_', 1)[-1])
                             events.append({"player": n, "type": "dwelling_place", "card": cid_d})
                         elif cid_d:
                             warnings.append(f"turn {t} - {n}: dwelling card {cid_d} not found in hand (reconstruction)")
                         p.mana_spend += _card_cost(cid_d or "")
                     continue
-                # pending zone (doctors, engine_version 16): PLACE a pending card in the
-                # pending zone (NOT part of the trip chain — resolved at play time).
-                if m.get("to") == "pending_zone" and (game.engine_version or 0) >= 16:
+                # pending zone (doctors): PLACE a pending card in the pending zone
+                # (NOT part of the trip chain — resolved at play time).
+                if m.get("to") == "pending_zone":
                     cids_p = m.get("cards") or []
                     cid_p = cids_p[0] if cids_p else None
                     if cid_p:
@@ -1232,16 +1173,10 @@ def analyze_game(state_dict: dict) -> dict:
                         if p.pending_slots is None:
                             p.pending_slots = []
                         p.pendings.append(cid_p)
-                        if (game.engine_version or 0) >= 15:
-                            _slot = int(ge._player_stopover(game, n, len(chain)).rsplit('_', 1)[-1])
-                            # v19: placeholder is a [card, slot] pair (per-turn list, NOT
-                            # parallel to the persistent pendings zone); v16-18: bare int
-                            if (game.engine_version or 0) >= 19:
-                                p.pending_slots.append([cid_p, _slot])
-                            else:
-                                p.pending_slots.append(_slot)
-                        else:
-                            p.pending_slots.append(4 - min(len(p.pending_slots), 4))
+                        _slot = int(ge._player_stopover(game, n, len(chain)).rsplit('_', 1)[-1])
+                        # the placeholder is a [card, slot] pair (per-turn list, NOT
+                        # parallel to the persistent pendings zone)
+                        p.pending_slots.append([cid_p, _slot])
                         events.append({"player": n, "type": "pending_place", "card": cid_p})
                     p.mana_spend += _card_cost(cid_p or "")
                     continue
@@ -1253,56 +1188,53 @@ def analyze_game(state_dict: dict) -> dict:
                 if _card_row(cid) is None:
                     warnings.append(f"turn {t} - {n}: card unknown to the cardpool (ignored)")
                     continue
-                # engineer drop (engine_version 12): the drop token is placed INSTANTLY
-                # at play time on the message's 'cell' - record the event for the UI
-                if (game.engine_version or 0) >= 12 and cid in ge.ENGINEER_DROPS and m.get("cell") is not None:
+                # engineer drop: the drop token is placed INSTANTLY at play time on
+                # the message's 'cell' - record the event for the UI
+                if cid in ge.ENGINEER_DROPS and m.get("cell") is not None:
                     events.append({"player": n, "type": "drop_place", "card": cid, "cell": int(m["cell"])})
-                # Mages Celestial_reversal (engine_version 22): the INSTANT effect fired
+                # Mages Celestial_reversal: the INSTANT effect fired
                 # at play time (BEFORE the trip chain) - the day/night is FIXED to the
                 # player's choice (message 'day_night') for the rest of the game. The
                 # card itself is a no-op on the chain (support card: advancing 0).
-                if ((game.engine_version or 0) >= 22 and cid == ge.MAGE_CELASTIAL_REVERSAL
-                        and m.get("day_night") in ("day", "night")):
+                if cid == ge.MAGE_CELASTIAL_REVERSAL and m.get("day_night") in ("day", "night"):
                     day_night = m["day_night"]
                     day_night_fixed = True
                     game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
                     events.append({"player": n, "type": "celestial_reversal", "card": cid, "day_night": day_night})
-                # Mages thermic_flux (engine_version 24): the INSTANT effect fired at
+                # Mages thermic_flux: the INSTANT effect fired at
                 # play time (BEFORE the trip chain) - the planet temperature changes by
                 # ±4 °C to the player's choice (message 'temp_change': 'up'/'down'),
                 # CLAMPED to 1..20, PERMANENTLY. The card itself is a no-op on the chain
                 # (support card: advancing 0). Mutate game.temperature so the temp_*
                 # conditions read the new value at resolution time.
-                if ((game.engine_version or 0) >= 24 and cid == ge.MAGE_THERMIC_FLUX
-                        and m.get("temp_change") in ("up", "down")):
+                if cid == ge.MAGE_THERMIC_FLUX and m.get("temp_change") in ("up", "down"):
                     _old_temp = game.temperature
                     _delta = 4 if m["temp_change"] == "up" else -4
                     _new_temp = max(1, min(20, (_old_temp or 0) + _delta))
                     game.temperature = _new_temp   # keep the ENGINE state in sync (is_condition_met reads it)
                     events.append({"player": n, "type": "thermic_flux", "card": cid,
                                    "from": _old_temp, "to": _new_temp})
-                # Mages nobodymoves (engine_version 23): the INSTANT effect fired at play
+                # Mages nobodymoves: the INSTANT effect fired at play
                 # time (BEFORE the trip chain) - ALL players are BLOCKED for the rest of
                 # the turn (MOVE cards canceled, only unstoppable may advance). The card
                 # itself is a no-op on the chain (support card: advancing 0). The block
                 # is game-level and applies to the trip chain resolution below.
-                if (game.engine_version or 0) >= 23 and cid == ge.MAGE_NOBODYMOVES:
+                if cid == ge.MAGE_NOBODYMOVES:
                     nobodymoves_active = True
                     game.nobodymoves_active = True   # keep the ENGINE state in sync (process_card reads it)
                     events.append({"player": n, "type": "nobodymoves", "card": cid})
-                # Mages Apocalypticritual (engine_version 25): the INSTANT effect fired
+                # Mages Apocalypticritual: the INSTANT effect fired
                 # at play time (BEFORE the trip chain) - the ORDER OF ALL 4 CATACLYSM
                 # CARDS is SET to the player's choice (message 'cataclysm_order': a
                 # permutation of the 4 biomes, index 0 strikes next), PERMANENTLY
                 # (until the next ritual). The card itself is a no-op on the chain
                 # (support card: advancing 0). Mutate game.cataclysm_pile so the
                 # real trigger_cataclysm (called by process_card) reads the new order.
-                if ((game.engine_version or 0) >= 25 and cid == ge.MAGE_APOCALYPTICRITUAL
-                        and isinstance(m.get("cataclysm_order"), list)):
+                if cid == ge.MAGE_APOCALYPTICRITUAL and isinstance(m.get("cataclysm_order"), list):
                     game.cataclysm_pile = list(m["cataclysm_order"])   # keep the ENGINE state in sync (trigger_cataclysm reads it)
                     events.append({"player": n, "type": "apocalypticritual", "card": cid,
                                    "order": list(m["cataclysm_order"])})
-                # swap_cards (engine_version 29): the INSTANT effect fired at play
+                # swap_cards: the INSTANT effect fired at play
                 # time (BEFORE the trip chain). The play's own recorded 'to' is
                 # ALREADY post-swap (the engine rewrote the action in place), so the
                 # play's position is automatically correct and a play target needs
@@ -1310,8 +1242,7 @@ def analyze_game(state_dict: dict) -> dict:
                 # the replay reconstructs itself (a pending / dwelling placeholder or
                 # a rooted card) must be mirrored: the engine rewrote the target's
                 # stopover to the play's original column (m['swapped_from']).
-                if ((game.engine_version or 0) >= 29 and m.get("swapped_with_kind")
-                        in ("pending", "dwelling", "rooted") and m.get("swapped_from")
+                if (m.get("swapped_with_kind") in ("pending", "dwelling", "rooted") and m.get("swapped_from")
                         and isinstance(m.get("swap_with"), int)
                         and not isinstance(m.get("swap_with"), bool)):
                     _sw_new = int(str(m["swapped_from"]).rsplit("_", 1)[-1])
@@ -1320,8 +1251,6 @@ def analyze_game(state_dict: dict) -> dict:
                         for _i, _e in enumerate(p.pending_slots or []):
                             if isinstance(_e, (list, tuple)) and len(_e) == 2 and _e[1] == _sw_old:
                                 p.pending_slots[_i] = [_e[0], _sw_new]
-                            elif _e == _sw_old:   # v16-18 bare-int shape (unreachable for v29 games)
-                                p.pending_slots[_i] = _sw_new
                     elif m["swapped_with_kind"] == "dwelling":
                         p.dwelling_slot = _sw_new
                     else:   # rooted (compared WITH stopover at the end of the replay)
@@ -1335,32 +1264,16 @@ def analyze_game(state_dict: dict) -> dict:
                 if cid in (p.hand or []):
                     p.hand.remove(cid)
                 p.mana_spend += _card_cost(cid)
-                # doctors (engine_version 16): the pending card was consumed from the
-                # zone at play time (the engine removes it from player.pendings in
-                # player_play). Mirror that here so the replay's pending zone matches.
+                # doctors: the pending card was consumed from the zone at play time
+                # (the engine removes it from player.pendings in player_play). Mirror
+                # that here so the replay's pending zone matches. The attached
+                # card's placeholder STAYS IN PLACE (it marks the consumed trip-chain
+                # position) — pending_slots is untouched (the engine keeps the
+                # [card, slot] pair).
                 _pcard = m.get("pending_card")
-                if _pcard and p.pendings and _pcard in p.pendings and (game.engine_version or 0) >= 16:
+                if _pcard and p.pendings and _pcard in p.pendings:
                     _pidx = p.pendings.index(_pcard)
                     p.pendings = p.pendings[:_pidx] + p.pendings[_pidx+1:]
-                    if (game.engine_version or 0) >= 20:
-                        # v20: the attached pending card's placeholder STAYS IN PLACE
-                        # (it marks the consumed trip-chain position) — pending_slots
-                        # is untouched (the engine keeps the [card, slot] pair)
-                        pass
-                    elif (game.engine_version or 0) >= 19:
-                        # v19: remove the attached card's placeholder BY CARD NAME
-                        # (the first matching [card, slot] pair) — the index in
-                        # `pendings` does NOT index the per-turn placeholder list
-                        _new_slots, _removed = [], False
-                        for _e in (p.pending_slots or []):
-                            if (not _removed and isinstance(_e, (list, tuple)) and len(_e) == 2
-                                    and _e[0] == _pcard):
-                                _removed = True
-                                continue
-                            _new_slots.append(_e)
-                        p.pending_slots = _new_slots
-                    elif p.pending_slots and len(p.pending_slots) > _pidx:
-                        p.pending_slots = p.pending_slots[:_pidx] + p.pending_slots[_pidx+1:]
                 chain.append(m)
             chains[n] = chain
 
@@ -1370,12 +1283,12 @@ def analyze_game(state_dict: dict) -> dict:
         actions = _replay_trip_chain(game, turn_order, chains, ctxs, t)
         positions_after = {n: game.players[n].current_position or 0 for n in names}
 
-        # rooted (engine_version 10): settle the rooted cards NOW (mirror of the
-        # engine's ge._process_rooted_cards, called in handle_websocket_message right
+        # rooted: settle the rooted cards NOW (mirror of the engine's
+        # ge._process_rooted_cards, called in handle_websocket_message right
         # after the trip chain, in ALL end-of-turn cases). The engine's process_card
         # already granted the tokens (rooted_this_turn); this pulls the survivors out
         # of the discard onto free stopovers (rooted_on_board) and discards last
-        # turn's rooted cards. A no-op for games with engine_version < 10.
+        # turn's rooted cards.
         _buf_rooted = io.StringIO()
         with contextlib.redirect_stdout(_buf_rooted):
             ge._process_rooted_cards(game)
@@ -1406,21 +1319,18 @@ def analyze_game(state_dict: dict) -> dict:
         # prepare next turn (engine order: flip order, reset spend/chains, flip day/night)
         turn_order = list(reversed(turn_order))
         # flip day/night each new turn - SKIPPED once a Mages Celestial_reversal card
-        # (engine_version 22) fixed it (day_night_fixed set above; the engine skips the
-        # same flip in _end_turn when game.day_night_fixed is True).
+        # fixed it (day_night_fixed set above; the engine skips the same flip in
+        # _end_turn when game.day_night_fixed is True).
         if not day_night_fixed:
             day_night = "night" if day_night == "day" else "day"
             game.day_night = day_night   # keep the ENGINE state in sync (is_condition_met reads it)
-        # nobodymoves (engine_version 23): the movement lock lasts until the end of
-        # the turn - reset the game-level flag (the engine clears it in _end_turn).
-        # A no-op for games < 23 (the field defaults to False and is never set).
+        # nobodymoves: the movement lock lasts until the end of the turn - reset
+        # the game-level flag (the engine clears it in _end_turn).
         nobodymoves_active = False
         game.nobodymoves_active = False
         for n in names:
             game.players[n].mana_spend = 0
             game.players[n].action_chain = []
-
-    ge._on_home_biome = _saved_on_home_biome   # restore (the loop above only breaks, never returns early)
 
     # stored state says the game ended but our count-based checks did not fire
     # (e.g. a missing setup message in the history) -> infer the ending
@@ -1452,16 +1362,15 @@ def analyze_game(state_dict: dict) -> dict:
             if sorted(getattr(rp, zone) or []) != sorted(sp.get(zone) or []):
                 warnings.append(f"{n}: identities of the {zone} zone not exactly reconstructed")
 
-    # pet_trap (engine_version 8): the unconsumed drop tokens left on the board
+    # pet_trap: the unconsumed drop tokens left on the board
     # must match the stored ones (tokens consumed by triggers are gone from both)
     stored_drops = {int(k): int(v) for k, v in (state_dict.get('drop_tokens') or {}).items()}
     replayed_drops = {int(k): int(v) for k, v in (game.drop_tokens or {}).items()}
     if stored_drops != replayed_drops:
         warnings.append(f"drop tokens diverge (replayed {replayed_drops}, stored {stored_drops})")
 
-    # rooted (engine_version 10): the rooted cards sitting on the board must match
-    # the stored ones (same cards, same owners, same stopovers). Empty for games
-    # with engine_version < 10 (the rooted effect is a no-op there).
+    # rooted: the rooted cards sitting on the board must match the stored ones
+    # (same cards, same owners, same stopovers).
     stored_rooted = sorted(
         (e.get('card_id'), e.get('owner'), e.get('stopover'))
         for e in (state_dict.get('rooted_on_board') or [])
@@ -1473,7 +1382,7 @@ def analyze_game(state_dict: dict) -> dict:
     if stored_rooted != replayed_rooted:
         warnings.append(f"rooted on board diverge (replayed {replayed_rooted}, stored {stored_rooted})")
 
-    # engineers' drops (engine_version 12): the unconsumed drop tokens left on the
+    # engineers' drops: the unconsumed drop tokens left on the
     # board must match the stored ones (tokens consumed by triggers are gone from both)
     stored_bdrops = sorted(
         (e.get('cell'), e.get('kind'), e.get('owner'))
@@ -1486,7 +1395,7 @@ def analyze_game(state_dict: dict) -> dict:
     if stored_bdrops != replayed_bdrops:
         warnings.append(f"engineer drops diverge (replayed {replayed_bdrops}, stored {stored_bdrops})")
 
-    # dwelling (engine_version 12): the dwelling card on the board (outside the
+    # dwelling: the dwelling card on the board (outside the
     # four zones) must match the stored one for both players
     for n in names:
         rp_d = game.players[n].dwelling or None
@@ -1494,16 +1403,15 @@ def analyze_game(state_dict: dict) -> dict:
         if rp_d != sp_d:
             warnings.append(f"{n}: dwelling diverges (replayed {rp_d}, stored {sp_d})")
 
-    # thermic_flux (engine_version 24): the replay tracks the temperature from the
-    # initial rolled value + the thermic_flux changes; the final tracked value must
-    # match the stored `temperature`. (For games < 24 the replay uses the stored value
-    # as-is, so this is always equal.)
+    # thermic_flux: the replay tracks the temperature from the initial rolled value
+    # + the thermic_flux changes; the final tracked value must match the stored
+    # `temperature`.
     stored_temp = state_dict.get("temperature")
     replayed_temp = game.temperature
     if stored_temp != replayed_temp:
         warnings.append(f"temperature diverges (replayed {replayed_temp}, stored {stored_temp})")
 
-    # Apocalypticritual (engine_version 25) + cataclysm triggers: the replay tracks
+    # Apocalypticritual + cataclysm triggers: the replay tracks
     # the pile from the reconstructed initial order + the ritual reorders + the
     # trigger rotations; the final tracked pile must match the stored one.
     stored_pile = list(state_dict.get("cataclysm_pile") or [])
@@ -1511,21 +1419,19 @@ def analyze_game(state_dict: dict) -> dict:
     if stored_pile != replayed_pile:
         warnings.append(f"cataclysm pile diverges (replayed {replayed_pile}, stored {stored_pile})")
 
-    # black_hole (engine_version 26): the replay reconstructs the INITIAL earth (the
+    # black_hole: the replay reconstructs the INITIAL earth (the
     # stored final earth reversed by the total rotation) and applies each black_hole tap
     # in order; the final biome codes must match the stored final earth. (Tokens are
     # addressed by cell index and are checked separately via the final positions.)
-    if (game.engine_version or 0) >= 26:
-        stored_earth_codes = [c[0] for c in (state_dict.get("earth") or []) if c]
-        replayed_earth_codes = [c[0] for c in (game.earth or []) if c]
-        if stored_earth_codes != replayed_earth_codes:
-            warnings.append(f"earth biomes diverge (replayed {replayed_earth_codes}, stored {stored_earth_codes})")
+    stored_earth_codes = [c[0] for c in (state_dict.get("earth") or []) if c]
+    replayed_earth_codes = [c[0] for c in (game.earth or []) if c]
+    if stored_earth_codes != replayed_earth_codes:
+        warnings.append(f"earth biomes diverge (replayed {replayed_earth_codes}, stored {stored_earth_codes})")
 
     verified = positions_ok and (state_dict.get("state") != "game over" or ended is not None)
     if not positions_ok:
         warnings.append(
-            f"final positions diverge (replayed {replayed_pos}, stored {stored_pos}) "
-            "- game probably generated by an older engine version"
+            f"final positions diverge (replayed {replayed_pos}, stored {stored_pos})"
         )
 
     return {

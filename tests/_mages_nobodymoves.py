@@ -111,7 +111,7 @@ def check(condition, msg):
 # ============================================================
 print("\n=== Test 1: nobodymoves LOCKS the player's movement (v23) — no advancing ===")
 # ============================================================
-gs, gid = new_game([NOBODY, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 
@@ -138,7 +138,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 2: nobodymoves LOCKS BOTH players' movement (v23) ===")
 # ============================================================
-gs, gid = new_game([NOBODY, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']; b = gs.players['B']
 force_hand(gs, 'A', [adv1, NOBODY])
@@ -160,7 +160,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 3: unstoppable card IGNORES the movement lock (v23) ===")
 # ============================================================
-gs, gid = new_game([NOBODY, UNSTOPPABLE], [adv1], version=23)
+gs, gid = new_game([NOBODY, UNSTOPPABLE], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [UNSTOPPABLE, NOBODY])
@@ -189,7 +189,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 4: the movement lock is CLEARED in the cleaning phase (v23) ===")
 # ============================================================
-gs, gid = new_game([NOBODY, adv1, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [adv1, NOBODY])
@@ -219,7 +219,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 5: a DEFEND play of nobodymoves is a no-op (no block) ===")
 # ============================================================
-gs, gid = new_game([NOBODY, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [NOBODY])
@@ -232,7 +232,7 @@ _delete(gid)
 # ============================================================
 print("\n=== Test 6: cannot attach a pending card to nobodymoves (support card) ===")
 # ============================================================
-gs, gid = new_game([NOBODY], [adv1], version=23)
+gs, gid = new_game([NOBODY], [adv1])
 set_biomes(gs)
 gs.players['A'].pendings = ['epo']   # pretend A has a pending card
 p = gs.players['A']
@@ -246,29 +246,9 @@ check(not okk, f"attaching a pending card to nobodymoves is rejected (msg: {msgt
 _delete(gid)
 
 # ============================================================
-print("\n=== Test 7: old-game pinning (v22) — nobodymoves is a no-op, no block ===")
-# ============================================================
-gs, gid = new_game([NOBODY, adv1], [adv1], version=22)   # pre-nobodymoves
-set_biomes(gs)
-a = gs.players['A']
-force_hand(gs, 'A', [adv1, NOBODY])
-# v22: the card is a no-op support card; the movement lock does not fire
-pos_before = a.current_position
-gs = play(gs, 'A', 'first', adv1, mode='move', to='stopover_4')[0]
-gs, okk, msgtxt = play(gs, 'A', 'first', NOBODY, mode='move', to='stopover_3')
-check(okk, f"v22 play accepted (the card is a no-op support card) (msg: {msgtxt})")
-check(gs.nobodymoves_active is False, f"v22: nobodymoves_active stays False: {gs.nobodymoves_active}")
-gs = pas(gs, 'B', 'second')
-gs = ge.process_trip_chain(gs)
-check(a.current_position != pos_before,
-      f"v22: adv1 ADVANCED (no block, {a.current_position} != {pos_before})")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 8b: turn-log note on the nobodymoves line (MOVEMENT LOCKED text) ===")
 # ============================================================
-gs, gid = new_game([NOBODY, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [adv1, NOBODY])
@@ -293,7 +273,7 @@ print("\n=== Test 9: a NON-MOVEMENT effect (draw) STILL FIRES during nobodymoves
 # ============================================================
 # The KEY difference from the old "cancel" semantics: a card with a non-movement
 # effect (draw) still resolves that effect, but its MOVEMENT is suppressed.
-gs, gid = new_game([NOBODY, DRAWS], [adv1], version=23)
+gs, gid = new_game([NOBODY, DRAWS], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [DRAWS, NOBODY])
@@ -325,7 +305,7 @@ print("\n=== Test 10: a MOVEMENT effect (advancing) is SUPPRESSED during nobodym
 # ============================================================
 # Contrast with Test 9: an advancing card (a movement effect) does NOT fire — no
 # extra cells — and its basic advancing is suppressed too.
-gs, gid = new_game([NOBODY, adv1], [adv1], version=23)
+gs, gid = new_game([NOBODY, adv1], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [adv1, NOBODY])
@@ -348,7 +328,7 @@ print("\n=== Test 11: unstoppable STILL MOVES while a normal card is locked (v23
 # ============================================================
 # Two cards in the same chain: a normal adv card (locked) + an unstoppable card
 # (still moves). Confirms the per-card exception.
-gs, gid = new_game([adv1, UNSTOPPABLE, NOBODY], [adv1], version=23)
+gs, gid = new_game([adv1, UNSTOPPABLE, NOBODY], [adv1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [adv1, UNSTOPPABLE, NOBODY])

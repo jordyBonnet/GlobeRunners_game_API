@@ -12,7 +12,7 @@ export function detectPhase(st) {
   if (s.includes("waiting for both players to put")) return "init-mana";
   if (s.includes("waiting for both players to mana or pass")) return "mana-pass";
 
-  // discard selection (engine_version 13): the trip chain paused so the discarding
+  // discard selection: the trip chain paused so the discarding
   // player can choose which cards to discard — "turn N - waiting for NAME to discard K card(s)"
   const md = s.match(/turn (\d+) - waiting for (.+?) to discard (\d+) card\(s\)/);
   if (md) return { kind: "discard", turn: +md[1], actor: md[2], n: +md[3] };

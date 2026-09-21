@@ -126,7 +126,7 @@ export function renderMyZone(me, interactive) {
 
   // tap the dwelling: refinery draws 1 / laboratory adds an 'epo' pending / black_hole
   // rotates the earth 3 cells. Once per turn (free action, play phase). The black_hole
-  // needs a direction CHOICE (cw/ccw) -> a popup (engine_version 26, Mages);
+  // needs a direction CHOICE (cw/ccw) -> a popup (Mages);
   // the other dwellings tap directly.
   const btnTap = $("#btn-tap");   // NOTE: local here - the one in renderAll is NOT in scope
   if (btnTap) btnTap.onclick = () => {
@@ -142,7 +142,7 @@ export function renderMyZone(me, interactive) {
     }
   };
 
-  // discard selection (engine_version ≥ 13): the popup (showDiscardPopup, actions.mjs)
+  // discard selection: the popup (showDiscardPopup, actions.mjs)
   // is the interface — auto-opened by renderAll; no action-bar button any more.
 
   // defend button: the selected card is engaged at 90° on the next slot,
@@ -169,7 +169,7 @@ export function renderMyZone(me, interactive) {
 /* ---------------- side rows: dwelling / pending / deck / discard ---------------- */
 export function renderSideRows(me, oppo) {
   const side = (p, pref) => {
-    // dwelling: 1 card (engine_version 12: the engineers' refinery — tap 1x/turn to draw 1)
+    // dwelling: 1 card (the engineers' refinery — tap 1x/turn to draw 1)
     const dw = $(`#${pref}-dwelling`);
     dw.innerHTML = "";
     if (p.dwelling) {

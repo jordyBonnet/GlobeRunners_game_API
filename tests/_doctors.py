@@ -145,7 +145,7 @@ print("\n=== Test 1: Pending zone placement ===")
 # ============================================================
 a_cards = [adv1, adv2, un1] + DOC_PENDING
 b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=16)
+gs, gid = new_game(a_cards, b_cards)
 set_biomes(gs)
 
 alice = gs.players['A']
@@ -179,7 +179,7 @@ print("\n=== Test 2: Pending card attachment (epo: +1 advancing) ===")
 # ============================================================
 a_cards = [adv1, adv2, un1] + DOC_PENDING
 b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=16)
+gs, gid = new_game(a_cards, b_cards)
 set_biomes(gs)
 
 alice = gs.players['A']
@@ -200,7 +200,7 @@ print(f"  A position before: {pos_before}, base advancing: {base_adv}")
 
 gs = play(gs, 'A', 'first', adv1, mode='move', to='stopover_4', pendings=['epo'])
 check('epo' not in alice.pendings, f"'epo' consumed from pendings: {alice.pendings}")
-check(alice.pending_slots == [], f"A's pending_slots cleared: {alice.pending_slots}")
+check(alice.pending_slots == [['epo', 4]], f"the epo placeholder stays in place: {alice.pending_slots}")
 
 # B passes
 gs = pas(gs, 'B', 'second')
@@ -222,7 +222,7 @@ print("\n=== Test 3: Laboratory tap (adds 'epo' pending) ===")
 # ============================================================
 a_cards = [adv1, adv2, un1] + [DOC_DWELLING]
 b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=16)
+gs, gid = new_game(a_cards, b_cards)
 set_biomes(gs)
 
 alice = gs.players['A']
@@ -246,7 +246,7 @@ print("\n=== Test 3b: Laboratory tap is a QUICK action with NO placeholder (v18)
 # ============================================================
 a_cards = [adv1, adv2, un1] + [DOC_DWELLING]
 b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=18)
+gs, gid = new_game(a_cards, b_cards)
 set_biomes(gs)
 
 alice = gs.players['A']
@@ -263,8 +263,8 @@ play_count_after_place = alice.play_count or 0
 gs, okk, msgtxt = dwelling(gs, 'A', 'first', cards=[], mode='dwelling_activation')
 check(okk, f"Laboratory tap succeeded (msg: {msgtxt})")
 check(alice.pendings == ['epo'], f"'epo' added to A's pendings: {alice.pendings}")
-check(alice.pending_slots == [None],
-      f"pending_slots parallel with a None (no placeholder) entry: {alice.pending_slots}")
+check(alice.pending_slots == [],
+      f"pending_slots has no tap-epo entry (no placeholder): {alice.pending_slots}")
 check((alice.play_count or 0) == play_count_after_place,
       f"tap consumes NO position (play_count {alice.play_count} == {play_count_after_place})")
 check(gs.state == f"turn {gs.turn} - waiting for first player ({gs.turn_order[0]}) to play",
@@ -292,7 +292,7 @@ check(p.message.get('to') == expected_to,
       f"play lands on {expected_to} (the tap consumed no position): {p.message.get('to')}")
 
 # attaching the tap's 'epo' to a main card still works (parallel-list removal by index)
-gs2, gid2 = new_game([adv1, adv2, un1] + [DOC_DWELLING], [adv1, adv2, un1], version=18)
+gs2, gid2 = new_game([adv1, adv2, un1] + [DOC_DWELLING], [adv1, adv2, un1])
 set_biomes(gs2)
 a2 = gs2.players['A']
 force_hand(gs2, 'A', [DOC_DWELLING])
@@ -300,7 +300,7 @@ gs2, okk, msgtxt = dwelling(gs2, 'A', 'first', cards=[DOC_DWELLING], mode='')
 check(okk, f"[attach] Laboratory placement succeeded (msg: {msgtxt})")
 gs2, okk, msgtxt = dwelling(gs2, 'A', 'first', cards=[], mode='dwelling_activation')
 check(okk, f"[attach] Laboratory tap succeeded (msg: {msgtxt})")
-check(a2.pending_slots == [None], f"[attach] pending_slots == [None]: {a2.pending_slots}")
+check(a2.pending_slots == [], f"[attach] pending_slots has no tap-epo entry: {a2.pending_slots}")
 p2 = gs2.players['A']
 p2.mana_spend = 0
 ensure_mana(gs2, 'A', max(ge._play_cost(gs2, adv1), 1) + 1)
@@ -316,29 +316,6 @@ _delete(gid)
 _delete(gid2)
 
 # ============================================================
-print("\n=== Test 4: Old-game pinning (v15 game) ===")
-# ============================================================
-a_cards = [adv1, adv2, un1] + DOC_PENDING
-b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=15)  # pre-doctors
-set_biomes(gs)
-
-alice = gs.players['A']
-
-# A tries to place 'epo' in the pending zone (should be rejected in v15)
-p = gs.players['A']
-cost = max(ge._play_cost(gs, 'epo'), 1)
-ensure_mana(gs, 'A', cost)
-p.mana_spend = 0
-p.message = {'cards': ['epo'], 'to': 'pending_zone', 'mode': '', 'pendings': []}
-gs.state = f"turn {gs.turn} - waiting for first player ({gs.turn_order[0]}) to play"
-p, gs, okk, msgtxt = ge.player_play('first', p, gs)
-check(not okk, f"Pending zone placement rejected in v15 (msg: {msgtxt})")
-check(alice.pendings == [], f"No pending cards in v15: {alice.pendings}")
-
-_delete(gid)
-
-# ============================================================
 print("\n=== Test 5: Mercurochrome unstoppable ===")
 # ============================================================
 # This test verifies that a card with mercurochrome attached can bypass blocks.
@@ -348,7 +325,7 @@ print("\n=== Test 5: Mercurochrome unstoppable ===")
 #  - The block should be bypassed
 a_cards = [adv1, adv2, un1] + DOC_PENDING
 b_cards = [adv1, adv2, un1]
-gs, gid = new_game(a_cards, b_cards, version=16)
+gs, gid = new_game(a_cards, b_cards)
 set_biomes(gs)
 
 alice = gs.players['A']
@@ -438,15 +415,8 @@ next_stop = ge._player_stopover(gs, 'A', a.play_count or 0)
 check(next_stop == 'stopover_2', f"[v19] next play lands on position 3 (stopover_2), got {next_stop}")
 _delete(gid)
 
-# --- v18: legacy index-splice is kept (replay must pin this old behavior) ---
-gs, gid, a = _setup_attach_scenario(18)
-check(a.pendings == ['mercurochrome'], f"[v18] virus consumed: {a.pendings}")
-check((a.pending_slots or []) == [],
-      f"[v18] legacy behavior: the index splice wiped pending_slots[0] (mercurochrome's slot): {a.pending_slots}")
-_delete(gid)
-
 # --- v19: laboratory tap adds 'epo' with NO placeholder entry ---
-gs, gid = new_game([adv1, adv2, un1] + [DOC_DWELLING], [adv1, adv2, un1], version=19)
+gs, gid = new_game([adv1, adv2, un1] + [DOC_DWELLING], [adv1, adv2, un1])
 set_biomes(gs)
 a = gs.players['A']
 force_hand(gs, 'A', [DOC_DWELLING])
@@ -511,18 +481,8 @@ check(front_mirror == (a.play_count or 0),
       f"[v20] frontend mirror ({front_mirror}) == engine play_count ({a.play_count})")
 _delete(gid)
 
-# --- v19: same flow REMOVES the placeholder (old behavior — replay must pin it) ---
-gs, gid, a = _setup_same_turn_attach(19)
-check(a.pendings == [], f"[v19] epo consumed: {a.pendings}")
-check((a.pending_slots or []) == [],
-      f"[v19] old behavior: the placeholder was removed on attachment: {a.pending_slots}")
-next_stop = ge._player_stopover(gs, 'A', a.play_count or 0)
-check(next_stop == 'stopover_2',
-      f"[v19] engine next play still position 3 (stopover_2) — only the visible mirror diverged: {next_stop}")
-_delete(gid)
-
 # --- v20: attaching an OLD pending (no placeholder this turn) — nothing to keep ---
-gs, gid = new_game([adv1, adv2, un1], [adv1, adv2, un1], version=20)
+gs, gid = new_game([adv1, adv2, un1], [adv1, adv2, un1])
 set_biomes(gs)
 a = gs.players['A']
 a.pendings = ['virus']          # placed a PREVIOUS turn (persistent zone)

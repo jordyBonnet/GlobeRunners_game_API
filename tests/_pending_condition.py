@@ -107,24 +107,6 @@ print(f"3) several pending cards in zone (v21): engine={engine_met} ai={ai_met} 
 assert engine_met is True and ai_met is True, (engine_met, ai_met)
 ok += 1
 
-# 4) OLD game (engine_version 20), empty pending zone -> canonical default: MET
-gs.engine_version = 20
-engine_met = ge.is_condition_met('pending', gs.players['A'], gs)
-ai_met = ai_condition_met(gs, 'A', 'pending')
-gs.engine_version = 21
-print(f"4) old game v20, empty zone: engine={engine_met} ai={ai_met} (both expected True)")
-assert engine_met is True and ai_met is True, (engine_met, ai_met)
-ok += 1
-
-# 5) OLD game (engine_version 15), empty pending zone -> canonical default: MET
-gs.engine_version = 15
-engine_met = ge.is_condition_met('pending', gs.players['A'], gs)
-ai_met = ai_condition_met(gs, 'A', 'pending')
-gs.engine_version = 21
-print(f"5) old game v15, empty zone: engine={engine_met} ai={ai_met} (both expected True)")
-assert engine_met is True and ai_met is True, (engine_met, ai_met)
-ok += 1
-
 # 6) FULL RESOLUTION (v21), empty pending zone -> NOT met: no draw, reduced advancing (mana-1 = 1)
 gs = new_game()
 set_biomes(gs, 'JU')

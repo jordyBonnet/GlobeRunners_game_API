@@ -824,7 +824,7 @@ def test_avalanche():
     print('=== unit tests: avalanche effect ===')
     gs = fresh_game()
     a, b = gs.players['A'], gs.players['B']
-    assert (gs.engine_version or 0) >= 4   # avalanche rule active in new games
+    # avalanche rule is active in every new game (engine_version "1.0")
 
     mo_cells = [i for i, cell in enumerate(gs.earth) if cell and cell[0] == 'MO']
     assert len(mo_cells) == 6
@@ -870,18 +870,6 @@ def test_avalanche():
     ge.process_card({'cards': [cid], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}, p3, gs3)
     assert p3.current_position == mo3 + adv, f'{mo3 + 1} -> {mo3} then +{adv} = {mo3 + adv}'
     print(f'  resolve: A@{mo3 + 1} knocked to {mo3}, then advances +{adv} -> {p3.current_position}')
-
-    # 4) game with engine_version < 4 -> avalanche is a no-op (old behavior),
-    #    the card still advances normally
-    gs4 = fresh_game()
-    p4 = gs4.players['A']
-    gs4.engine_version = 3
-    mo4 = [i for i, cell in enumerate(gs4.earth) if cell and cell[0] == 'MO'][0]
-    gs4.earth[0].remove('A'); gs4.earth[mo4 + 2].append('A')
-    p4.current_position = mo4 + 2
-    ge.process_card({'cards': [cid], 'to': 'stopover_4', 'mode': 'move', 'pendings': []}, p4, gs4)
-    assert p4.current_position == mo4 + 2 + adv, 'no knockback on engine_version < 4'
-    print(f'  engine_version 3: no knockback, A advances {mo4 + 2} -> {p4.current_position}')
 
     print('avalanche tests PASSED\n')
 
@@ -946,17 +934,6 @@ def test_grappling_hook():
     assert fp.current_position == FAC_ADV
     assert sp.current_position == reduced, f'not met: {sp.current_position} != {reduced}'
     print(f'  condition not met: reduced {reduced}, no copy = {sp.current_position}')
-
-    # 5) engine_version < 5 -> grappling_hook is a no-op (old behavior)
-    gs = fresh_game()
-    gs.engine_version = 4
-    fp, sp = gs.players[gs.turn_order[0]], gs.players[gs.turn_order[1]]
-    fp.action_chain = [msg(FAC)]
-    sp.action_chain = [msg(GH)]
-    ge.process_trip_chain(gs)
-    assert fp.current_position == FAC_ADV
-    assert sp.current_position == GH_BASE, f'ev<5: {sp.current_position} != {GH_BASE}'
-    print(f'  engine_version 4: no copy, base {GH_BASE} only = {sp.current_position}')
 
     ge._on_home_biome = saved_on_home   # restore before test 6 (it manages its own patch)
 
@@ -1035,16 +1012,6 @@ def test_effect_canceled():
     ge.process_trip_chain(gs)
     assert fp.current_position == FAC_BASE + FAC_BONUS, f'diff stopover: {fp.current_position} != {FAC_BASE + FAC_BONUS}'
     print(f'  4) canceler on different stopover: facing advances {FAC_BASE + FAC_BONUS} (full)')
-
-    # 5) engine_version < 6 -> effect_canceled is a no-op (old behavior)
-    gs = fresh_game()
-    gs.engine_version = 5
-    fp, sp = gs.players[gs.turn_order[0]], gs.players[gs.turn_order[1]]
-    fp.action_chain = [msg(FAC)]
-    sp.action_chain = [msg(CANCEL)]
-    ge.process_trip_chain(gs)
-    assert fp.current_position == FAC_BASE + FAC_BONUS, f'ev<6: {fp.current_position} != {FAC_BASE + FAC_BONUS}'
-    print(f'  5) engine_version 5: facing advances {FAC_BASE + FAC_BONUS} (no cancel)')
 
     # 6) a non-movement effect (draw) is also canceled: the hand does NOT grow from the draw
     #    (the test hand holds fake ids, so the played card was never in it; only the draw
