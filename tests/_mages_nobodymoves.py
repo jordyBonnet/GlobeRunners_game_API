@@ -277,13 +277,13 @@ gs, okk, msgtxt = play(gs, 'A', 'first', NOBODY, mode='move', to='stopover_3')
 check(okk, f"play accepted (msg: {msgtxt})")
 gs = pas(gs, 'B', 'second')
 gs = ge.process_trip_chain(gs)
+# the MOVEMENT LOCKED note lives in the turn's 'instant' section (play-time effect)
 found_note = False
 for turn in gs.log:
-    for sv in turn.get('stopovers', []):
-        for e in sv.get('entries', []):
-            for note in e.get('notes', []):
-                if 'nobodymoves' in note and 'MOVEMENT LOCKED' in note:
-                    found_note = True
+    for it in (turn.get('instant') or []):
+        w = str(it.get('what'))
+        if 'nobodymoves' in w and 'movement locked' in w.lower():
+            found_note = True
 check(found_note, f"turn log has a nobodymoves MOVEMENT LOCKED note")
 
 _delete(gid)

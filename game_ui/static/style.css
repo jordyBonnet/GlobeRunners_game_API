@@ -590,6 +590,18 @@ body.cell-selecting .cell-target:hover {
 .log-tag.neg { color: var(--danger); background: rgba(252,129,129,.14); border: 1px solid rgba(252,129,129,.55); }
 .log-tag.shield { color: #b7c5ea; background: rgba(139,154,199,.14); border: 1px solid rgba(139,154,199,.45); }
 .log-note { font-size: .68rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+/* turn-level INSTANT section — the play-time instant effects + dwelling taps of the
+   turn, rendered at the TOP of the turn (before the stopovers) so they read as the
+   turn's opening event, distinct from the per-card resolution notes below. */
+.log-instant-sec {
+  margin: 6px 8px 8px 8px; padding: 6px 8px;
+  border: 1px solid rgba(246,173,85,.5); border-left: 3px solid var(--accent-2);
+  border-radius: 8px; background: rgba(246,173,85,.08);
+}
+.log-instant-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 2px 0; font-size: .7rem; line-height: 1.45; }
+.log-instant-row + .log-instant-row { border-top: 1px dashed rgba(246,173,85,.22); }
+.log-instant-player { font-weight: 700; color: var(--accent-2); white-space: nowrap; }
+.log-instant-what { color: var(--text); }
 
 /* defense button (between "play" and "pass") */
 .defend-btn {
@@ -706,6 +718,31 @@ body.cell-selecting .cell-target:hover {
   padding: 10px 12px; color: var(--text); font-size: .85rem; cursor: pointer;
 }
 .cata-order-row select:focus { outline: none; border-color: var(--accent); }
+
+/* swap_cards popup (engine_version 29): the player's own stopover mirror (positions
+   1..5) with the played card (draggable) + the other chain entries; drag the card
+   onto a target (or click it) to swap positions (showSwapPopup, actions.mjs) */
+.modal.swap-popup .modal-box { max-width: 480px; }
+.swap-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.swap-cell {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 12px; font-size: .85rem; color: var(--text);
+}
+.swap-cell .swap-pos { width: 84px; flex: none; color: var(--muted); font-size: .78rem; }
+.swap-cell i { color: var(--muted); font-style: normal; font-size: .78rem; }
+.swap-cell.swap-own {
+  border-color: var(--accent); background: rgba(79,209,197,.08);
+  cursor: grab;
+}
+.swap-cell.swap-own:active { cursor: grabbing; }
+.swap-cell .swap-card { cursor: grab; user-select: none; }
+.swap-cell.swap-target {
+  border-style: dashed; border-color: rgba(183,197,234,.55); cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.swap-cell.swap-target:hover { border-color: var(--accent); background: rgba(79,209,197,.08); }
+.swap-cell.swap-target.dragover { border-color: var(--accent); background: rgba(79,209,197,.18); }
 
 /* toast */
 #toast {

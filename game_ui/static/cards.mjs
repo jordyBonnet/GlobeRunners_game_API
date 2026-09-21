@@ -164,6 +164,15 @@ export const isMageBlackHole = (id) => id === MAGE_BLACK_HOLE;
 
 export const isSupportPlay     = (id) => isEngineerDrop(id) || isEngineerDwelling(id) || isDoctorPending(id) || isDoctorDwelling(id) || isMageCelestial(id) || isMageNobodyMoves(id) || isMageThermicFlux(id) || isMageApocalypticritual(id) || isMageBlackHole(id);
 
+// swap_cards (engine_version 29): a MAIN-card effect (156 cards in the pool) — an
+// INSTANT play-time effect: the card SWAPS its trip-chain position with one of the
+// player's OWN chain entries (a play, a board placeholder, a rooted card). The
+// player makes the choice in a popup (actions.mjs showSwapPopup) and sends the
+// target position as the message `swap_with` field. Optional — without it the card
+// simply advances as usual. (A MAIN effect, not a support card: isSupportPlay is
+// untouched, and it goes through the normal move-card dispatch branch.)
+export const isSwapCards = (id) => !!(CARDPOOL[id] && CARDPOOL[id].effect === 'swap_cards');
+
 /* ---------------- factions & support factions ---------------- */
 export const FACTIONS = [
   { key: "Dwa", name: "Dwarves", logo: "/assets/logo_dwarves.png" },

@@ -598,9 +598,20 @@ def _build_initial_state(state_dict: dict, names: list[str], segs: dict) -> tupl
     if (game.engine_version or 0) >= 3 and final_pile:
         # chronological event list from the log: ('strike', biome) /
         # ('ritual', None), in the order the engine wrote them (turn → stopover →
-        # entry → note)
+        # entry → note).
+        # NEW LOG FORMAT (current engine): instant effects (ritual included) are
+        # recorded in the turn's 'instant' section (list of {'player', 'what'}),
+        # which PRECEDES the stopovers of that turn. That is chronologically
+        # correct — a ritual fires at PLAY TIME, i.e. before any strike of the same
+        # turn. OLD LOG FORMAT (games saved before the 'instant' section existed):
+        # the ritual note sat on the card's stopover entry (entries[].notes) — the
+        # scan below still covers that (and old games have no 'instant' key).
         events = []
         for t in (state_dict.get("log") or []):
+            for it in (t.get("instant") or []):
+                s = str(it.get("what") if isinstance(it, dict) else it)
+                if s.startswith("☄️ Apocalypticritual"):
+                    events.append(("ritual", None))
             for s in t.get("stopovers") or []:
                 for e in s.get("entries") or []:
                     for n in (e.get("notes") or []):
@@ -835,6 +846,16 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                             dwelling_card = oppo.dwelling
                             oppo.discard = (oppo.discard or []) + [dwelling_card]
                             oppo.dwelling = None
+                            # the placeholder (dwelling_slot): engine_version 28+
+                            # KEEPS it in place (it still occupies the consumed
+                            # trip-chain position until the cleaning phase — the
+                            # replay's local state therefore keeps it too, so the
+                            # replayed chain has the same placeholder entries as
+                            # the engine's); games < 28 CLEARED it with the card
+                            # (the "stopover hole"), so the replay mirrors that
+                            # clear for those games.
+                            if (game.engine_version or 0) < 28:
+                                oppo.dwelling_slot = None
 
     try:
         # Build the per-player chains: v15 = that player's OWN rooted cards (from
@@ -1281,6 +1302,36 @@ def analyze_game(state_dict: dict) -> dict:
                     game.cataclysm_pile = list(m["cataclysm_order"])   # keep the ENGINE state in sync (trigger_cataclysm reads it)
                     events.append({"player": n, "type": "apocalypticritual", "card": cid,
                                    "order": list(m["cataclysm_order"])})
+                # swap_cards (engine_version 29): the INSTANT effect fired at play
+                # time (BEFORE the trip chain). The play's own recorded 'to' is
+                # ALREADY post-swap (the engine rewrote the action in place), so the
+                # play's position is automatically correct and a play target needs
+                # nothing (its 'to' was rewritten the same way). Only a TARGET that
+                # the replay reconstructs itself (a pending / dwelling placeholder or
+                # a rooted card) must be mirrored: the engine rewrote the target's
+                # stopover to the play's original column (m['swapped_from']).
+                if ((game.engine_version or 0) >= 29 and m.get("swapped_with_kind")
+                        in ("pending", "dwelling", "rooted") and m.get("swapped_from")
+                        and isinstance(m.get("swap_with"), int)
+                        and not isinstance(m.get("swap_with"), bool)):
+                    _sw_new = int(str(m["swapped_from"]).rsplit("_", 1)[-1])
+                    _sw_old = 5 - m["swap_with"]   # the target's (pre-swap) column
+                    if m["swapped_with_kind"] == "pending":
+                        for _i, _e in enumerate(p.pending_slots or []):
+                            if isinstance(_e, (list, tuple)) and len(_e) == 2 and _e[1] == _sw_old:
+                                p.pending_slots[_i] = [_e[0], _sw_new]
+                            elif _e == _sw_old:   # v16-18 bare-int shape (unreachable for v29 games)
+                                p.pending_slots[_i] = _sw_new
+                    elif m["swapped_with_kind"] == "dwelling":
+                        p.dwelling_slot = _sw_new
+                    else:   # rooted (compared WITH stopover at the end of the replay)
+                        for _r in (game.rooted_on_board or []):
+                            if _r.get("owner") == n and _r.get("stopover") == f"stopover_{_sw_old}":
+                                _r["stopover"] = f"stopover_{_sw_new}"
+                    events.append({"player": n, "type": "swap_cards", "card": cid,
+                                   "swap_with": m.get("swap_with"),
+                                   "swapped_with": m.get("swapped_with"),
+                                   "kind": m["swapped_with_kind"]})
                 if cid in (p.hand or []):
                     p.hand.remove(cid)
                 p.mana_spend += _card_cost(cid)

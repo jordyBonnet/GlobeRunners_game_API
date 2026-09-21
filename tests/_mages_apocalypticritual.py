@@ -286,14 +286,14 @@ gs, okk, msgtxt = play(gs, 'A', 'first', RITUAL, mode='move', to='stopover_4', o
 check(okk, f"play accepted (msg: {msgtxt})")
 gs = pas(gs, 'B', 'second')
 gs = ge.process_trip_chain(gs)
-# find the log note for the ritual and check it carries the chosen order
+# find the log note for the ritual (turn 'instant' section) and check it carries
+# the chosen order
 found_note = None
 for turn in gs.log:
-    for sv in turn.get('stopovers', []):
-        for e in sv.get('entries', []):
-            for note in e.get('notes', []):
-                if 'Apocalypticritual' in note and 'cataclysm order set' in note:
-                    found_note = note
+    for it in (turn.get('instant') or []):
+        note = str(it.get('what'))
+        if 'Apocalypticritual' in note and 'cataclysm order set' in note:
+            found_note = note
 check(found_note is not None, f"turn log has an Apocalypticritual order note: {found_note!r}")
 if found_note:
     check(all(b in found_note for b in chosen), f"the note lists the 4 chosen biomes: {found_note!r}")

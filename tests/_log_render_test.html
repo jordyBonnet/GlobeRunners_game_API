@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">
+{
+  "imports": {
+    "../game_ui/static/cards.mjs": "./logrender_stub.mjs",
+    "../game_ui/static/game.mjs": "./logrender_stub.mjs",
+    "../game_ui/static/zones.mjs": "./logrender_stub.mjs",
+    "../game_ui/static/modals.mjs": "./logrender_stub.mjs",
+    "../game_ui/static/chainanim.mjs": "./logrender_stub.mjs"
+  }
+}
+</script>
+<style>
+body{font-family:system-ui,sans-serif;background:#0d1223;color:#dbe4ff;padding:16px}
+pre#out{background:#131a2e;border:1px solid #2d3a5f;border-radius:8px;padding:10px;white-space:pre-wrap;font-size:.8rem}
+</style></head>
+<body>
+<h3>log.mjs renderLog — bug-scenario test</h3>
+<pre id="out">running…</pre>
+<div id="log-panel" style="width:340px"><div id="log-body" style="max-height:500px;overflow:auto"></div></div>
+
+<script type="module">
+import { renderLog } from "../game_ui/static/log.mjs";
+import { game, chainAnimCalls } from "./logrender_stub.mjs";
+const out = document.getElementById('out');
+let ok = 0, fail = 0;
+const check = (label, cond, detail='') => {
+  if (cond) { ok++; out.textContent += `  ✓ ${label}\n`; }
+  else { fail++; out.textContent += `  ✗ FAIL: ${label} ${detail}\n`; }
+};
+
+// --- shared log data ---------------------------------------------------------
+const turn1 = { turn: 1, stopovers: [
+  { stopover: 'stopover_4', entries: [
+    { player: 'Alice', order: 1, mode: 'move', to: 'stopover_4', cards: ['AAA'],
+      pos_before: 1, pos_after: 4, condition_met: true, effect: 'advancing',
+      shield: null, negatives: [], notes: [] },
+    { player: 'Bob', order: 2, mode: 'move', to: 'stopover_4', cards: ['BBB'],
+      pos_before: 2, pos_after: 5, condition_met: true, effect: 'advancing',
+      shield: null, negatives: [], notes: ['⚡ cataclysm — OC strikes'] } ] },
+], instant: [] };
+const inst = [ { player: 'Alice', what: '🔮 Celestial_reversal — day/night fixed to night for the rest of the game' } ];
+const turn2_instant_only = { turn: 2, stopovers: [], instant: inst };   // engine state at PLAY TIME
+const turn2_resolved = { turn: 2, stopovers: [                            // same entry after the chain resolves
+  { stopover: 'stopover_4', entries: [
+    { player: 'Alice', order: 1, mode: 'move', to: 'stopover_4', cards: ['AAA'],
+      pos_before: 4, pos_after: 7, condition_met: true, effect: 'advancing',
+      shield: null, negatives: [], notes: [] },
+    { player: 'Bob', order: 2, mode: 'move', to: 'stopover_4', cards: ['BBB'],
+      pos_before: 5, pos_after: 8, condition_met: false, effect: 'advancing',
+      shield: null, negatives: ['blocked — shields 4 ≥ cost 2'], notes: [] } ] },
+  { stopover: 'stopover_3', entries: [
+    { player: 'Bob', order: 2, mode: 'defend', to: 'stopover_3', cards: ['CCC'],
+      pos_before: 5, pos_after: 5, condition_met: null, effect: null,
+      shield: 4, negatives: [], notes: [] } ] },
+], instant: inst };
+const turn3 = { turn: 3, stopovers: [
+  { stopover: 'stopover_4', entries: [
+    { player: 'Alice', order: 1, mode: 'move', to: 'stopover_4', cards: ['DDD'],
+      pos_before: 7, pos_after: 9, condition_met: true, effect: 'advancing',
+      shield: null, negatives: [], notes: [] } ] },
+], instant: [] };
+
+const body = document.getElementById('log-body');
+const turns = () => Array.from(body.querySelectorAll(':scope > .log-turn'));
+
+// --- STATE A: the poll lands in the play window — turn 2 has ONLY instant ----
+renderLog({ log: [ turn1, turn2_instant_only ] });
+check('state A: 2 turn elements', turns().length === 2, `(got ${turns().length})`);
+check('state A: logTurnsRendered == 2', game.logTurnsRendered === 2, `(got ${game.logTurnsRendered})`);
+const lastA = turns()[1];
+check('state A: turn 2 shows the instant section', !!lastA.querySelector('.log-instant-sec'));
+check('state A: turn 2 has NO stopovers yet', lastA.querySelectorAll('.log-sv').length === 0,
+      `(got ${lastA.querySelectorAll('.log-sv').length})`);
+
+// --- STATE B: the SAME turn entry now has its stopovers (chain resolved) -----
+renderLog({ log: [ turn1, turn2_resolved ] });
+check('state B: STILL exactly 2 turn elements (no duplicate)', turns().length === 2, `(got ${turns().length})`);
+const lastB = turns()[1];
+check('BUG FIX: turn 2 NOW shows the 2 stopovers', lastB.querySelectorAll('.log-sv').length === 2,
+      `(got ${lastB.querySelectorAll('.log-sv').length})`);
+check('BUG FIX: turn 2 STILL shows the instant section', !!lastB.querySelector('.log-instant-sec'));
+check('BUG FIX: the stopover entries rendered', lastB.querySelectorAll('.log-entry').length === 3,
+      `(got ${lastB.querySelectorAll('.log-entry').length})`);
+check('chain anim fired on the resolution update',
+      chainAnimCalls.some(c => c.turn === 2 && c.sv > 0), `(calls=${JSON.stringify(chainAnimCalls)})`);
+
+// --- open/closed state preserved across a content update ----------------------
+lastB.open = false;   // user collapsed the latest turn
+const turn2_resolved2 = JSON.parse(JSON.stringify(turn2_resolved));
+turn2_resolved2.stopovers[1].entries[0].notes.push('🪤 drop on cell 8 — knocked back −1');
+renderLog({ log: [ turn1, turn2_resolved2 ] });
+check('update preserves the user\'s collapsed state', turns()[1].open === false);
+check('update applied the new note', turns()[1].textContent.includes('knocked back −1'));
+
+// --- a genuinely NEW turn is still appended ----------------------------------
+renderLog({ log: [ turn1, turn2_resolved2, turn3 ] });
+check('state C: turn 3 appended (3 elements)', turns().length === 3, `(got ${turns().length})`);
+check('state C: turn 3 has its stopover', turns()[2].querySelectorAll('.log-sv').length === 1);
+check('state C: first render rule — latest open, others closed',
+      turns()[2].open === true);
+
+out.textContent += `\nRESULT: ${ok} passed, ${fail} failed\n`;
+if (fail) document.title = 'TEST-FAILED';
+</script>
+</body></html>

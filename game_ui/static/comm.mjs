@@ -37,7 +37,7 @@ export function connectWs() {
   ws.onclose = () => setConn(false);
 }
 
-export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight = null, tempChange = null, cataclysmOrder = null, rotation = null) {
+export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight = null, tempChange = null, cataclysmOrder = null, rotation = null, swapWith = null) {
   /* sends an action and resolves with the server's reply (state or rejection).
      Sends are serialized: one WS message at a time.
      `cell` (0-23): target earth cell for an engineer drop placement (engine_version 12).
@@ -50,7 +50,10 @@ export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight
      message `cataclysm_order` field (index 0 = strikes next).
      `rotation` ('cw'/'ccw'): the Mages black_hole DWELLING tap direction
      (engine_version 26) — sent as the message `rotation` field (only for a
-     dwelling_activation tap of the black_hole; omitted for every other action). */
+     dwelling_activation tap of the black_hole; omitted for every other action).
+     `swapWith` (1..5): the swap_cards position-swap choice (engine_version 29) —
+     the position of the OWN chain entry the card swaps with (a play, a board
+     placeholder, a rooted card); omitted when the card is played without a swap. */
   return new Promise((resolve) => {
     const doSend = () => {
       if (!game.ws || game.ws.readyState !== WebSocket.OPEN) {
@@ -66,6 +69,7 @@ export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight
       if (tempChange != null) msg.temp_change = tempChange;
       if (cataclysmOrder != null) msg.cataclysm_order = cataclysmOrder;
       if (rotation != null) msg.rotation = rotation;
+      if (swapWith != null) msg.swap_with = swapWith;
       game.ws.send(JSON.stringify(msg));
     };
     doSend();

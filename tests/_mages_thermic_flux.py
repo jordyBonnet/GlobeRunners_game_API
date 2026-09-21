@@ -287,14 +287,13 @@ gs, okk, msgtxt = play(gs, 'A', 'first', THERMIC, mode='move', to='stopover_4', 
 check(okk, f"play accepted (msg: {msgtxt})")
 gs = pas(gs, 'B', 'second')
 gs = ge.process_trip_chain(gs)
-# find the log entry for A's action and check for the thermic_flux note
+# find the thermic_flux note in the turn's 'instant' section (play-time effect)
 found_note = False
 for turn in gs.log:
-    for sv in turn.get('stopovers', []):
-        for e in sv.get('entries', []):
-            for note in e.get('notes', []):
-                if 'thermic_flux' in note and '14' in note:
-                    found_note = True
+    for it in (turn.get('instant') or []):
+        w = str(it.get('what'))
+        if 'thermic_flux' in w and '14' in w:
+            found_note = True
 check(found_note, f"turn log has a thermic_flux note: {gs.log}")
 
 _delete(gid)

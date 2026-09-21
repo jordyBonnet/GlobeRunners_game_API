@@ -284,16 +284,23 @@ export function renderBoard(st, me, oppoName) {
     // (engine_version 12+). The engine sets it at placement time and CLEARS it in
     // the cleaning phase, so the placeholder only shows during the placement turn
     // and must not reappear at every new turn.
+    // engine_version 28: when a wrecking_ball removes the dwelling card, the
+    // placeholder STAYS in place (only the card goes to the discard) — the gate
+    // is on p.dwelling_slot ALONE (no longer requiring p.dwelling). In games < 28
+    // the engine cleared dwelling_slot on the wreck, so a slot-without-card can
+    // only occur in v28+ (the tooltip adapts to the missing card).
     // ALWAYS remove any stale placeholder first (it would otherwise stick in the
     // DOM once the engine clears the slot - the slots are built once, not rebuilt
     // on each render).
     slotEls[row].forEach(s => s.querySelectorAll(".dwelling-placeholder").forEach(e => e.remove()));
-    if (p.dwelling && p.dwelling_slot !== null && p.dwelling_slot !== undefined) {
+    if (p.dwelling_slot !== null && p.dwelling_slot !== undefined) {
       const phCol = p.dwelling_slot;
       const slot = slotEls[row][phCol];
       const el = document.createElement("div");
       el.className = "card dwelling-placeholder";
-      el.title = `⚗ Dwelling: ${p.dwelling} (${name})`;
+      el.title = p.dwelling
+        ? `⚗ Dwelling: ${p.dwelling} (${name})`
+        : `⚗ Dwelling placeholder (${name}) — the card was wrecked this turn; the slot stays occupied until the end of the turn`;
       el.innerHTML = `<img src="${dwellingPlaceholderSrc(p.faction)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
       slot.appendChild(el);
     }

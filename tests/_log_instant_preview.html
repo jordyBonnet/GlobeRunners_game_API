@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root {
+  --bg-0: #0d1223; --bg-1: #131a2e; --bg-2: #1b2540; --panel: #17203a;
+  --line: #2d3a5f; --text: #dbe4ff; --muted: #8b98c9; --accent: #4fd1c5; --accent-2: #f6ad55;
+}
+html,body{background:var(--bg-0);color:var(--text);font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:20px}
+#log-panel{width:340px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px}
+details.log-turn{margin:4px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+details.log-sv{margin:4px 8px;border:1px solid rgba(255,255,255,.08);border-radius:6px}
+.log-turn>summary,.log-sv>summary{cursor:pointer;padding:5px 8px;list-style:none}
+.log-turn>summary{font-weight:700;color:var(--accent-2)}
+.log-sv>summary{color:var(--muted);font-size:.78rem}
+.log-entry{padding:5px 4px 5px 16px;border-bottom:1px dashed rgba(255,255,255,.09);font-size:.75rem}
+.log-entry .lp{font-weight:700;color:var(--accent)}
+.log-instant-sec{margin:6px 8px 8px 8px;padding:6px 8px;border:1px solid rgba(246,173,85,.5);border-left:3px solid var(--accent-2);border-radius:8px;background:rgba(246,173,85,.08)}
+.log-instant-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:2px 0;font-size:.7rem;line-height:1.45}
+.log-instant-row+.log-instant-row{border-top:1px dashed rgba(246,173,85,.22)}
+.log-instant-player{font-weight:700;color:var(--accent-2);white-space:nowrap}
+.log-instant-what{color:var(--text)}
+.neg{color:#ff6b6b;font-size:.7rem}.note{color:var(--muted);font-size:.68rem}
+</style></head>
+<body>
+<div id="log-panel">
+  <!-- Turn 2: has an instant section (2 play-time effects + a tap) AND stopovers -->
+  <details class="log-turn" open>
+    <summary>Turn 2</summary>
+    <div class="log-instant-sec">
+      <div class="log-instant-row"><span class="log-instant-player">Alice</span><span class="log-instant-what">🔮 Celestial_reversal — day/night fixed to night for the rest of the game</span></div>
+      <div class="log-instant-row"><span class="log-instant-player">Bob</span><span class="log-instant-what">🪤 pet_trap — drop token placed on cell 4 (fires when any token arrives)</span></div>
+      <div class="log-instant-row"><span class="log-instant-player">Alice</span><span class="log-instant-what">🏭 refinery tap — draws 1 card(s)</span></div>
+    </div>
+    <details class="log-sv" open>
+      <summary>stopover_4</summary>
+      <div class="log-entry"><span class="lp">Alice</span> — move · 2→5 <div class="note">⚡ cataclysm — OC strikes</div></div>
+      <div class="log-entry"><span class="lp">Bob</span> — move · 1→3 <div class="neg">blocked — shields 4 ≥ cost 2</div></div>
+    </details>
+    <details class="log-sv" open>
+      <summary>stopover_3</summary>
+      <div class="log-entry"><span class="lp">Bob</span> — move · 3→7</div>
+    </details>
+  </details>
+  <!-- Turn 3: a TAP-ONLY turn (instant section, no stopovers) -->
+  <details class="log-turn" open>
+    <summary>Turn 3</summary>
+    <div class="log-instant-sec">
+      <div class="log-instant-row"><span class="log-instant-player">Alice</span><span class="log-instant-what">🕳️ black_hole tap — the earth rotates 3 cells clockwise</span></div>
+    </div>
+  </details>
+  <!-- Turn 4: a normal turn with NO instant section (old-style / no instant effects) -->
+  <details class="log-turn">
+    <summary>Turn 4</summary>
+    <details class="log-sv" open><summary>stopover_4</summary>
+      <div class="log-entry"><span class="lp">Bob</span> — move · 7→10 <div class="note">grappling hook — copied +3 from the facing card</div></div>
+    </details>
+  </details>
+</div>
+</body></html>

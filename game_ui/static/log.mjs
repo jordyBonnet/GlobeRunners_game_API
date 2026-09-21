@@ -27,6 +27,7 @@ function effectLabel(id) {
     case 'taxation': return `taxation ${n}`;
     case 'taxation_oppo': return `opponent −${n} mana`;
     case 'pet_trap': return 'trap — drop token here';
+    case 'swap_cards': return 'swap — exchanges its chain position at play time';
     default: return row.effect;
   }
 }
@@ -115,6 +116,31 @@ function buildLogEntryEl(e) {
   return div;
 }
 
+/** The turn-level INSTANT section, rendered at the TOP of a turn, before the
+ *  stopovers. `t.instant` is a list of {player, what} — the play-time instant
+ *  effects (pet_trap, engineer drops, wrecking_ball, the Mages' instant cards) and
+ *  the dwelling taps (refinery / laboratory / black_hole) of that turn. Old games
+ *  have no 'instant' key -> nothing is rendered. */
+function buildInstantEl(items) {
+  if (!Array.isArray(items) || !items.length) return null;
+  const box = document.createElement('div');
+  box.className = 'log-instant-sec';
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'log-instant-row';
+    const p = document.createElement('span');
+    p.className = 'log-instant-player';
+    p.textContent = it.player || '';
+    row.append(p);
+    const w = document.createElement('span');
+    w.className = 'log-instant-what';
+    w.textContent = it.what || '';
+    row.append(w);
+    box.append(row);
+  }
+  return box;
+}
+
 function buildLogTurnEl(t, open) {
   const det = document.createElement('details');
   det.className = 'log-turn';
@@ -122,6 +148,8 @@ function buildLogTurnEl(t, open) {
   const sum = document.createElement('summary');
   sum.textContent = `Turn ${t.turn}`;
   det.append(sum);
+  const inst = buildInstantEl(t.instant);
+  if (inst) det.append(inst);
   for (const sv of (t.stopovers || [])) {
     const sd = document.createElement('details');
     sd.className = 'log-sv';
@@ -157,19 +185,50 @@ function fitLogWidth() {
 }
 window.addEventListener('resize', () => fitLogWidth());
 
-// incremental: only newly-resolved turns are appended (existing collapsed state is
-// preserved across the 2.5s polling re-renders); on the first render (or a rejoin)
-// every turn appears, all collapsed except the latest one
+// incremental: newly-resolved turns are appended, and turns whose CONTENT changed
+// are re-rendered in place (existing collapsed state is preserved across the 2.5s
+// polling re-renders); on the first render (or a rejoin) every turn appears, all
+// collapsed except the latest one.
+// The content-update matters: the engine creates a turn's log entry at PLAY TIME
+// (an instant effect — e.g. a Mage card or a dwelling tap — records the 'instant'
+// section, stopovers still empty). A poll in that window renders the turn with
+// ONLY the instant section; when the trip chain then resolves, the SAME entry gains
+// its stopovers (the turn count does NOT change), so without the update step the
+// trip-chain resolution would never appear for that turn.
 export function renderLog(st) {
   const log = (st && st.log) || [];
   const panel = $('#log-panel');
   if (!log.length) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
   const body = $('#log-body');
+  if (!Array.isArray(game.logTurnSigs)) game.logTurnSigs = [];
+  if (game.logTurnsRendered === 0) game.logTurnSigs = [];   // fresh game / rejoin
+  const sigOf = (t) => JSON.stringify(t);
   const start = game.logTurnsRendered;
+  // 1) UPDATE rendered turns whose content changed (the case above: the entry was
+  //    rendered with only the 'instant' section, then the chain resolved and the
+  //    same entry gained stopovers / filled pos_after / notes). Keep open state.
+  let lastGainedStopovers = false;
+  const n = Math.min(start, log.length);
+  for (let i = 0; i < n; i++) {
+    const s = sigOf(log[i]);
+    if (s === game.logTurnSigs[i]) continue;
+    const el = body.children[i];
+    const wasOpen = (el && el.classList && el.classList.contains('log-turn')) ? el.open : true;
+    let hadSv = false;
+    if (typeof game.logTurnSigs[i] === 'string') {
+      try { hadSv = !!(JSON.parse(game.logTurnSigs[i]).stopovers || []).length; } catch { hadSv = true; }
+    }
+    const fresh = buildLogTurnEl(log[i], wasOpen);
+    if (el) el.replaceWith(fresh); else body.append(fresh);
+    game.logTurnSigs[i] = s;
+    if (i === n - 1 && !hadSv && (log[i].stopovers || []).length) lastGainedStopovers = true;
+  }
+  // 2) APPEND genuinely new turns
   let added = false;
   while (game.logTurnsRendered < log.length) {
     body.append(buildLogTurnEl(log[game.logTurnsRendered], true));
+    game.logTurnSigs[game.logTurnsRendered] = sigOf(log[game.logTurnsRendered]);
     game.logTurnsRendered++;
     added = true;
   }
@@ -183,7 +242,8 @@ export function renderLog(st) {
   // auto-reveal the latest turn only when it's new — otherwise keep the
   // user's scroll position (the panel scrolls internally, see #board-wrap)
   if (added) body.scrollTop = body.scrollHeight;
-  // trip-chain animation: a turn that just resolved (a GENUINELY new log turn,
-  // not a rejoin/first render) -> pulse the slots in the exact resolution order
-  if (added && start > 0) playChainAnim(log[log.length - 1]);
+  // trip-chain animation: a turn that just resolved (a genuinely new log turn, or
+  // one that just gained its stopovers — not a rejoin/first render) -> pulse the
+  // slots in the exact resolution order
+  if (start > 0 && (added || lastGainedStopovers)) playChainAnim(log[log.length - 1]);
 }

@@ -256,14 +256,12 @@ gs, okk, msgtxt = play(gs, 'A', 'first', CELESTIAL, mode='move', to='stopover_4'
 check(okk, f"play accepted (msg: {msgtxt})")
 gs = pas(gs, 'B', 'second')
 gs = ge.process_trip_chain(gs)
-# find the log entry for A's action and check for the Celestial_reversal note
+# find the Celestial_reversal note in the turn's 'instant' section (play-time effect)
 found_note = False
 for turn in gs.log:
-    for sv in turn.get('stopovers', []):
-        for e in sv.get('entries', []):
-            for note in e.get('notes', []):
-                if 'Celestial_reversal' in note and 'night' in note:
-                    found_note = True
+    for it in (turn.get('instant') or []):
+        if 'Celestial_reversal' in str(it.get('what')) and 'night' in str(it.get('what')):
+            found_note = True
 check(found_note, f"turn log has a Celestial_reversal note: {gs.log}")
 
 _delete(gid)

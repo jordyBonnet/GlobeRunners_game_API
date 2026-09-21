@@ -243,7 +243,9 @@ gs, *_ = ge.process_card(a.action_chain[0], a, gs, log_entry=entry_a, oppo_entry
 gs, *_ = ge.process_card(b.action_chain[0], b, gs, log_entry=entry_b, oppo_entry=entry_a)
 print(f"9) log: A notes={entry_a['notes']}")
 print(f"      B notes={entry_b['notes']}")
-assert any('pet_trap' in n and 'placed' in n for n in entry_a['notes']), entry_a['notes']
+# placement note: play-time instant effect -> the turn's 'instant' section (gs.log)
+inst = [str(it.get('what')) for t in gs.log for it in (t.get('instant') or [])]
+assert any('pet_trap' in w and 'placed' in w for w in inst), inst
 assert any('drop' in n and 'knocked back' in n for n in entry_b['notes']), entry_b['notes']
 ok += 1
 

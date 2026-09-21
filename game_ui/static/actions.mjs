@@ -2,7 +2,7 @@
 "use strict";
 
 import { toast } from "./utils.mjs";
-import { cardImg, cardTitle, cardInfo, cardCost, isSupportPlay, isEngineerDrop, isEngineerDwelling, isDoctorPending, isDoctorDwelling, DOCTOR_PENDING, isMageCelestial, isMageThermicFlux, isMageApocalypticritual, isMageBlackHole } from "./cards.mjs";
+import { cardImg, cardTitle, cardInfo, cardCost, isSupportPlay, isEngineerDrop, isEngineerDwelling, isDoctorPending, isDoctorDwelling, DOCTOR_PENDING, isMageCelestial, isMageThermicFlux, isMageApocalypticritual, isMageBlackHole, isSwapCards } from "./cards.mjs";
 import { myTurn } from "./phase.mjs";
 import { game, enterCellSelect } from "./game.mjs";
 import { sendAction } from "./comm.mjs";
@@ -27,7 +27,11 @@ export function playedCount(st, name) {
   const p = (st && st.players) ? st.players[name] : null;
   if (!p) return 0;
   let n = ((p.action_chain) || []).filter((a) => a && (a.mode === "move" || a.mode === "defend") && a.cards && a.cards.length).length;
-  if (p.dwelling && p.dwelling_slot != null) n += 1;   // the refinery placeholder occupies one position
+  // the dwelling placeholder occupies one position. engine_version 28: it STAYS after
+  // the dwelling card is wrecked (only the card goes to the discard) — so the gate is
+  // on p.dwelling_slot ALONE (no longer requiring p.dwelling). In games < 28 the engine
+  // cleared dwelling_slot on the wreck, so a slot-without-card can only occur in v28+.
+  if (p.dwelling_slot != null) n += 1;
   // pending placeholders (doctors, v16): ONLY non-null slots occupy a position.
   // Entry shapes: engine_version 19+ = [card, slot] pair (the per-turn placeholder
   // list — NOT parallel to the persistent pendings zone); v18 = bare int or null
@@ -73,7 +77,7 @@ export function occupiedCols(st, name) {
   for (let pos = 1; pos <= Math.max(r, N_STOPOVERS); pos++) if (pos <= r) occ.add(N_STOPOVERS - pos);
   if (st && st.players && st.players[name]) {
     const p = st.players[name];
-    if (p.dwelling && p.dwelling_slot != null) occ.add(p.dwelling_slot % N_STOPOVERS);
+    if (p.dwelling_slot != null) occ.add(p.dwelling_slot % N_STOPOVERS);   // v28: also after a wreck (placeholder stays)
   }
   return occ;
 }
@@ -193,6 +197,27 @@ export function dispatchPlay(cardId, col = null) {
     if (!checkMana(cardId)) return;
     const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
     showApocalypticritualPopup(cardId, slotCol);
+    return;
+  }
+  // swap_cards (engine_version 29): a MOVE play onto a stopover with an OPTIONAL
+  // position swap — the card SWAPS its trip-chain position with one of the
+  // player's OWN chain entries (a play, a board placeholder, a rooted card). The
+  // player sees their own stopover mirror and drag-and-drops the card onto the
+  // target entry (or plays without a swap). The target position is sent as the
+  // message `swap_with` field. If the player has pending cards, the attach popup
+  // comes FIRST (the pending choice is part of the same action message).
+  if (isSwapCards(cardId)) {
+    if (col == null && freeCols(game.state, game.me).length === 0) { toast(orderHint()); return; }
+    if (!checkMana(cardId)) return;
+    const slotCol = col != null ? col : nextSlotCol(game.state, game.me);
+    const meP = (game.state && game.state.players) ? game.state.players[game.me] : null;
+    const myPendings = (meP && meP.pendings) || [];
+    if (myPendings.length > 0) {
+      // chain: pick the pending card first, then the swap target (one action message)
+      showPendingPopup(cardId, slotCol, myPendings, (cid, c, pArr) => showSwapPopup(cid, c, pArr));
+    } else {
+      showSwapPopup(cardId, slotCol);
+    }
     return;
   }
   // normal move card onto the stopover (the player's next position when col is absent)
@@ -318,7 +343,11 @@ function showApocalypticritualPopup(cardId, col) {
 }
 
 /* popup: choose a pending card to attach to the main card (or none) */
-function showPendingPopup(cardId, col, pendings) {
+/* showPendingPopup: pick a pending card to attach to the play (or none). With an
+   `onSend` callback (swap_cards, engine_version 29) the choice is passed to it
+   (cardId, col, pendingsArr) INSTEAD of sending — the callback opens the next
+   popup in the chain (the swap target), which sends the single action message. */
+function showPendingPopup(cardId, col, pendings, onSend = null) {
   const modal = document.createElement("div");
   modal.className = "modal pending-popup";
   const options = ['<button class="pending-opt" data-pending="">⏭ None</button>'];
@@ -338,11 +367,102 @@ function showPendingPopup(cardId, col, pendings) {
     btn.onclick = () => {
       const pending = btn.dataset.pending;
       const pendingsArr = pending ? [pending] : [];
-      sendAction([cardId], `stopover_${col}`, "move", pendingsArr);
       game.selected = new Set();
       modal.remove();
+      if (onSend) {
+        onSend(cardId, col, pendingsArr);
+      } else {
+        sendAction([cardId], `stopover_${col}`, "move", pendingsArr);
+      }
     };
   });
+  modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
+}
+
+/* showSwapPopup: swap_cards position swap (engine_version 29). The card being
+   played SWAPS its trip-chain position with ONE of the player's OWN chain
+   entries (a play, a board placeholder — pending/dwelling — or a rooted card).
+   The popup shows the player's own stopover mirror (positions 1..5): the card
+   being played (draggable, at its own position) and the other entries. The
+   player DRAG-AND-DROPS the card onto the target entry (or clicks the entry) to
+   exchange places — the target POSITION is sent as the message `swap_with`
+   field (the engine rewrites both entries' stopover columns at play time).
+   "Play without swap" plays the card normally (no `swap_with` field — the card
+   simply advances as usual). Idempotent: renderAll re-runs on every 2.5 s poll
+   — the .swap-popup guard prevents a second instance. Backdrop click closes the
+   popup (no action is sent). */
+function showSwapPopup(cardId, col, pendingsArr = []) {
+  if (document.querySelector(".swap-popup")) return;   // already open (polling re-render)
+  const st = game.state;
+  const me = (st && st.players) ? st.players[game.me] : {};
+  const ownPos = 5 - col;   // the card's own position (column col -> position 5-col)
+  // the player's OWN chain entries by position (1..5) — plays, placeholders, rooted
+  const cells = {};
+  for (const a of (me.action_chain || [])) {
+    const m = /^stopover_(\d+)$/.exec(a.to || '');
+    if (!m || !a.cards) continue;
+    cells[5 - (+m[1])] = { kind: a.mode === 'defend' ? 'defend' : 'play', label: a.cards[0] };
+  }
+  for (const e of (me.pending_slots || [])) {
+    const slot = Array.isArray(e) ? e[1] : e;
+    if (slot == null) continue;
+    cells[5 - (+slot)] = { kind: 'pending', label: (Array.isArray(e) ? e[0] : '?') };
+  }
+  if (me.dwelling_slot != null) {
+    cells[5 - (+me.dwelling_slot)] = { kind: 'dwelling', label: me.dwelling || 'dwelling' };
+  }
+  for (const r of ((st && st.rooted_on_board) || [])) {
+    if (!r || r.owner !== game.me) continue;
+    const m = /^stopover_(\d+)$/.exec(r.stopover || '');
+    if (!m) continue;
+    cells[5 - (+m[1])] = { kind: 'rooted', label: r.card_id || r.card || 'rooted' };
+  }
+  const targets = [1,2,3,4,5].filter(p => p !== ownPos && cells[p]);
+  const kindLabel = { play: 'card', defend: 'defense', pending: 'pending', dwelling: 'dwelling', rooted: 'rooted' };
+  const kindIcon = { play: '🎴', defend: '🛡', pending: '⏳', dwelling: '🏠', rooted: '🌿' };
+  const nameOf = (id) => (cardTitle(id) || id).split(' — ')[0];
+  const chips = [1,2,3,4,5].map(pos => {
+    const entry = cells[pos];
+    const isOwn = pos === ownPos;
+    const isTarget = targets.includes(pos);
+    let inner = `<span class="swap-pos">stopover ${pos}</span>`;
+    if (isOwn) inner += `<span class="swap-card" draggable="true">🎴 ${nameOf(cardId)} <i>(this card — drag me)</i></span>`;
+    else if (entry) inner += `${kindIcon[entry.kind] || ''} ${nameOf(entry.label)} <i>(${kindLabel[entry.kind]})</i>`;
+    else inner += '<i>empty</i>';
+    return `<div class="swap-cell${isOwn ? ' swap-own' : ''}${isTarget ? ' swap-target' : ''}"${isTarget ? ` data-pos="${pos}"` : ''}>${inner}</div>`;
+  }).join('');
+  const modal = document.createElement("div");
+  modal.className = "modal pending-popup swap-popup";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <h3>🔀 Swap positions?</h3>
+      <p class="hint">Drag <b>${nameOf(cardId)}</b> onto one of your own chain entries to exchange trip-chain positions (or click the entry). Or play it without swapping.</p>
+      <div class="swap-grid">${chips}</div>
+      <div class="pending-options"><button class="pending-opt swap-noswap">▶ Play without swap</button></div>
+    </div>`;
+  document.body.appendChild(modal);
+  const doSend = (swapPos) => {
+    if (swapPos) {
+      sendAction([cardId], `stopover_${col}`, "move", pendingsArr, null, null, null, null, null, swapPos);
+    } else {
+      sendAction([cardId], `stopover_${col}`, "move", pendingsArr);
+    }
+    game.selected = new Set();
+    modal.remove();
+  };
+  // drag-and-drop: the card chip (draggable) onto a target cell
+  const dragCard = modal.querySelector(".swap-card");
+  if (dragCard) {
+    dragCard.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', cardId); ev.dataTransfer.effectAllowed = 'move'; });
+  }
+  modal.querySelectorAll('.swap-target').forEach(cellEl => {
+    cellEl.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; cellEl.classList.add('dragover'); });
+    cellEl.addEventListener('dragleave', () => cellEl.classList.remove('dragover'));
+    cellEl.addEventListener('drop', (ev) => { ev.preventDefault(); cellEl.classList.remove('dragover'); doSend(+cellEl.dataset.pos); });
+    cellEl.addEventListener('click', () => doSend(+cellEl.dataset.pos));   // click fallback (touch / no DnD)
+  });
+  modal.querySelector('.swap-noswap').onclick = () => doSend(null);
   modal.querySelector(".modal-backdrop").onclick = () => modal.remove();
 }
 

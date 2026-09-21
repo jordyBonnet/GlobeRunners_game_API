@@ -186,13 +186,11 @@ force_hand(gs, 'A', [wb1]); force_hand(gs, 'B', [adv1])
 dwelling_card = filler[4]
 gs.players['B'].dwelling = dwelling_card
 gs = play(gs, 'A', 'first', wb1)
-# build a log entry the same way the engine does during the trip chain
-a = gs.players['A']
-entry = ge.new_log_entry(a, a.action_chain[-1], 1)
-notes = entry['notes']
-assert any('wrecking_ball' in n and 'dwelling' in n for n in notes), \
-    f"log entry should have a wrecking_ball note, got {notes}"
-print(f"6) LOG: note present: {notes} -> PASS")
+# the wreck note is a play-time instant effect -> the turn's 'instant' section
+inst = [str(it.get('what')) for t in gs.log for it in (t.get('instant') or [])]
+assert any('wrecking_ball' in w and 'dwelling' in w for w in inst), \
+    f"turn log 'instant' should have a wrecking_ball note, got {inst}"
+print(f"6) LOG: note present: {inst} -> PASS")
 ok += 1
 
 # ============================================================
