@@ -4,6 +4,7 @@
 import { $, $$, api, toast } from "./utils.mjs";
 import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
+import { startBgCards } from "./bg.mjs?v=4";
 
 /* ------------------------------------------------------------------ deck building */
 
@@ -318,4 +319,6 @@ export async function boot() {
   // re-render the support section now that the card data is available
   renderSupportFactions();
   if (setup.support) renderSupportPreview();
+  // animated card background behind the setup page (params: background_cards_parameters.json)
+  startBgCards();
 }
