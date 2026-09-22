@@ -212,7 +212,7 @@ export function initSetup() {
       renderDeckPreview();
       updateLaunchBtn();
     } catch (err) {
-      toast(`Erreur de lecture du fichier : ${err.message}`);
+      toast(`File read error: ${err.message}`);
     }
   };
 
@@ -262,7 +262,7 @@ async function launch() {
   const deck = shuffleDeck([...setup.deck, ...setup.supportDeck]);
 
   const btn = $("#btn-launch");
-  btn.disabled = true; btn.textContent = "Lancement…";
+  btn.disabled = true; btn.textContent = "Starting…";
   try {
     await loadCardpool();
     if (setup.mode === "ai") {
@@ -303,8 +303,8 @@ async function launch() {
       enterGame();
     }
   } catch (err) {
-    errEl.textContent = `Erreur : ${err.message}`;
-    btn.disabled = false; btn.textContent = "Lancer";
+    errEl.textContent = `Error: ${err.message}`;
+    btn.disabled = false; btn.textContent = "Start";
   }
 }
 
@@ -329,7 +329,7 @@ function stopWaiting() {
   if (waitTimer) clearTimeout(waitTimer);
   waitTimer = null;
   const btn = $("#btn-launch");
-  btn.disabled = false; btn.textContent = "Lancer";
+  btn.disabled = false; btn.textContent = "Start";
 }
 
 /* ------------------------------------------------------------------ boot */

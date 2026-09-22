@@ -70,7 +70,7 @@ export function renderAll() {
   const firstName = (st.turn_order && st.turn_order.length) ? st.turn_order[0] : null;
   $("#turn-number").textContent = firstName ? `Turn ${st.turn || "?"} (first player: ${firstName})` : `Turn ${st.turn || "?"}`;
   $("#temp-badge").textContent = st.temperature != null ? `🌡️ ${st.temperature}` : "🌡️ ?";
-  const dn = st.day_night === "night" ? "🌙 Nuit" : "☀️ Jour";
+  const dn = st.day_night === "night" ? "🌙 Night" : "☀️ Day";
   $("#daynight-badge").textContent = dn;
 
   // phase label + buttons
@@ -139,7 +139,7 @@ export function renderAll() {
   const canTap = canAct && ph && ph.kind === "play" && !!me.dwelling && !me.dwelling_tapped;
   if (ph === "init-mana") {
     btnPlay.classList.remove("hidden");   // the discard branch hides btnPlay; un-hide it for the phases that show it
-    btnPlay.textContent = "Poser en mana";
+    btnPlay.textContent = "Place in mana";
     btnPlay.disabled = !canAct || game.selected.size === 0;
     btnPass.classList.add("hidden");
     btnDefend.classList.add("hidden");
