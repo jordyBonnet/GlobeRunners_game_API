@@ -110,6 +110,7 @@ Players **alternate** acting; the state indicates whose action is expected. A pl
 - The block is a **shield race**: `Σ shields of defender's cards on that stopover` vs `mana cost of the attacking card`. Defender wins the block iff `Σ shields ≥ mana cost`.
 - `shield` values: 0–6. A card with `shield 0` contributes nothing.
 - **Block effect**: if the opponent's card is **blocked** and a defending card has `condition == "block"`, that card's **effect takes place at the moment of the block** (dedicated block card). A block card that did **not** block anything has **no** effect.
+- **`block` condition in move mode**: the `block` condition is a **defend-only marker** — it is met **only** when the card was played in **defend** mode (and actually blocked). If the same card is played **normally (move mode)**, the condition is **not met**: no effect, and the card advances by the reduced amount (`mana` cost − 1). (Engine fix 2026-09-22: `is_condition_met('block')` previously returned `True` unconditionally, so a block-condition card played in move mode fired its effect — bug in game `26_09_22_20_55_31_VESGf`.) The mirror in `player_ai/playerai.py` returns `False` for `block` to match.
 
 **Advancing — movement (`process_advancing`)**
 - **Faction biome bonus**: if the player's token is on one of the **two biomes** of their faction (see the biome ↔ faction map below), the **forward** advancing value gets **+1** (applies to `process_advancing` and to `jump` distance; recoil / backward movement is **not** boosted).

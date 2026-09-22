@@ -1,0 +1,9 @@
+{
+  "_docs": "Per-faction UI theme colors (editable — served no-cache, just edit and reload the page). Keys are the MAIN faction names (Dwarves, Demons, Twigs, Miaous, Orcs, Mummies — the values of the `faction` column / the `FACTIONS` table in cards.mjs). Fields per faction: accent = primary UI color (buttons, outlines, highlights, glow); accent2 = secondary color (turn number, counters, modal headings, hover rings); onAccent = text color drawn ON TOP of accent-colored buttons. Colors are sampled from the faction logo (assets/logo_<key>.png). A faction missing here falls back to the default teal/orange palette. The page BACKGROUND is intentionally NOT themed (it stays the dark blue of style.css :root).",
+  "Dwarves": { "accent": "#459fe0", "accent2": "#9fd4ff", "onAccent": "#07203a" },
+  "Demons":  { "accent": "#9b7ce8", "accent2": "#cdb9ff", "onAccent": "#170b30" },
+  "Twigs":   { "accent": "#77b53a", "accent2": "#c0e884", "onAccent": "#10240a" },
+  "Miaous":  { "accent": "#ea8b4b", "accent2": "#ffc98f", "onAccent": "#33180a" },
+  "Orcs":    { "accent": "#b03227", "accent2": "#ff8f80", "onAccent": "#ffe9e4" },
+  "Mummies": { "accent": "#e2d9b8", "accent2": "#f5efd6", "onAccent": "#3a331d" }
+}

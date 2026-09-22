@@ -34,7 +34,8 @@ export function buildBoard() {
       el.className = "slot";
       el.dataset.row = row;
       el.dataset.col = col;
-      el.innerHTML = `<span class="slot-num">${N_STOPOVERS - col}</span>`;
+      // .slot-logo: the row owner's main-faction logo watermark (src set by renderBoard)
+      el.innerHTML = `<img class="slot-logo" alt="" hidden> <span class="slot-num">${N_STOPOVERS - col}</span>`;
 
       if (row === "me") {   // only the player row is a drop target
         el.title = `Stopover ${N_STOPOVERS - col} — drop a card here to play it`;
@@ -224,6 +225,19 @@ export function renderBoard(st, me, oppoName) {
       el.style.top = `calc(${pt.y}% - ${k * FAN_STEP_PX}px)`;
       el.style.zIndex = 5 + k;
       layer.appendChild(el);
+    }
+  }
+
+  // faction-logo watermark in each stopover slot: the ROW OWNER's main-faction
+  // logo (me row -> my logo, oppo row -> the opponent's) — hidden when unknown
+  for (const row of ["me", "oppo"]) {
+    const owner = (row === "me") ? me : (oppoName ? st.players[oppoName] : null);
+    const src = owner ? factionLogoSrc(owner.faction) : null;
+    for (const slot of slotEls[row]) {
+      const img = slot.querySelector(".slot-logo");
+      if (!img) continue;
+      if (src) { img.src = src; img.hidden = false; }
+      else { img.removeAttribute("src"); img.hidden = true; }
     }
   }
 

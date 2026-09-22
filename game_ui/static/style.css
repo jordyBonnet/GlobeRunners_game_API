@@ -9,6 +9,14 @@
   --muted: #8b9ac7;
   --accent: #4fd1c5;
   --accent-2: #f6ad55;
+  --accent-contrast: #04211f;
+  /* opponent's faction palette (set per game on the opponent containers + #view-game;
+     fallback slate when the opponent's faction is unknown) — .marker.oppo and the
+     #oppo-zone/#oppo-side/#row-oppo scopes read these. All tints/glow are derived
+     with color-mix() at use sites, so setting --accent in a scope recolors it. */
+  --oppo-accent: #8fa0c5;
+  --oppo-accent-2: #c8b9a2;
+  --oppo-accent-contrast: #10151f;
   --danger: #fc8181;
   --ok: #68d391;
   --card-w: clamp(64px, 7.2vw, 96px);
@@ -34,11 +42,16 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 
 /* ---------------- setup page ---------------- */
 #bg-cards { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
-.bg-card { position: absolute; top: 0; left: 0; border-radius: 9px; overflow: hidden; will-change: transform, opacity; }
+.bg-card { position: absolute; top: 0; left: 0; border-radius: 9px; overflow: hidden; will-change: transform, opacity; pointer-events: auto; cursor: zoom-in; }
+.bg-card:hover { filter: brightness(1.3) saturate(1.1); }
 .bg-card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .setup-wrap { max-width: 1060px; margin: 0 auto; padding: 24px 16px 60px; position: relative; z-index: 1; }
+/* the setup page passes mouse events through its non-interactive areas so the animated
+   background cards behind it can be hovered (big preview); interactive elements stay clickable */
+#view-setup { pointer-events: none; }
+#view-setup button, #view-setup input, #view-setup label, #view-setup .card { pointer-events: auto; }
 .setup-header { text-align: center; margin-bottom: 22px; }
-.logo { height: 276px; object-fit: contain; filter: drop-shadow(0 4px 18px rgba(79,209,197,.35)); }
+.logo { height: 276px; object-fit: contain; filter: drop-shadow(0 4px 18px color-mix(in srgb, var(--accent) 35%, transparent)); }
 .tagline { color: var(--muted); margin-top: 6px; font-size: .9rem; }
 
 .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -46,9 +59,12 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 /* left column: main deck + support faction panels stacked */
 .setup-col { display: grid; gap: 18px; align-content: start; }
 
+/* container tint: a very dark shade of the scoped faction accent (setup page =
+   the selected faction's; in-game = my scope / the opponent scope carries its own
+   --accent, so #oppo-zone/.side-row descendants get the OPPONENT's tint — theme.mjs). */
 .panel {
-  background: linear-gradient(180deg, var(--panel), #141b30);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), color-mix(in srgb, var(--accent) 9%, #141b30));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   border-radius: 14px;
   padding: 18px;
 }
@@ -73,7 +89,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .faction-btn img { width: 34px; height: 34px; object-fit: contain; }
 .faction-btn:hover { border-color: var(--accent-2); transform: translateY(-1px); }
-.faction-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px rgba(79,209,197,.25) inset; }
+.faction-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent) inset; }
 
 /* support faction selection: banner on top, name below */
 .support-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
@@ -84,7 +100,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 }
 .supfac-btn img { width: 100%; height: 46px; object-fit: cover; object-position: center; border-radius: 6px; }
 .supfac-btn:hover { border-color: var(--accent-2); transform: translateY(-1px); }
-.supfac-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px rgba(79,209,197,.25) inset; }
+.supfac-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent) inset; }
 
 /* csv */
 .file-btn {
@@ -109,7 +125,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .card:hover { transform: translateY(-6px) scale(1.04); z-index: 5; box-shadow: 0 10px 22px rgba(0,0,0,.65), 0 0 0 2px var(--accent-2); }
 /* playable card (cost ≤ available mana): green/blue outline */
 .card.playable { outline: 2px solid var(--accent); outline-offset: -2px; }
-.card.selected { outline: 3px solid var(--accent); outline-offset: -2px; transform: translateY(-8px) scale(1.05); z-index: 6; box-shadow: 0 12px 24px rgba(0,0,0,.7), 0 0 14px rgba(79,209,197,.5); }
+.card.selected { outline: 3px solid var(--accent); outline-offset: -2px; transform: translateY(-8px) scale(1.05); z-index: 6; box-shadow: 0 12px 24px rgba(0,0,0,.7), 0 0 14px color-mix(in srgb, var(--accent) 50%, transparent); }
 .card.dragging { opacity: .35; cursor: grabbing; }
 /* no pointer-events:none: the hover (3x preview) must stay active even out of turn */
 .card.disabled { filter: grayscale(.6) brightness(.75); cursor: default; }
@@ -152,8 +168,11 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 /* ---------------- top / bottom bars: [name] [mana zone on the left] [hand] ---------------- */
 .big-zone {
   position: relative; margin: 0 14px; min-height: 150px;
-  border: 2px solid rgba(255,255,255,.55); border-radius: 16px;
-  background: linear-gradient(180deg, rgba(24,34,64,.55), rgba(16,23,44,.55));
+  /* hand container (the whole [name] [mana] [hand] band): very dark shade of the
+     scoped faction accent — my band = my accent, the opponent's band (inside
+     #oppo-zone) = the opponent's accent (theme.mjs) */
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, #2a3a63); border-radius: 16px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, rgba(24,34,64,.55)), color-mix(in srgb, var(--accent) 9%, rgba(16,23,44,.55)));
   display: flex; align-items: center; gap: 14px; padding: 14px 18px;
 }
 .band-hand {
@@ -221,8 +240,10 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .side-row { display: flex; gap: 12px; margin: 0 14px; align-items: stretch; }
 .side-panel {
   position: relative; flex: 1; min-height: 88px;
-  border: 2px solid rgba(255,255,255,.4); border-radius: 12px;
-  background: rgba(20,29,54,.5); color: var(--muted);
+  /* very dark shade of the scoped faction accent (dwelling / pending / deck /
+     discard containers — my side = my accent, opponent side = their accent) */
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, #223052); border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 13%, rgba(20,29,54,.5)); color: var(--muted);
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   transition: all .15s;
 }
@@ -309,8 +330,10 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
    doubles as the fallback background when the logo is missing (unknown faction). */
 .marker .marker-logo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .marker .marker-letter { position: relative; z-index: 1; font-size: .85rem; }
-.marker.me { background: radial-gradient(circle at 32% 30%, #7ee8de, var(--accent) 60%, #2c9d92); }
-.marker.oppo { background: radial-gradient(circle at 32% 30%, #fbd38d, var(--accent-2) 60%, #c05621); }
+.marker.me { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent) 60%, color-mix(in srgb, var(--accent) 40%, #000)); }
+/* the opponent's token reads the OPPONENT palette (--oppo-*, set by theme.mjs from the
+   opponent's own main faction) so both tokens show their own faction color */
+.marker.oppo { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--oppo-accent) 45%, #fff), var(--oppo-accent) 60%, color-mix(in srgb, var(--oppo-accent) 40%, #000)); }
 
 /* pet_trap drop token on the Earth (public board marker, cell-centered) */
 .drop-token {
@@ -334,21 +357,21 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .cell-target {
   position: absolute; transform: translate(-50%, -50%);
   width: clamp(26px, 3vw, 40px); aspect-ratio: 1; border-radius: 50%;
-  border: 2px dashed rgba(79,209,197,.0); background: transparent;
+  border: 2px dashed color-mix(in srgb, var(--accent) 0%, transparent); background: transparent;
   pointer-events: none; cursor: pointer;
   transition: border-color .15s, background .15s, box-shadow .15s;
 }
 body.cell-selecting #board-stage { cursor: crosshair; }
 body.cell-selecting .cell-target {
   pointer-events: auto;
-  border-color: rgba(79,209,197,.85); background: rgba(79,209,197,.12);
+  border-color: color-mix(in srgb, var(--accent) 85%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent);
   animation: cellTargetPulse 1.3s ease-in-out infinite;
 }
 body.cell-selecting .cell-target:hover {
-  border-color: var(--accent); background: rgba(79,209,197,.35);
-  box-shadow: 0 0 0 4px rgba(79,209,197,.45), 0 0 16px rgba(79,209,197,.8);
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 16px color-mix(in srgb, var(--accent) 80%, transparent);
 }
-@keyframes cellTargetPulse { 0%,100% { background: rgba(79,209,197,.10); } 50% { background: rgba(79,209,197,.22); } }
+@keyframes cellTargetPulse { 0%,100% { background: color-mix(in srgb, var(--accent) 10%, transparent); } 50% { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
 
 /* ---------------- card movement animation (zone transitions) ---------------- */
 /* a lightweight clone that flies from the old zone to the new zone (deck→hand,
@@ -357,7 +380,7 @@ body.cell-selecting .cell-target:hover {
 .card-fly {
   position: fixed; z-index: 80; pointer-events: none;
   border-radius: 9px; overflow: hidden; background: #141b30;
-  box-shadow: 0 12px 28px rgba(0,0,0,.7), 0 0 0 2px rgba(79,209,197,.45);
+  box-shadow: 0 12px 28px rgba(0,0,0,.7), 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   transition: transform 520ms cubic-bezier(.3,.75,.4,1), opacity 520ms ease;
   will-change: transform, opacity;
 }
@@ -440,6 +463,16 @@ body.cell-selecting .cell-target:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,.45);
   transition: transform .18s, box-shadow .18s, border-color .18s;
 }
+/* faction-logo watermark inside every stopover slot — the ROW OWNER's main-faction
+   logo (board.mjs sets the src per row: me row -> my logo, oppo row -> their logo).
+   Behind the cards (z-index 0) so a played card covers it; hidden when the
+   faction is unknown. */
+.slot .slot-logo {
+  position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%);
+  width: 80%; height: 80%; object-fit: contain;
+  opacity: .26; pointer-events: none; z-index: 0;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.6));
+}
 #row-me .slot { cursor: pointer; }
 .slot .slot-num { position: absolute; right: 7px; bottom: 5px; font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.7); }
 /* played card placed in a stopover cell */
@@ -450,8 +483,8 @@ body.cell-selecting .cell-target:hover {
 .slot .dwelling-placeholder {
   position: absolute; inset: 6% 8%; width: 84%; aspect-ratio: 180 / 260;
   border-radius: 6px; overflow: hidden; z-index: 1;
-  border: 2px solid rgba(79, 209, 197, .5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .5), 0 0 6px rgba(79, 209, 197, .25);
+  border: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .5), 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent);
   opacity: .85;
   pointer-events: none;
 }
@@ -526,7 +559,7 @@ body.cell-selecting .cell-target:hover {
   inset: auto; left: 50%; top: 50%;
   width: 132%; aspect-ratio: 260 / 180;
   transform: translate(-50%, -50%);
-  outline: 2px solid rgba(79,209,197,.9);
+  outline: 2px solid color-mix(in srgb, var(--accent) 90%, transparent);
 }
 /* the art is rotated 90° and sized (frame height × width, 260/180 ratio)
    to exactly fill the landscape frame after rotation */
@@ -535,15 +568,15 @@ body.cell-selecting .cell-target:hover {
   width: 69.23%; height: 144.44%;
   transform: translate(-50%, -50%) rotate(90deg);
 }
-.slot.drop-target { transform: scale(1.12); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(79,209,197,.85); z-index: 8; }
+.slot.drop-target { transform: scale(1.12); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 85%, transparent); z-index: 8; }
 .slot.drop-target-invalid { transform: scale(1.05); border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger), 0 0 18px rgba(252,129,129,.7); z-index: 8; }
 /* play order 1→5: not-yet-accessible cells are dimmed, the next one is highlighted */
 .stopover-row .slot { opacity: .5; }
 .stopover-row .slot.filled { opacity: 1; }
-#row-me .slot.slot-next { opacity: 1; border-color: rgba(79,209,197,.8); box-shadow: 0 0 0 2px rgba(79,209,197,.35); }
+#row-me .slot.slot-next { opacity: 1; border-color: color-mix(in srgb, var(--accent) 80%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 #row-me .slot.slot-next .slot-num { color: var(--accent); }
 /* valid cell (click fallback: selected card) */
-.slot.slot-valid { cursor: pointer; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(79,209,197,.75); animation: stopoverPulse 1.4s ease-in-out infinite; z-index: 7; }
+.slot.slot-valid { cursor: pointer; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 75%, transparent); animation: stopoverPulse 1.4s ease-in-out infinite; z-index: 7; }
 @keyframes stopoverPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 
 /* ===================== game log ===================== */
@@ -555,7 +588,7 @@ body.cell-selecting .cell-target:hover {
    centered board + trip-chain are never overlapped, whatever the window width. */
 #log-panel {
   position: absolute; right: 0; top: 14px; bottom: 14px;
-  width: clamp(240px, 23vw, 340px);
+  width: clamp(280px, 27vw, 400px);
   display: flex; flex-direction: column; min-height: 0;
   border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
   background: linear-gradient(90deg, rgba(40,54,92,.35), rgba(24,33,60,.55));
@@ -587,7 +620,7 @@ body.cell-selecting .cell-target:hover {
 }
 .log-tag.met { color: var(--ok); background: rgba(104,211,145,.13); border: 1px solid rgba(104,211,145,.55); }
 .log-tag.unmet { color: var(--danger); background: rgba(252,129,129,.12); border: 1px solid rgba(252,129,129,.5); }
-.log-tag.effect { color: var(--accent); background: rgba(79,209,197,.11); border: 1px solid rgba(79,209,197,.45); }
+.log-tag.effect { color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 /* effect that never fired (the card was blocked / its effect canceled) */
 .log-tag.effect.dim { opacity: .55; text-decoration: line-through; }
 .log-tag.neg { color: var(--danger); background: rgba(252,129,129,.14); border: 1px solid rgba(252,129,129,.55); }
@@ -598,18 +631,18 @@ body.cell-selecting .cell-target:hover {
    turn's opening event, distinct from the per-card resolution notes below. */
 .log-instant-sec {
   margin: 6px 8px 8px 8px; padding: 6px 8px;
-  border: 1px solid rgba(246,173,85,.5); border-left: 3px solid var(--accent-2);
-  border-radius: 8px; background: rgba(246,173,85,.08);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 50%, transparent); border-left: 3px solid var(--accent-2);
+  border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 8%, transparent);
 }
 .log-instant-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 2px 0; font-size: .7rem; line-height: 1.45; }
-.log-instant-row + .log-instant-row { border-top: 1px dashed rgba(246,173,85,.22); }
+.log-instant-row + .log-instant-row { border-top: 1px dashed color-mix(in srgb, var(--accent-2) 22%, transparent); }
 .log-instant-player { font-weight: 700; color: var(--accent-2); white-space: nowrap; }
 .log-instant-what { color: var(--text); }
 
-/* defense button (between "play" and "pass") */
+/* defense button (between "play" and "pass") — themed with the player's faction accent */
 .defend-btn {
-  background: linear-gradient(180deg, #2e6d64, #1f4a44);
-  color: #dff7f3; border: 1px solid rgba(79,209,197,.6); font-weight: 600;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 34%, #131a2e), color-mix(in srgb, var(--accent) 18%, #131a2e));
+  color: var(--accent-contrast); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); font-weight: 600;
 }
 .defend-btn:not(:disabled):hover { filter: brightness(1.12); }
 
@@ -622,10 +655,10 @@ body.cell-selecting .cell-target:hover {
 #action-hint { color: var(--muted); font-size: .8rem; text-align: right; max-width: 300px; line-height: 1.3; }
 .primary-btn {
   padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: .95rem; font-weight: 600;
-  background: linear-gradient(135deg, #2c7a7b, var(--accent)); color: #04211f; border: none;
-  transition: all .15s; box-shadow: 0 4px 14px rgba(79,209,197,.3);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, #0b1020), var(--accent)); color: var(--accent-contrast); border: none;
+  transition: all .15s; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
-.primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(79,209,197,.45); }
+.primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
 .primary-btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
 .ghost-btn {
   padding: 10px 18px; border-radius: 10px; cursor: pointer; font-size: .9rem;
@@ -697,11 +730,26 @@ body.cell-selecting .cell-target:hover {
 .defend-summary .defend-shield { color: #b7c5ea; font-weight: 600; }
 .defend-popup .defend-confirm {
   width: 100%; padding: 10px 0; font-size: 1.05rem; font-weight: 700;
-  background: linear-gradient(180deg, #2e6d64, #1f4a44); color: #dff7f3;
-  border: 1px solid rgba(79,209,197,.6); cursor: pointer;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 34%, #131a2e), color-mix(in srgb, var(--accent) 18%, #131a2e));
+  color: var(--accent-contrast);
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); cursor: pointer;
 }
 .defend-popup .defend-confirm:not(:disabled):hover { filter: brightness(1.12); }
 .defend-popup .defend-confirm:disabled { opacity: .4; cursor: not-allowed; }
+
+/* discard pile viewer: the FULL discard pile of either player, opened by
+   clicking a side-row discard panel (showDiscardPilePopup, modals.mjs) */
+.modal.discard-pile-popup .modal-box { max-width: 760px; }
+.discard-pile-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px; margin-bottom: 14px; max-height: 55vh; overflow-y: auto;
+}
+.discard-pile-grid .card { width: 100%; }
+.discard-pile-popup .discard-pile-close {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 22px; color: var(--text); font-size: .9rem; cursor: pointer;
+}
+.discard-pile-popup .discard-pile-close:hover { filter: brightness(1.15); }
 
 .pending-options { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .pending-opt {
@@ -709,8 +757,8 @@ body.cell-selecting .cell-target:hover {
   padding: 10px 16px; color: var(--text); font-size: .85rem; cursor: pointer;
   transition: border-color .15s, background .15s;
 }
-.pending-opt:hover { border-color: var(--accent); background: rgba(79,209,197,.08); }
-.pending-opt:active { background: rgba(79,209,197,.15); }
+.pending-opt:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.pending-opt:active { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 
 /* Apocalypticritual order popup (Mages, engine_version 25): 4 ordered biome rows */
 .cata-order { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
@@ -735,7 +783,7 @@ body.cell-selecting .cell-target:hover {
 .swap-cell .swap-pos { width: 84px; flex: none; color: var(--muted); font-size: .78rem; }
 .swap-cell i { color: var(--muted); font-style: normal; font-size: .78rem; }
 .swap-cell.swap-own {
-  border-color: var(--accent); background: rgba(79,209,197,.08);
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent);
   cursor: grab;
 }
 .swap-cell.swap-own:active { cursor: grabbing; }
@@ -744,8 +792,8 @@ body.cell-selecting .cell-target:hover {
   border-style: dashed; border-color: rgba(183,197,234,.55); cursor: pointer;
   transition: border-color .15s, background .15s;
 }
-.swap-cell.swap-target:hover { border-color: var(--accent); background: rgba(79,209,197,.08); }
-.swap-cell.swap-target.dragover { border-color: var(--accent); background: rgba(79,209,197,.18); }
+.swap-cell.swap-target:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.swap-cell.swap-target.dragover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
 /* toast */
 #toast {

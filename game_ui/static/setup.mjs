@@ -2,9 +2,10 @@
 "use strict";
 
 import { $, $$, api, toast } from "./utils.mjs";
-import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE } from "./cards.mjs";
+import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
-import { startBgCards } from "./bg.mjs?v=4";
+import { startBgCards } from "./bg.mjs?v=5";
+import { loadFactionThemes, applyFactionTheme } from "./theme.mjs";
 
 /* ------------------------------------------------------------------ deck building */
 
@@ -62,6 +63,11 @@ export const setup = {
   gameId: null,        // set after create (or typed for join)
 };
 
+// theme the setup page with the current faction's colors (faction_themes.json);
+// hovering a faction button PRE-VIEWS that palette, mouseleave restores the selection
+function setSetupTheme(factionName) {
+  applyFactionTheme($("#view-setup"), factionName, "me");
+}
 function renderFactions() {
   const grid = $("#faction-grid");
   grid.innerHTML = "";
@@ -72,9 +78,15 @@ function renderFactions() {
     btn.onclick = () => {
       setup.faction = f.key;
       setup.deck = buildStarterDeck(f.key, setup.name || f.key);
+      setSetupTheme(f.name);
       renderFactions();
       renderDeckPreview();
       updateLaunchBtn();
+    };
+    btn.onmouseenter = () => setSetupTheme(f.name);   // preview this faction's palette
+    btn.onmouseleave = () => {                          // restore the selected faction's palette
+      const sel = FACTIONS.find((x) => x.key === setup.faction);
+      setSetupTheme(sel ? sel.name : null);
     };
     grid.appendChild(btn);
   }
@@ -88,11 +100,8 @@ function renderDeckPreview() {
   $("#deck-count").textContent = setup.deck.length;
   box.innerHTML = "";
   for (const id of setup.deck) {
-    const el = document.createElement("div");
-    el.className = "card";
+    const el = cardEl(id);   // shared render site: hoverId → the delegated 3x hover preview (modals.mjs)
     el.style.cursor = "default";
-    el.title = cardTitle(id);
-    el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
     box.appendChild(el);
   }
 }
@@ -128,11 +137,8 @@ function renderSupportPreview() {
   $("#support-count").textContent = setup.supportDeck.length;
   box.innerHTML = "";
   for (const id of setup.supportDeck) {
-    const el = document.createElement("div");
-    el.className = "card";
+    const el = cardEl(id);   // shared render site: hoverId → the delegated 3x hover preview (modals.mjs)
     el.style.cursor = "default";
-    el.title = cardTitle(id);
-    el.innerHTML = `<img src="${cardImg(id)}" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
     box.appendChild(el);
   }
 }
@@ -188,6 +194,21 @@ export function initSetup() {
       if (!ids.length) { toast("No card found in this file"); return; }
       if (dupes.length) { toast(`File contains duplicate card(s) — a card can only appear once: ${[...new Set(dupes)].join(", ")}`); return; }
       setup.deck = picked;
+      // theme the setup page with the LOADED deck's faction (the majority of the
+      // cards — normally all 20 are the same) so the palette follows the file
+      const counts = {};
+      for (const id of picked) {
+        const f = CARDPOOL[id] && CARDPOOL[id].faction;
+        if (f) counts[f] = (counts[f] || 0) + 1;
+      }
+      let top = null, topN = 0;
+      for (const [f, n] of Object.entries(counts)) if (n > topN) { top = f; topN = n; }
+      if (top) {
+        setSetupTheme(top);
+        // keep the tracked selection in sync (hover-restore, name-input rebuild)
+        const key = getFactionKey(top);
+        if (key) setup.faction = key;
+      }
       renderDeckPreview();
       updateLaunchBtn();
     } catch (err) {
@@ -314,7 +335,7 @@ function stopWaiting() {
 /* ------------------------------------------------------------------ boot */
 export async function boot() {
   initSetup();
-  const results = await Promise.allSettled([loadCardpool(), loadSupportCards()]);
+  const results = await Promise.allSettled([loadCardpool(), loadSupportCards(), loadFactionThemes()]);
   for (const r of results) if (r.status === "rejected") toast(`Cannot load the cards: ${r.reason.message}`);
   // re-render the support section now that the card data is available
   renderSupportFactions();

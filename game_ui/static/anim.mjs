@@ -185,6 +185,13 @@ function flyCard(fromRect, toRect, cardId, delay) {
     el.style.top = fromRect.top + "px";
     el.style.width = w + "px";
     el.style.height = h + "px";
+    // the clone lives on <body> (outside the themed scopes) — copy the current
+    // faction accent so its glow ring matches the game's palette (theme.mjs)
+    const vgame = document.getElementById("view-game");
+    if (vgame) {
+      const acc = getComputedStyle(vgame).getPropertyValue("--accent").trim();
+      if (acc) el.style.setProperty("--accent", acc);
+    }
     document.body.appendChild(el);
     const dx = (toRect.left + toRect.width / 2) - (fromRect.left + w / 2);
     const dy = (toRect.top + toRect.height / 2) - (fromRect.top + h / 2);

@@ -181,7 +181,7 @@ function fitLogWidth() {
   // rr.right is the border-box edge; the panel (absolute, right:0) sits inside the
   // 18px right padding -> reserve that padding + a 20px visual gap before the panel.
   const avail = rr.right - 18 - 20 - groupRight;
-  panel.style.maxWidth = Math.max(170, Math.min(avail, 340)) + 'px';
+  panel.style.maxWidth = Math.max(190, Math.min(avail, 400)) + 'px';
 }
 window.addEventListener('resize', () => fitLogWidth());
 

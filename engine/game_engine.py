@@ -2591,10 +2591,13 @@ def is_condition_met(condition, player, current_game):
         return True
 
     # 'block' is the condition of defend cards: it is not a state to evaluate but a
-    # marker handled in process_card (a block-condition card only triggers its effect
-    # when played in defend mode)
+    # marker handled in process_card. Defend plays return BEFORE any condition
+    # evaluation, so reaching this line means the card was played in MOVE mode -
+    # the block condition is NOT met there: no effect, reduced advancing (mana - 1)
+    # (the effect of a block card fires only when played in defend mode and it
+    # actually blocked an opponent card - see _fire_block_effects).
     if condition == 'block':
-        return True
+        return False
 
     # 'cataclysm' is a TRIGGER condition: the strike itself (knock back all tokens
     # on the struck biome to the biome start, rotate the pile) is fired exactly

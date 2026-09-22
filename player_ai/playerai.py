@@ -906,9 +906,12 @@ class PlayerAI:
 			# The AI cannot evaluate the strike (hidden pile) and doesn't need to.
 			return True
 		if condition == 'block':
-			# a defend-card MARKER, not a state to evaluate (engine returns True; the effect is handled
-			# by process_card only when the card was actually played in defend mode and blocked something)
-			return True
+			# a defend-card MARKER, not a state to evaluate. Engine fix (2026-09-22, bug in game
+			# 26_09_22_20_55_31_VESGf): is_condition_met now returns False for 'block' - it is only
+			# ever evaluated on the MOVE path (defend plays return before condition evaluation), so
+			# a block-condition card played in move mode is NOT met: no effect, reduced advancing
+			# (mana - 1). Its effect fires only when played in defend mode AND it actually blocks.
+			return False
 		if 'biome' in condition:
 			# B #19 (P0 fix): biome_X conditions are fully evaluable from PUBLIC info - my cell's board
 			# layout (earth_biomes) + FACTION_BIOMES. Exact engine mirror: met iff the biome of the cell I

@@ -65,11 +65,12 @@ function buckets() {
   }
   return BUCKETS;
 }
-function pickCardImg() {
+/* returns a card id (main card_id or support card_name) or null if no pool is loaded */
+function pickCardId() {
   const list = buckets().filter((b) => b.length);
-  if (!list.length) return "/placeholder.svg";
+  if (!list.length) return null;
   const bucket = list[Math.floor(Math.random() * list.length)];
-  return cardImg(bucket[Math.floor(Math.random() * bucket.length)]);
+  return bucket[Math.floor(Math.random() * bucket.length)];
 }
 
 function makeCardEl(src) {
@@ -90,7 +91,9 @@ function spawn() {
   const jitter = cfg.size_jitter ?? 0.3;
   const w = Math.max(40, cfg.card_width_px * (1 + (Math.random() * 2 - 1) * jitter));
   const h = w * CARD_RATIO;
-  const el = makeCardEl(pickCardImg());
+  const id = pickCardId();
+  const el = makeCardEl(id ? cardImg(id) : "/placeholder.svg");
+  el.dataset.hoverId = id || "";   // → the delegated big-hover preview (modals.mjs)
   el.style.width = w + "px";
   el.style.height = h + "px";
   ensureLayer().appendChild(el);
@@ -103,7 +106,7 @@ function spawn() {
   const cx = W / 2 + (Math.random() * 2 - 1) * spread;
   const x = Math.min(Math.max(0, cx - w / 2), Math.max(0, W - w));
   const c = {
-    el, w, h,
+    el, w, h, id,
     x,   // fully on-screen at spawn
     y: window.innerHeight,           // starts just below the bottom edge
     speed: (cfg.speed_px_per_s) * (0.6 + Math.random() * 0.8),
@@ -145,8 +148,11 @@ function tick(t) {
   // update
   for (let i = bg.cards.length - 1; i >= 0; i--) {
     const c = bg.cards[i];
-    c.y -= c.speed * dt;
-    c.rot += c.rotSpeed * dt;
+    // hovering a card (see modals.mjs big preview): freeze it so it does not drift away from the cursor
+    if (!c.el.matches(":hover")) {
+      c.y -= c.speed * dt;
+      c.rot += c.rotSpeed * dt;
+    }
     if (c.y + c.h < 0) { c.el.remove(); bg.cards.splice(i, 1); continue; }
     applyCard(c);
   }

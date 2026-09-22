@@ -9,7 +9,7 @@ import { checkMana } from "./state.mjs";
 import { playedCount, nextSlotCol, orderHint, freeCols } from "./actions.mjs";
 import { N_STOPOVERS } from "./board.mjs";
 import { setup } from "./setup.mjs";
-import { stopBgCards } from "./bg.mjs?v=4";
+import { stopBgCards } from "./bg.mjs?v=5";
 
 export const game = {
   id: null,

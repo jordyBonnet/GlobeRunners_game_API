@@ -12,7 +12,7 @@ The robot's mirror (`PlayerAI._condition_met` in [player_ai/playerai.py](player_
 | Condition (exact pool values) | Meaning | #cards |
 |---|---|---|
 | `no_condition` | Always met. | 370 |
-| `block` | Marker for dedicated defend/block cards (see *Defense & blocking*). Treated as met. | 48 |
+| `block` | Marker for dedicated defend/block cards (see *Defense & blocking*). A defend-only marker: in **defend** mode the card is armed and its effect fires only if it actually blocks; if the same card is played in **move** mode the condition is **not met** (no effect, reduced advancing `mana − 1` — engine fix 2026-09-22, bug in game `26_09_22_20_55_31_VESGf`). | 48 |
 | `cataclysm` | **Trigger condition** (see *Cataclysm* below): striking a biome first, then treated as met (the card's effect fires). | 379 |
 | `biome_Dwa` / `biome_Dem` / `biome_Twi` / `biome_Mia` / `biome_Orc` / `biome_Mum` | Player must be standing on a cell of the **two biomes** associated with that faction. E.g. `biome_Dwa` (Dwarves) → cell is `MO` or `OC`. Full map below. | 48–109 each |
 | `dist_ahead_sup_1` / `dist_ahead_sup_3` | Player is **strictly more than N cells ahead** of the opponent (I lead). | ~378 each |

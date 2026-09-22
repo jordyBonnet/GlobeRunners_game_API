@@ -12,6 +12,8 @@ import { renderOppZone, renderMyZone, renderSideRows } from "./zones.mjs";
 import { renderBoard, slotEls, N_STOPOVERS } from "./board.mjs";
 import { renderLog } from "./log.mjs";
 import { canDropOnStopover, showDiscardPopup, freeCols } from "./actions.mjs";
+import { refreshDiscardPilePopup } from "./modals.mjs";
+import { syncGameThemes } from "./theme.mjs";
 
 // client-side guard: card cost vs available mana (mana zone - mana spent).
 // The engine would reject the play ("not enough mana") but that rejection is easy
@@ -59,6 +61,10 @@ export function renderAll() {
   const me = st.players[game.me];
   const oppoName = Object.keys(st.players).find((n) => n !== game.me);
   const oppo = oppoName ? st.players[oppoName] : null;
+
+  // faction themes: MY palette is the page default, the OPPONENT's palette on
+  // #oppo-zone / #oppo-side / #row-oppo + the --oppo-* vars (their board marker)
+  syncGameThemes(me, oppo);
 
   // topbar
   const firstName = (st.turn_order && st.turn_order.length) ? st.turn_order[0] : null;
@@ -115,6 +121,9 @@ export function renderAll() {
   // every poll, so sweep it here (a no-op while it is validly open).
   if (!(ph && ph.kind === "play" && myTurn(st)))
     document.querySelectorAll(".defend-popup").forEach((m) => m.remove());
+  // discard pile viewer (modals.mjs): read-only popup — keep its contents fresh
+  // on every state (no-op when it is not open)
+  refreshDiscardPilePopup();
   const selCard = (game.selected.size === 1) ? [...game.selected][0] : null;
   const selIsDrop = selCard && isEngineerDrop(selCard);
   const selIsDwelling = selCard && (isEngineerDwelling(selCard) || isDoctorDwelling(selCard) || isMageBlackHole(selCard));
