@@ -25,7 +25,7 @@ Structure (a list, one object per resolved turn, in turn order):
           "effect": "advancing",          // the card's effect (informational)
           "shield": null,                 // shield value for defend cards, else null
           "negatives": ["blocked — shields 4 ≥ cost 2"],   // red flags: what went wrong for this card
-          "notes": ["faction biome bonus +1 (token on home biome)"]  // extra events that happened
+          "notes": ["faction biome bonus +1"]  // extra events that happened (kept short and simple)
         }
       ]
     }
@@ -35,7 +35,7 @@ Structure (a list, one object per resolved turn, in turn order):
 
 - **Created**: both players' entries are created *before* their action resolves (so cross-events — a block fired on the opponent's card, a grappling copy — can attach to either line) and finalized after (positions reflect everything, including grappling copies). A turn in which **nothing** was played (both passed) is **dropped** from the log. If the **game ends mid-chain**, the partial turn is still kept.
 - **`negatives`** (what prevented this card from doing its thing): `blocked — shields X ≥ cost Y`, `effect canceled by <name>`, …
-- **`notes`** (extra events, any player's line): `faction biome bonus +1 …`, `🌋 cataclysm — <biome> strikes`, `🏔 avalanche — MO strikes`, `grappling hook — copied +N from the facing card`, `unstoppable — ignored the opponent block`, `block broken — shields X < cost Y`, `block card <name> — effect fired: <effect>`, `blocked <name>'s card on <stopover>`, `🪤 pet_trap — drop token placed on cell N (fires when any token arrives)`, `🪤 drop on cell N — knocked back −K`, `🏆 <name> reached cell 24 — win!`
+- **`notes`** (extra events, any player's line — **kept short and simple: one line per event, no rule re-explanations in parentheses**): `faction biome bonus +1`, `🌋 cataclysm — <biome> strikes`, `🏔 avalanche — MO strikes`, `grappling hook — copied +N`, `unstoppable — ignored the opponent block`, `block broken — shields X < cost Y`, `block card <name> — effect fired: <effect>`, `blocked <name>'s card on <stopover>`, `🪤 pet_trap — drop token placed on cell N`, `🪤 drop on cell N — knocked back −K`, `🏆 <name> reached cell 24 — win!`
 - **`order`**: 1/2 = first/second player of **that turn** (turn order flips every turn).
 - **Empty log**: a game with no turns yet (or one that predates the log feature) has `log: []` (the field defaults to empty) — the UI simply shows no log. The log is an additive read-only recap; it does not change any rule.
 - **Replay/AI**: untouched — the log is written only by the engine; `replay.py` and `PlayerAI` ignore it. All engine functions that gained a `log_entry`/`oppo_entry` parameter default to `None`, so existing callers are unchanged.

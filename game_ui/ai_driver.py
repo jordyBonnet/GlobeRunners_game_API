@@ -20,7 +20,7 @@ from pathlib import Path
 import polars as pl
 
 import engine.game_engine as ge
-from player_ai.playerai import PlayerAI
+from player_ai.playerai import PlayerAI, validate_message
 
 # "turn N - waiting for first/second player (NAME) to play"
 PLAY_TURN_RE = re.compile(r"turn \d+ - waiting for (first|second) player \((.+?)\) to play")
@@ -95,7 +95,8 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
     # in the next mana phase -> permanent deadlock.
     phase_key = (state, game.turn)
     if st.get("key") != phase_key:
-        st.update(key=phase_key, state=state, acted=False, fallback=False)
+        st.update(key=phase_key, state=state, acted=False, fallback=False,
+                  tapped_this_turn=False)   # A.1: dwelling-tap bookkeeping (quick action)
 
     me = game.players.get(ai_name)
     if me is None:
@@ -130,7 +131,13 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
     if md and md.group(1) == ai_name:
         return ai.choose_discard(int(md.group(2)))
 
-    # 3. Play phase: play an affordable card (or pass)
+    # 3. Play phase — per-tick priority (A.1): dwelling tap -> threat response (nobodymoves)
+    #     -> defend reaction -> main move card -> support fallback -> pass.
+    #     The stopover of a move/defend play is the robot's next position in its OWN chain:
+    #     played_before = me.play_count — the engine's own counter, which counts moves AND
+    #     defends AND the pending/dwelling placements that also consume a position (the
+    #     action_chain does not include those). The engine overwrites 'to' anyway; this is
+    #     the frontend mirror convention for display.
     m = PLAY_TURN_RE.match(state)
     if m and m.group(2) == ai_name:
         if st["fallback"]:
@@ -140,54 +147,76 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
         # the robot's actions THIS turn (action_chain is reset at the end of each turn)
         acted = [a for a in (me.action_chain or []) if a]
         moved_this_turn = any(a.get("mode") == "move" and a.get("cards") for a in acted)
-        defended_this_turn = any(a.get("mode") == "defend" and a.get("cards") for a in acted)
-        oppo_moves = [
-            a for a in ((oppo.action_chain or []) if oppo is not None else [])
-            if a and a.get("mode") == "move" and a.get("cards")
-        ]
 
-        # 3.a REACTION (only after having already moved this turn): if the opponent played
-        #     a card (move) this turn and the robot hasn't defended yet -> answer in DEFEND
-        #     mode (card played sideways at 90°). Since the robot already advanced, the game
-        #     always progresses -> no deadlock.
-        if moved_this_turn and not defended_this_turn and oppo_moves and random.random() < 0.5:
-            defend = ai.defend_card()
-            if defend is not None:
-                # SAME ordering rule as the frontend / moves: the defend card is the
-                # robot's next card in the 1->5 order, placed on ITS next stopover.
-                # (It blocks the opponent card on this SAME stopover — each player's
-                # k-th card — and does NOT overlap the cards the robot already played.)
-                played = sum(
-                    1 for a in (me.action_chain or [])
-                    if a and a.get("mode") in ("move", "defend") and a.get("cards")
-                )
-                defend["to"] = ge._player_stopover(game, me.name, played)
-                return defend
+        # 3.1 DWELLING TAP (free QUICK action, once per turn) — do it FIRST: for a black_hole
+        #     the rotation changes which biome is under each token, which affects the biome
+        #     conditions of cards resolved later this SAME turn. Quick actions don't alternate,
+        #     so the state string doesn't change; tapped_this_turn prevents re-sending (it is
+        #     cleared on phase change / rejection by run_ai_loop).
+        if me.dwelling and not me.dwelling_tapped and not st.get("tapped_this_turn"):
+            tap = ai.tap_dwelling()
+            if tap is not None:
+                st["tapped_this_turn"] = True
+                return tap
 
-        # 3.b MAIN: play a card (move) — the robot advances every turn (original behavior).
+        # 3.2 THREAT RESPONSE (before committing my own movement this turn): nobodymoves locks
+        #     ALL players' movement for the rest of the turn - only sensible as a first action,
+        #     never after I have declared a move myself (A.3 refines the threat estimate).
+        if not moved_this_turn:
+            nm = ai.play_nobodymoves_threat()
+            if nm is not None:
+                nm["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
+                return nm
+
+        # 3.3 REACTION (D #27-#29): CONCRETE declared threat only — choose_defend checks that the
+        #     opponent's LATEST play is a MOVE recorded on exactly my next stopover column (the engine's
+        #     block race compares columns, so it faces precisely my next entry). Under play alternation
+        #     that is the ONLY moment a defend can answer something already declared: earlier positions
+        #     are filled by my own plays, later ones face cards they have not declared yet. Defend-FIRST
+        #     (#29) is allowed even before my first move this turn — choose_defend refuses when I hold an
+        #     affordable winning move (self-denial guard), and a defend still leaves the turn open to my
+        #     normal plays afterwards, so no deadlock mode appears. No coin flip: a value threshold decides.
+        i_am_first = bool(getattr(game, "turn_order", None) and game.turn_order[0] == me.name)
+        defend = ai.choose_defend(i_am_first=i_am_first)
+        if defend is not None:
+            # SAME ordering rule as the frontend / moves: the defend card(s) are the robot's next
+            # entry in its own 1->5 order, placed on ITS next stopover (the engine overwrites 'to').
+            defend["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
+            return defend
+
+        # 3.4 MAIN: play a card (move) — the robot advances every turn (original behavior).
         msg = ai.play_card()
-        # ordering rule (same as the frontend's freeCols/nextSlotCol): the k-th card of
-        # the turn — move OR defend — goes to the k-th FREE stopover (columns 4,3,2,1,0),
-        # SKIPPING any stopover reserved by board furniture (rooted-on-board card or a
-        # dwelling placeholder). BOTH modes consume a slot, and the robot's k-th card sits
-        # on the same column as the opponent's k-th card (which it blocks).
-        if msg.get("mode") == "move" and msg.get("cards"):
-            played = sum(
-                1 for a in (me.action_chain or [])
-                if a and a.get("mode") in ("move", "defend") and a.get("cards")
-            )
-            msg["to"] = ge._player_stopover(game, me.name, played)
-        return msg
+        if msg is not None and msg.get("mode") == "move" and msg.get("cards"):
+            msg["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
+            return msg
+
+        # 3.5 SUPPORT FALLBACK (A.1): no main move card playable/worth it -> spend the leftover
+        #     mana on a support card: engineers' drops/dwelling, doctors' pending/laboratory,
+        #     mages' instant cards. The builders already carry every required choice field.
+        smsg = ai.choose_support_play()
+        if smsg is not None:
+            if smsg.get("mode") == "move" and smsg.get("cards"):
+                smsg["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
+            return smsg
+
+        # nothing playable left -> pass (ends my part of the play phase)
+        return {"cards": [], "to": "", "mode": "pass", "pendings": []}
 
     return None
 
 
-async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4):
+async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4, hard_mode: bool = False):
     """Background loop: as soon as it's the robot's turn, it plays.
 
     Stops when the game is over or if the game has disappeared from the DB.
+
+    G #37 information policy: fair play by default - every decision uses PUBLIC info + the robot's
+    own state only. `hard_mode=True` is an explicit opt-in (testing / difficulty tier): the robot may
+    then read the opponent's hidden hand to sharpen threat detection (see PlayerAI.hard_mode).
     """
     ai = PlayerAI(player_state=None)
+    if hard_mode:
+        ai.hard_mode = True   # G #37: explicit opt-in - never on by default
     st: dict = {}
     await asyncio.sleep(interval)   # give the human frontend time to set up
     while True:
@@ -208,6 +237,18 @@ async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4):
             if msg is None:
                 continue
 
+            # A.1 local pre-validation: never submit a message the engine would reject -
+            # a rejected action costs the tick and trips the fallback-pass.
+            _me_pub = game.players[ai_name]
+            ok_v, why_v = validate_message(msg, dwelling=_me_pub.dwelling,
+                                           pendings_zone=_me_pub.pendings)
+            if not ok_v:
+                print(f"[ai] invalid local message for {ai_name}: {why_v} -> fallback pass")
+                st.update(acted=False, tapped_this_turn=False)
+                if msg.get("mode") != "pass":
+                    st["fallback"] = True
+                continue
+
             player = game.players[ai_name].model_copy()
             player.message = msg
             try:
@@ -216,7 +257,7 @@ async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4):
                 import traceback
                 traceback.print_exc()
                 print(f"[ai] action failed for {ai_name}: {e} -> retry next cycle")
-                st["acted"] = False   # allow a retry in this same phase
+                st.update(acted=False, tapped_this_turn=False)   # allow a retry in this same phase
                 continue
 
             # the engine returns a JSON (str or dict) with {'message': {'success': bool, ...}}
@@ -228,11 +269,11 @@ async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4):
             ok = info.get("success", True)
             if not ok:
                 print(f"[ai] action rejected for {ai_name}: {info.get('message')} -> retry next cycle")
-                st["acted"] = False   # the action was not applied -> we can retry
+                st.update(acted=False, tapped_this_turn=False)   # the action was not applied (a rejected tap may be retried)
                 if msg.get("mode") != "pass":
                     st["fallback"] = True   # next decision in the same phase -> pass
         except Exception:
             import traceback
             traceback.print_exc()
             print("[ai] unexpected error in AI loop -> will retry next cycle")
-            st.update(acted=False, fallback=False)
+            st.update(acted=False, fallback=False, tapped_this_turn=False)

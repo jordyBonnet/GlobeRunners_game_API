@@ -115,7 +115,7 @@ export const isEngineerDwelling= (id) => id === ENGINEER_DWELLING;
 export const DOCTOR_PENDING = {
   epo:           { label: "epo — +1 advancing" },
   virus:         { label: "virus — −1 knockback" },
-  bloodtest:     { label: "bloodtest — discard 1 card" },
+  bloodtest:     { label: "bloodtest — the OPPONENT discards 1 card (they choose)" },
   mercurochrome: { label: "mercurochrome — unstoppable" },
 };
 export const DOCTOR_DWELLING = "laboratory";   // tap once/turn -> adds an 'epo' pending card

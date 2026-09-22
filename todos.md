@@ -2,13 +2,11 @@ Bug fixes
 - bug at the start position, it seems it starts at 0, so it create a shift of one all along the rest of the game.
 
 Visuals
+- add the possibility to click on the discard to see tehm all in a popup
+- [x] In the game ui system log don't put:  "— the placeholder STAYS in place (pommi's stopover slot stays occupied for the rest of the turn)" part of text, keep it short and simple (apply this short and simple rule on all other game ui logs) — DONE 2026-07-15: all engine log lines (instant section, notes, negatives) trimmed to short, simple, one-line events (engine/game_engine.py); specs updated in cond_effects_agent.md / game_log_agent.md / sup_fact_agent.md; smoke tests pass
 
 AI
-- ask llm to create a plan to improve AI with all the effects, conditions, and new support factions. then apply the plan by steps:
-When I play against the AI (robot) It never plays support factions. Now that we have implemented all 3 support factions I want the AI to be able to play them.                   
-More generaly I want you to make a check-up of all improvement that can be done on the AI system player (Robot) So that he uses all the implemented effects and becomes better at the game.               
-Do not modifiy anything now, just produce a clear list of the lacks & improvements that can be done.
-Put this list in improvement_plan.md in the folder.
+
 
 Game Analysis
 - support faciton cards not shown

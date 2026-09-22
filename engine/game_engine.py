@@ -47,7 +47,9 @@ ENGINEER_DWELLING = 'refinery'   # tap effect: draw 1 card
 # Pending cards (placed in the pending zone, attachable to a main card — max 1):
 #   epo           +1 advancing (added to the main card's effect)
 #   virus          -1 knockback (added to the main card's effect)
-#   bloodtest      discard 1 card from the player's hand
+#   bloodtest      OPPONENT discards 1 card (treated as a `discard_oppo` effect:
+#                  the opponent CHOOSES which card — same pause/choice flow, see
+#                  the pending_discard mechanism in process_trip_chain)
 #   mercurochrome  unstoppable (the main card ignores blocks — checked at block time)
 # Dwelling card (placed in the dwelling slot, tap 1x/turn):
 #   laboratory     when tapped, adds an "epo" pending card to the player's pending zone
@@ -1142,7 +1144,7 @@ def _apply_instant_effects(player, current_game, msg):
                 msg['drop_kind'] = card_id
                 # turn log: the 'instant' section (top of the turn, before the stopovers)
                 _append_instant(current_game, player.name,
-                                f'🧲 {card_id} — drop placed on cell {cell} (fires when any token arrives, then is consumed)')
+                                f'🧲 {card_id} — drop placed on cell {cell}')
                 print(f'\t\t\tINSTANT engineer drop: {card_id} token placed on cell {cell} (owner {player.name})')
             continue
         # Mages Celestial_reversal: the day/night is
@@ -1155,7 +1157,7 @@ def _apply_instant_effects(player, current_game, msg):
                 current_game.day_night = choice
                 current_game.day_night_fixed = True
                 _append_instant(current_game, player.name,
-                                f'🔮 Celestial_reversal — day/night fixed to {choice} for the rest of the game')
+                                f'🔮 Celestial_reversal — day/night fixed to {choice}')
                 print(f'\t\t\tINSTANT Celestial_reversal: day/night FIXED to {choice} (for the rest of the game)')
             continue
         # Mages thermic_flux: the planet temperature
@@ -1174,7 +1176,7 @@ def _apply_instant_effects(player, current_game, msg):
                 msg['thermic_flux_from'] = old_temp
                 msg['thermic_flux_to'] = new_temp
                 _append_instant(current_game, player.name,
-                                f'🌡️ thermic_flux — temperature {old_temp} → {new_temp} °C (permanent)')
+                                f'🌡️ thermic_flux — temperature {old_temp} → {new_temp} °C')
                 print(f'\t\t\tINSTANT thermic_flux: temperature {old_temp} -> {new_temp} ({direction} 4, clamped 1..20)')
             continue
         # Mages nobodymoves: LOCKS ALL PLAYERS'
@@ -1188,7 +1190,7 @@ def _apply_instant_effects(player, current_game, msg):
         if card_id == MAGE_NOBODYMOVES:
             current_game.nobodymoves_active = True
             _append_instant(current_game, player.name,
-                            "🚫 nobodymoves — all players' movement locked for the rest of the turn (only unstoppable may move)")
+                            "🚫 nobodymoves — all players' movement locked")
             print(f'\t\t\tINSTANT nobodymoves: ALL PLAYERS MOVEMENT LOCKED for the rest of the turn (only unstoppable may move)')
             continue
         # Mages Apocalypticritual: the ORDER OF
@@ -1223,7 +1225,7 @@ def _apply_instant_effects(player, current_game, msg):
             current_game.drop_tokens[cell] = current_game.drop_tokens.get(cell, 0) + 1
             placed.append(cell)
             _append_instant(current_game, player.name,
-                            f'🪤 pet_trap — drop token placed on cell {cell} (fires when any token arrives)')
+                            f'🪤 pet_trap — drop token placed on cell {cell}')
             print(f'\t\t\tINSTANT pet_trap: drop token placed on cell {cell} (total there: {current_game.drop_tokens[cell]})')
         elif r['effect'] == 'wrecking_ball':
             oppo = _get_oppo(player, current_game)
@@ -1243,8 +1245,7 @@ def _apply_instant_effects(player, current_game, msg):
                 # action_chain / messages_history): the replay reads it
                 msg['dwelling_removed'] = dwelling_card
                 msg['dwelling_removed_from'] = oppo.name
-                note = (f"💥 wrecking_ball — removed {oppo.name}'s dwelling card {dwelling_card}"
-                        f" — the placeholder STAYS in place ({oppo.name}'s stopover slot stays occupied for the rest of the turn)")
+                note = f"💥 wrecking_ball — removed {oppo.name}'s dwelling card {dwelling_card}"
                 _append_instant(current_game, player.name, note)
                 print(f'\t\t\tINSTANT wrecking_ball: removed {oppo.name}\'s dwelling card {dwelling_card} (placeholder stays in place)')
         # swap_cards: the card just played SWAPS its trip-chain
@@ -1293,7 +1294,7 @@ def _apply_instant_effects(player, current_game, msg):
                         msg['swapped_with_kind'] = kind
                         msg['swapped_from'] = f'stopover_{own_col}'
                         _append_instant(current_game, player.name,
-                                        f'\U0001F500 swap_cards — {card_id} (position {5 - own_col}) swaps places with {target_name} (position {swap_with})')
+                                        f'\U0001F500 swap_cards — {card_id} swaps places with {target_name}')
                         print(f'\t\t\tINSTANT swap_cards: {card_id} (pos {5 - own_col}) <-> {target_name} (pos {swap_with})')
     return placed
 
@@ -1412,7 +1413,7 @@ def _trigger_board_drops(current_game, player, log_entry=None):
         elif kind == 'landmine':
             print(f'\t\t\tengineer drop LANDMINE on cell {cell}: {player.name} BLOCKED for the rest of the turn')
             if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append(f'💥 landmine on cell {cell} — {player.name} blocked for the rest of the turn')
+                log_entry['notes'].append(f'💥 landmine on cell {cell} — {player.name} blocked')
             player.landmine_blocked = True
         else:
             print(f'\t\t	unknown engineer drop {kind} on cell {cell} (consumed, no effect)')
@@ -1438,7 +1439,7 @@ def apply_grappling_copy(game, player, amount, log_entry=None):
     if amount > 0:
         print(f'\t\t\tgrappling_hook: {player.name} copies the facing card advancement (+{amount})')
         if log_entry is not None:
-            log_entry['notes'].append(f'grappling hook — copied +{amount} from the facing card')
+            log_entry['notes'].append(f'grappling hook — copied +{amount}')
         return process_advancing(amount, player, game, allow_bonus=False, log_entry=log_entry)
     return game
 
@@ -1470,7 +1471,7 @@ def apply_copy_effect(game, copier, copier_action, facing_player, facing_action,
 
     print(f'\t\t\tcopy_effect: {copier.name} copies "{facing["effect"]}" from the facing card {facing["name"]}')
     if log_entry is not None:
-        log_entry['notes'].append(f'copy_effect — copied "{facing["effect"]}" from the facing card ({facing["name"]})')
+        log_entry['notes'].append(f'copy_effect — copied "{facing["effect"]}" ({facing["name"]})')
     return apply_effect(facing['effect'], facing['effect_number'], int(facing['advancing']), copier, game, log_entry)
 
 
@@ -1899,7 +1900,7 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
             else:
                 print(f'\t\t	card {card_id} CANCELED by the landmine block (no effect, no advancing)')
                 if log_entry is not None:
-                    log_entry['negatives'].append('landmine — blocked (no effect, no advancing)')
+                    log_entry['negatives'].append('landmine — blocked')
                 current_game.message = {'success': True, 'message': f'{player.name} is blocked by landmine'}
                 continue
 
@@ -1914,12 +1915,12 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         if movement_locked:
             print(f'\t\t	card {card_id} is MOVEMENT-LOCKED by nobodymoves (no advancing / movement effects; non-movement effects still fire)')
             if log_entry is not None:
-                log_entry['notes'].append('🚫 nobodymoves — movement locked (no advancing / movement effects)')
+                log_entry['notes'].append('🚫 nobodymoves — movement locked')
         elif current_game.nobodymoves_active:
             # nobodymoves is active but this card is unstoppable (condition met) -> still moves
             print(f'\t\t	card {card_id} is unstoppable (condition met) -> ignores the nobodymoves movement lock (still advances)')
             if log_entry is not None:
-                log_entry['notes'].append('unstoppable — ignored the nobodymoves movement lock (still advances)')
+                log_entry['notes'].append('unstoppable — ignored the nobodymoves lock')
 
         # BLOCK check: is the opponent playing defend card(s) on this same stopover?
         oppo = _get_oppo(player, current_game)
@@ -1956,7 +1957,8 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         # was already applied at block-check time as an unstoppable modifier).
         # nobodymoves: the pending epo (+1) / virus (-1) are
         # MOVEMENT and are suppressed when the card is movement-locked; bloodtest
-        # (discard 1) is a zone effect and still fires.
+        # (the OPPONENT discards 1, treated as discard_oppo — it pauses the chain
+        # on pending_discard for the opponent's choice) still fires.
         _pcard = cards_dict.get('pending_card')
         if _pcard and effect_activated and current_game.state != "game over":
             current_game = _apply_pending_effect(_pcard, player, current_game, log_entry, movement_locked=movement_locked)
@@ -1991,7 +1993,7 @@ def process_rooted_card(card_id, player, current_game, log_entry=None, oppo_entr
     if log_entry is not None:
         log_entry['effect'] = row['effect']
         log_entry['condition_met'] = None
-        log_entry['notes'].append('🌱 rooted card — basic advancing only (no condition, no effect)')
+        log_entry['notes'].append('🌱 rooted card — basic advancing only')
     stopover = _rooted_stopover_of(current_game, card_id, player.name)
     _rb_source = None
     if current_game.nobodymoves_active:
@@ -2001,7 +2003,7 @@ def process_rooted_card(card_id, player, current_game, log_entry=None, oppo_entr
     if _rb_source:
         print(f'\t\t\trooted card {card_id} CANCELED by the {_rb_source} block (no advancing)')
         if log_entry is not None:
-            log_entry['negatives'].append(f'{_rb_source} — rooted card blocked (no advancing)')
+            log_entry['negatives'].append(f'{_rb_source} — rooted card blocked')
         return current_game, 0, False
     oppo = _get_oppo(player, current_game)
     if oppo is not None and _oppo_defend_actions(oppo, stopover):
@@ -2109,7 +2111,7 @@ def trigger_cataclysm(current_game, log_entry=None):
     if current_game.nobodymoves_active:
         print(f'\t\t\tcataclysm knockback SUPPRESSED (nobodymoves movement lock)')
         if log_entry is not None:
-            log_entry['notes'].append('nobodymoves — cataclysm knockback suppressed (movement locked)')
+            log_entry['notes'].append('nobodymoves — cataclysm knockback suppressed')
         return current_game
 
     return _knockback_biome(biome, current_game, f'cataclysm: {biome} strikes', log_entry)
@@ -2241,7 +2243,7 @@ def _resolve_card(row, player, current_game, stopover=None, log_entry=None, move
                 # movement-locked). Non-movement effects still fire below.
                 print(f'\t\t\teffect {effect} SUPPRESSED (nobodymoves movement lock)')
                 if log_entry is not None:
-                    log_entry['notes'].append(f'nobodymoves — {effect} suppressed (movement locked)')
+                    log_entry['notes'].append(f'nobodymoves — {effect} suppressed')
             else:
                 print(f'\t\t\tapplying effect: {effect}')
                 current_game = apply_effect(effect, row['effect_number'], basic_advancing, player, current_game, log_entry)
@@ -2285,12 +2287,17 @@ def _apply_pending_effect(pcard, player, current_game, log_entry=None, movement_
      as an unstoppable modifier).
      nobodymoves: `movement_locked` suppresses the MOVEMENT
      pending effects (epo +1, virus -1); bloodtest (discard 1) is a zone effect
-     and still fires. """
+     and still fires.
+     bloodtest is treated like a `discard_oppo` effect: it sets
+     current_game.pending_discard targeting the OPPONENT — the trip chain pauses
+     at the next step boundary and the opponent chooses the card (to:
+     'discard_pile'), exactly like the main-faction discard_oppo. The attaching
+     player's own hand is never touched. """
     print(f'\t\t\tapplied pending card effect: {pcard}')
     if pcard == 'epo':
         if movement_locked:
             if log_entry is not None:
-                log_entry['notes'].append('nobodymoves — pending epo suppressed (movement locked)')
+                log_entry['notes'].append('nobodymoves — pending epo suppressed')
         else:
             current_game = process_advancing(1, player, current_game, allow_bonus=False, log_entry=log_entry)
             if log_entry is not None:
@@ -2298,23 +2305,25 @@ def _apply_pending_effect(pcard, player, current_game, log_entry=None, movement_
     elif pcard == 'virus':
         if movement_locked:
             if log_entry is not None:
-                log_entry['notes'].append('nobodymoves — pending virus suppressed (movement locked)')
+                log_entry['notes'].append('nobodymoves — pending virus suppressed')
         else:
             current_game = process_advancing(-1, player, current_game, allow_bonus=False, log_entry=log_entry)
             if log_entry is not None:
                 log_entry['notes'].append('pending virus — -1 knockback')
     elif pcard == 'bloodtest':
-        if player.hand:
-            discarded = player.hand.pop()
-            if player.discard is None:
-                player.discard = []
-            player.discard.append(discarded)
-            print(f'\t\t\t  bloodtest: discarded {discarded}')
+        # TREATED AS A `discard_oppo` EFFECT (like the main-faction cards):
+        # the OPPONENT chooses 1 card from their own hand. The chain pauses at
+        # the next step boundary on pending_discard; the choice arrives as
+        # to:'discard_pile' and resumes the chain (handle_websocket_message).
+        oppo = _get_oppo(player, current_game)
+        if oppo is not None and len(oppo.hand or []) > 0:
+            current_game.pending_discard = {'player': oppo.name, 'n': 1}
             if log_entry is not None:
-                log_entry['notes'].append(f'pending bloodtest — discarded {discarded}')
+                log_entry['_pending_discard'] = 1
+            print(f'\t\t\tpending bloodtest: PAUSED - {oppo.name} must choose 1 card to discard')
         else:
             if log_entry is not None:
-                log_entry['notes'].append('pending bloodtest — no cards in hand to discard')
+                log_entry['notes'].append('pending bloodtest — opponent has no cards in hand')
     elif pcard == 'mercurochrome':
         # no-op: already applied at block-check time as an unstoppable modifier
         pass
@@ -2795,7 +2804,7 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game, l
             print(f'\t\t\tfaction biome bonus: +1 jump distance for {player.name} (token on home biome)')
             jump_distance += 1
             if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append('faction biome bonus +1 (token on home biome)')
+                log_entry['notes'].append('faction biome bonus +1')
         print(f'\t\t\teffect jump: {player.name} jumps {jump_distance} cell(s), skipping intermediate cells')
         return _jump(player, jump_distance, current_game, log_entry)
 
@@ -2938,7 +2947,7 @@ def process_advancing(advancing_value, player, current_game, allow_bonus=True, l
     if allow_bonus and advancing_value > 0 and _on_home_biome(player, current_game):
         print(f'\t\t\tfaction biome bonus: +1 advancing for {player.name} (token on home biome)')
         if log_entry is not None and log_entry.get('player') == player.name:
-            log_entry['notes'].append('faction biome bonus +1 (token on home biome)')
+            log_entry['notes'].append('faction biome bonus +1')
         advancing_value += 1
 
     # +1 to move forward, -1 to move backward (single loop handles both directions)

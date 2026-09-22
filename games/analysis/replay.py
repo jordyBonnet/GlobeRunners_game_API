@@ -139,9 +139,17 @@ def segment_history(history: list[dict]) -> dict:
 
     The initial phase may be a single message (3 cards) OR several 1-card
     messages (the engine accepts both): every LEADING `to == 'mana'` message
-    belongs to the initial mana put. Afterwards, each `to == 'mana'` message
-    (1 card, or pass) is the SETUP of the NEXT turn; the moves between two of
-    them are the play phase of that turn.
+    belongs to the initial mana put. Afterwards, each per-turn SETUP message
+    (the player's mana-phase message for the NEXT turn) is a turn boundary;
+    the messages between two boundaries are the play phase of that turn.
+
+    SETUP messages come in two forms, both recorded by the engine:
+    * a mana PLACE: `to == 'mana'` (exactly 1 card);
+    * a mana-phase PASS: the engine accepts a pass with ANY `to` (the frontend
+      sends `to: ""`) and records it in the mana-phase branch (section 3 of
+      handle_websocket_message). PLAY-PHASE passes are NEVER recorded (the
+      pass branch of player_play returns before the history append), so a
+      recorded `mode == 'pass'` message is by definition a mana-phase pass.
 
     Returns: {'initial_mana': [msg, ...], 'turns': [{'moves', 'setup_mana'}, ...]}
     """
@@ -153,12 +161,12 @@ def segment_history(history: list[dict]) -> dict:
     cur_moves: list[dict] = []
     pending_setup = None
     for m in history[i:]:
-        if m.get("to") == "mana":
+        if m.get("to") == "mana" or m.get("mode") == "pass":
             turns.append({"moves": cur_moves, "setup_mana": pending_setup})
             pending_setup, cur_moves = m, []
         else:
             cur_moves.append(m)
-    # trailing moves after the last mana msg (e.g. ending turn), or empty game
+    # trailing moves after the last boundary (e.g. ending turn), or empty game
     if cur_moves or not turns:
         turns.append({"moves": cur_moves, "setup_mana": pending_setup})
     return {"initial_mana": initial, "turns": turns}
@@ -678,7 +686,7 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
                 # auto-discarding -> choose the identity-consistent cards now (no hand
                 # arrangement) and apply them AFTER process_card (mirroring the
                 # player's to:'discard_pile' choice)
-                discard_choice = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
+                discard_choice = (target, _pick_discard(target, n, ctx, cur_turn))
             elif kind == "tax":
                 _pick_tax(target, n, ctx)
 
@@ -687,13 +695,28 @@ def _process_action(game: GameState, name: str, msg: dict, ctxs: dict, cur_turn:
     with contextlib.redirect_stdout(buf):
         _, grappling_activated, effect_activated = ge.process_card(msg, p, game)
 
-    # discard selection: the engine PAUSED instead of discarding (a blocked /
-    # not-met card never sets pending_discard, so the guard is exact) -> apply the
-    # choice (hand -> discard) and clear the pause marker. NOT applied when the
-    # card's own advancing won the game (mid-chain win: the real engine clears the
-    # pending discard and the cards stay in the hand).
-    if discard_choice is not None and game.pending_discard is not None and game.state != "game over":
-        _apply_discard_choice(game, discard_choice[0], discard_choice[1])
+    # discard selection: the engine PAUSED on pending_discard instead of
+    # discarding. Two sources share the same pause/choice flow:
+    #   * a main card's `discard` / `discard_oppo` effect -> discard_choice above;
+    #   * a doctors' PENDING bloodtest attached to this play (treated as
+    #     discard_oppo) -> discard_choice is None and the pause targets the
+    #     OPPONENT. The real player's choice arrived during the pause as a
+    #     to:'discard_pile' message; apply it now (hand -> discard, clears the
+    #     pause marker). A blocked / not-met card never sets pending_discard, so
+    #     the guard is exact. NOT applied when the card's own advancing won the
+    #     game (mid-chain win: the real engine cleared the pause and the cards
+    #     stayed in the hand).
+    if game.pending_discard is not None and game.state != "game over":
+        if discard_choice is not None:
+            _apply_discard_choice(game, discard_choice[0], discard_choice[1])
+        else:
+            pd = game.pending_discard or {}
+            target_name = pd.get('player')
+            n = int(pd.get('n') or 0)
+            target = game.players.get(target_name) if target_name else None
+            if target is not None and n > 0:
+                _apply_discard_choice(game, target,
+                                      _pick_discard(target, n, ctxs[target.name], cur_turn))
 
 
 
@@ -964,7 +987,7 @@ def _replay_trip_chain(game: GameState, order: list[str], chains: dict, ctxs: di
                             # discard selection: the copied discard PAUSES the engine
                             # (pending_discard) -> apply the choice after
                             # apply_copy_effect (mirrors the real game)
-                            copy_discard = (target, _pick_discard(target, n, ctx, cur_turn, arrange=False))
+                            copy_discard = (target, _pick_discard(target, n, ctx, cur_turn))
                         elif kind == "tax":
                             _pick_tax(target, n, ctx)
                 ge.apply_copy_effect(game, game.players[copier_nm], c_entry['action'],
@@ -1329,8 +1352,18 @@ def analyze_game(state_dict: dict) -> dict:
         nobodymoves_active = False
         game.nobodymoves_active = False
         for n in names:
+            # mirror the engine's _end_turn per-player reset (the placeholder
+            # resets matter: a stale pending_slots / dwelling_slot entry keeps a
+            # phantom placeholder in ge._player_chain, which shadows a play at
+            # the same position - _entry_at returns the placeholder and the play
+            # is never resolved)
             game.players[n].mana_spend = 0
             game.players[n].action_chain = []
+            game.players[n].play_count = 0
+            game.players[n].landmine_blocked = False
+            game.players[n].dwelling_tapped = False
+            game.players[n].dwelling_slot = None
+            game.players[n].pending_slots = []
 
     # stored state says the game ended but our count-based checks did not fire
     # (e.g. a missing setup message in the history) -> infer the ending

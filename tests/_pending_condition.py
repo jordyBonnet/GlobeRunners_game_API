@@ -5,8 +5,8 @@
 #  - OLD games (engine_version < 21) keep the canonical default: condition MET
 #  - AI mirror (PlayerAI._condition_met) agrees with the engine
 # Run from the project root:  uv run python tests/_pending_condition.py
-# NOTE: writes to games.db (like _diag.py)
-import sys, io, os
+# NOTE: writes to games.db (like _diag.py); the games are deleted after.
+import sys, io, os, sqlite3
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -37,11 +37,14 @@ filler = [c for c in q(faction='Dwarves')['card_id'].to_list() if c not in {pend
 assert len(filler) == 13, 'need 13 Dwarves filler cards'
 assert {pend, adv1}, 'need real pool cards'
 
+_gids = []
+
 def new_game():
     p1 = PlayerState(name='A', deck=[pend] + filler)
     p2 = PlayerState(name='B', deck=[adv1] + filler)
     gid = ge.create_new_game(player=p1.model_dump())
     ge.p2_connect_to_game(player=p2.model_dump(), game_id=gid)
+    _gids.append(gid)
     conn, _, gs = ge.get_current_game(gid)
     conn.close()
     gs.turn_order = ['A', 'B']
@@ -142,5 +145,12 @@ print(f"7) met: A hand {a_hand_before}->{a_hand_after} (expected +1, draw 1), "
 assert a_hand_after == a_hand_before + 1, (a_hand_before, a_hand_after)   # draw 1 (condition met)
 assert a_pos_after == a_pos_before + 1, (a_pos_before, a_pos_after)        # full advancing = adv 1
 ok += 1
+
+# delete the test games (convention: tests delete their own games)
+conn = sqlite3.connect(ge.DB_PATH)
+for gid in _gids:
+    conn.execute("DELETE FROM games WHERE game_id = ?", (gid,))
+conn.commit()
+conn.close()
 
 print(f"\nALL {ok} pending TESTS PASSED")
