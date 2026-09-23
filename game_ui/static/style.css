@@ -71,6 +71,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 
 /* tabs */
 .deck-source-tabs, .mode-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.mode-tabs { margin-top: 22px; }
 .tab {
   flex: 1; padding: 9px 10px; border-radius: 9px; cursor: pointer;
   background: var(--bg-2); color: var(--muted); border: 1px solid var(--line);
