@@ -322,6 +322,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
   display: flex; align-items: center; justify-content: center;
   font-size: .85rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000;
   border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6);
+  /* per-player border is overridden below (.marker.me / .marker.oppo) */
   transition: left .45s cubic-bezier(.5,1.4,.5,1), top .45s cubic-bezier(.5,1.4,.5,1);
 }
 /* note: the .marker elements are PERSISTED across renders (board.mjs repositions them
@@ -331,10 +332,10 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
    doubles as the fallback background when the logo is missing (unknown faction). */
 .marker .marker-logo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .marker .marker-letter { position: relative; z-index: 1; font-size: .85rem; }
-.marker.me { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent) 60%, color-mix(in srgb, var(--accent) 40%, #000)); }
+.marker.me { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent) 60%, color-mix(in srgb, var(--accent) 40%, #000)); border-color: #0b5394; }
 /* the opponent's token reads the OPPONENT palette (--oppo-*, set by theme.mjs from the
    opponent's own main faction) so both tokens show their own faction color */
-.marker.oppo { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--oppo-accent) 45%, #fff), var(--oppo-accent) 60%, color-mix(in srgb, var(--oppo-accent) 40%, #000)); }
+.marker.oppo { background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--oppo-accent) 45%, #fff), var(--oppo-accent) 60%, color-mix(in srgb, var(--oppo-accent) 40%, #000)); border-color: #990000; }
 
 /* pet_trap drop token on the Earth (public board marker, cell-centered) */
 .drop-token {
@@ -804,3 +805,4 @@ body.cell-selecting .cell-target:hover {
   opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 80vw; text-align: center;
 }
 #toast.show { opacity: 1; }
+
