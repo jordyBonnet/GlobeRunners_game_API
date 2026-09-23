@@ -49,7 +49,7 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 /* the setup page passes mouse events through its non-interactive areas so the animated
    background cards behind it can be hovered (big preview); interactive elements stay clickable */
 #view-setup { pointer-events: none; }
-#view-setup button, #view-setup input, #view-setup label, #view-setup .card { pointer-events: auto; }
+#view-setup button, #view-setup input, #view-setup label, #view-setup a, #view-setup .card { pointer-events: auto; }
 .setup-header { text-align: center; margin-bottom: 22px; }
 .logo { height: 276px; object-fit: contain; filter: drop-shadow(0 4px 18px color-mix(in srgb, var(--accent) 35%, transparent)); }
 .tagline { color: var(--muted); margin-top: 6px; font-size: .9rem; }
@@ -662,6 +662,8 @@ body.cell-selecting .cell-target:hover {
 }
 .primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
 .primary-btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+/* primary-btn used on an <a> (e.g. the setup page's deck-builder link): render as an inline block */
+a.primary-btn { display: inline-block; text-decoration: none; text-align: center; }
 .ghost-btn {
   padding: 10px 18px; border-radius: 10px; cursor: pointer; font-size: .9rem;
   background: transparent; color: var(--text); border: 1px solid var(--line); transition: all .15s;
