@@ -216,6 +216,13 @@ Left for §C/§D: the deliberate self-harm denial exception (#16), drop placemen
 
 ---
 
+## I. Mana pool management — P1 — ✅ DONE (2026-09-24)
+
+**Status:**
+- **#43 DONE** — the mana phase is a **decision, not an automatic** (user request). The robot used to sacrifice 1 card into its mana zone in **every** mana phase (unless the hand was empty), permanently burning playable cards to grow a pool it often didn't need. New rule (I.1): `put_mana(in_turn=True)` **passes** when the available mana (`mana zone − mana_spend`) already covers the **TOTAL cost of the whole hand** — new `_hand_total_cost()` = Σ `mana` of the mains + Σ `mana_cost` of the support (unknown support assumed 5) — because the pool can then already play everything the robot owns and a sacrificed card is never played again (extra mana = pure waste). Only while the pool is still **short** of the hand's total cost does the robot place a card (lowest keep-value first, unchanged). The INIT phase is unaffected (the engine requires its 3 cards; `put_mana(…, in_turn=False)` still returns them). Verified by `tests/_ai_mana_pool.py` (52 checks: unit branches for pool >, ==, < hand cost, `mana_spend` deduction, support costs in the total, keep-value sacrifice ordering, plus 2 real games through `ge.handle_websocket_message` where the robot **passes** the turn-2 mana phase when the pool covers the 3-cost hand, and **sacrifices the cost-4 main — not an m1** — when the pool is short of a 6-cost hand; the pool is only observed to grow in the second case). Regression: `_ai_a2/a3/a4`, `_ai_support_infra`, `_ai_b/c/d/e/f/g` suites all still pass. (Note: `tests/_ai_b_conditions.py` has a PRE-EXISTING failure unrelated to this change — its "block is always met" check predates the 2026-09-22 `block`-condition engine fix, which AGENTS.md documents as intentional: `_condition_met('block')` now returns `False`.)
+
+---
+
 ## Suggested order of work
 
 | Step | Items | Effect |
@@ -224,3 +231,4 @@ Left for §C/§D: the deliberate self-harm denial exception (#16), drop placemen
 | 2 | C #22–#24, D #27–#28 | Core strength: real advance model, endgame detection, meaningful defense |
 | 3 | A.2 / A.3 / A.4 (Doctors → Mages → Engineers or any order) | Faction-specific tactics (attachments, mage choices, drop placement, dwelling taps) |
 | 4 | E #31–#34, F #35–#36, G #37–#38, H rest | Tactical depth + hardening + docs/tests |
+| 5 | I #43 | Mana pool managed by decision (pass when the pool covers the hand), not automatic sacrifice |

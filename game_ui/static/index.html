@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
 <link rel="icon" href="/assets/GlobeRunners_icone.png">
-<link rel="stylesheet" href="/static/style.css?v=48">
+<link rel="stylesheet" href="/static/style.css?v=52">
 </head>
 <body>
 
@@ -40,12 +40,13 @@
           📂 Choose a text file
         </label>
         <span id="csv-filename" class="hint"></span>
-        <p class="hint small">Expected format: a single <code>card_id</code> per line (a header is fine), 20 cards.</p>
+        <p class="hint small">Expected format: a single <code>card_id</code> per line (a header is fine), 20 cards. Deck rules: one main faction, single-copy cards, max 5 cards per condition / per effect.</p>
       </div>
 
       <!-- deck preview -->
       <h3 id="deck-preview-title" class="hidden">Main deck loaded (<span id="deck-count">0</span>/20)</h3>
       <div id="deck-preview" class="card-row hidden"></div>
+      <div id="deck-issues" class="deck-issues hidden"></div>
     </section>
 
     <!-- support faction column -->
@@ -90,6 +91,7 @@
         <input type="text" id="join-game-id" placeholder="e.g. 26_08_24_15_30_12_aBcDe" autocomplete="off">
       </div>
 
+      <div id="launch-blockers" class="launch-blockers hidden"></div>
       <button id="btn-launch" class="primary-btn" disabled>Start</button>
       <p id="setup-error" class="error-msg"></p>
     </section>
@@ -263,6 +265,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/app.mjs?v=48"></script>
+<script type="module" src="/static/app.mjs?v=54"></script>
 </body>
 </html>

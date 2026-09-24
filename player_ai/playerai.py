@@ -12,6 +12,10 @@ message builders below are the single dispatch point for every support play (mir
 the frontend's dispatchPlay branches) and carry the required engine fields ('cell',
 'day_night', 'temp_change', 'cataclysm_order', 'rotation'). put_mana no longer burns
 support cards first: it sacrifices by a keep-value model so playable support stays in hand.
+Since I.1 (2026-09-24) the MANA PHASE is a decision, not an automatic: put_mana(in_turn=True)
+PASSes when the available mana already covers the TOTAL cost of the whole hand
+(_hand_total_cost) - the pool only grows while it is short of the hand's total cost, because
+a sacrificed card is never played again.
 """
 
 import polars as pl
@@ -253,6 +257,21 @@ class PlayerAI:
 			return 40 if self._choose_cataclysm_order() is not None else 12
 		return 5
 
+	def _hand_total_cost(self):
+		"""I.1: the TOTAL mana cost of playing EVERY card currently in my hand (main-pool rows
+		by their `mana`, support cards by their `mana_cost`). The yardstick of the mana-phase
+		decision: when my available mana already covers this total, the pool can play
+	everything I own this turn and growing it further is pure waste."""
+		total = 0
+		for cid in (self.player_state.hand or []):
+			row = self.MAIN_ROWS.get(cid)
+			if row is not None:
+				total += int(row['mana'])
+				continue
+			info = self.SUPPORT_INFO.get(cid)
+			total += int(info['cost']) if info is not None else 5   # unknown support -> assume the max
+		return total
+
 	def _mana_keep_value(self, cid):
 		"""Baseline keep-value of a hand card for MANA purposes (higher = worth keeping in
 		hand; put_mana sacrifices the lowest values first). A.1 baseline - sections B/C
@@ -279,9 +298,17 @@ class PlayerAI:
 		Since A.1 support cards are no longer burned unconditionally: playable support stays
 		in hand, dead copies and expensive mains go to mana.
 
+		I.1 MANA-PHASE DISCIPLINE (in_turn only): the robot no longer grows its pool
+		automatically. It PASSES when the available mana already covers the TOTAL cost of
+		its whole hand (_hand_total_cost) - the pool is big enough for everything it owns,
+		so sacrificing yet another card for +1 mana would be wasted. Only a pool that is
+		still SHORT of the hand's total cost justifies a placement. (The INIT phase is
+		unaffected: the engine requires its 3 cards and the hand is checked against them.)
+
 		Returns exactly `num_cards` cards whenever the hand has that many (this is what lets
 		the init phase put its mandatory 3 in one valid message even when the hand is a
-		main+support mix). An empty hand returns [] (init) or a pass."""
+		main+support mix). An empty hand returns [] (init) or a pass; an in_turn call
+		returns the pass message when the pool already covers the hand (I.1)."""
 		hand = list(self.player_state.hand or [])
 		if not hand:
 			if in_turn:  # empty hand: nothing to put in mana, pass instead
@@ -290,6 +317,11 @@ class PlayerAI:
 		ranked = sorted(hand, key=self._mana_keep_value)   # stable sort: ties keep hand order
 		top = ranked[:num_cards]
 		if in_turn:
+			# I.1: pool >= total hand cost -> PASS (the pool can already play the whole hand;
+			# a sacrificed card is never played again, so extra mana here is pure waste).
+			available = len(self.player_state.mana or []) - (self.player_state.mana_spend or 0)
+			if available >= self._hand_total_cost():
+				return {'cards': [], 'to': '', 'mode': 'pass', 'pendings': []}
 			return {
 				'cards': top,      # cards selected - LIST
 				'to': 'mana',      # destination - STRING [stopover_x, mana, pending_zone, dwelling, discard_pile]

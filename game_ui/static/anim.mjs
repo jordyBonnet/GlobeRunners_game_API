@@ -23,6 +23,22 @@ export const FLY_MS = 520;                          // one card flight duration
 export const FLY_STAGGER_MS = 110;                  // delay between consecutive flights
 export const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
+// rect of the element's LAYOUT box. getBoundingClientRect() includes the element's
+// current transform — inline AND a still-running (or even FROZEN) transition. In a
+// hidden/throttled tab the 450 ms flip transition freezes at its start value, so
+// the card's VISUAL position stays offset forever; reading that offset as the old
+// position made every ~2.5 s poll re-detect the delta and re-trigger the slide —
+// the "one hand card re-animates every ~2 s" glitch (2026-09-24). Subtracting the
+// current COMPUTED transform (getComputedStyle sees inline, class, animation and
+// in-flight transition values alike) gives the true layout position in every case.
+function layoutRect(el) {
+  const r = el.getBoundingClientRect();
+  const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(el).transform || "");
+  if (!m) return r;                                       // transform: none
+  const p = m[1].split(",").map(parseFloat);
+  return { ...r, left: r.left - p[4], top: r.top - p[5] };
+}
+
 // capture the rects of the current (OLD) DOM zones — must run BEFORE renderAll() rewrites it
 // NOTE: the stopover rows are #row-me / #row-oppo (and slotEls.me / slotEls.oppo),
 //       while the zone panels are #my-* / #oppo-* — the two row ids differ!
@@ -36,7 +52,7 @@ export function snapshotZones() {
     if (handEl) for (const el of handEl.querySelectorAll(".card")) {
       hand.push({
         id: (el.dataset.hoverId && el.dataset.hoverId !== "__back__") ? el.dataset.hoverId : null,
-        rect: el.getBoundingClientRect(),
+        rect: layoutRect(el),
       });
     }
     snap.hand[name] = hand;
@@ -206,21 +222,35 @@ function flyCard(fromRect, toRect, cardId, delay) {
 }
 
 // the remaining hand cards re-center when the row grows/shrinks — slide them (FLIP) instead of jumping
+// 2026-09-24 robustness fix (the "one hand card re-animates every ~2 s" glitch):
+// the double-rAF below can be delayed or skipped entirely (hidden/throttled tab,
+// busy main thread) — then the inline transform STUCK in place, and every ~2.5 s
+// state poll re-detected the offset and re-animated the card, forever.
+// Three layers now make this impossible:
+//   1. the snapshot records the LAYOUT rect (layoutRect) — a stuck transform no
+//      longer fakes a position delta;
+//   2. a card is never re-flipped within 900 ms (lastFlip);
+//   3. a fallback timer clears the transform + transition even if the rAF chain
+//      never runs — a transform can no longer stick.
+const lastFlip = new Map();   // hoverId -> Date.now() of the last flip
 function flipMyHand(snap) {
+  const now = Date.now();
   for (const h of (snap.hand[game.me] || [])) {
     if (!h.id) continue;
+    if (now - (lastFlip.get(h.id) || 0) < 900) continue;
     const el = Array.from(document.querySelectorAll("#my-hand .card")).find((c) => c.dataset.hoverId === h.id);
     if (!el) continue;                                // left the hand — its flight is handled above
     const r = el.getBoundingClientRect();
     const dx = h.rect.left - r.left, dy = h.rect.top - r.top;
     if (Math.abs(dx) < 2 && Math.abs(dy) < 2) continue;
+    lastFlip.set(h.id, now);
     el.style.transition = "none";
     el.style.transform = "translate(" + dx + "px," + dy + "px)";
     requestAnimationFrame(() => requestAnimationFrame(() => {
       el.style.transition = "transform 450ms cubic-bezier(.3,.75,.4,1)";
       el.style.transform = "";
     }));
-    setTimeout(() => { el.style.transition = ""; }, 650);
+    setTimeout(() => { el.style.transition = ""; el.style.transform = ""; }, 900);
   }
 }
 

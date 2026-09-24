@@ -64,7 +64,7 @@ only ever speaks to the HTTP/WS surface.
 | `POST /create_game_ai` | `create_game_ai()` | new game vs the Robot (see *AI wiring*) |
 | `GET /api/state/{game_id}/{player_name}` | `personalized_state()` | masked per-player state for polling |
 | `GET /static/*` | (mount) | `static/` — css, js modules, placeholder |
-| `GET /art/*` | (mount, `LOCAL_TEST=True`) **or** `serve_card_image()` (`LOCAL_TEST=False`) | main-card art (`<card_id>.png`) + support art (`<card_path>`) — local folder, or redirect to the GitHub Releases of `GlobeRunners_images` (see *Card art (`/art`)*) |
+| `GET /art/*` | (mount, `LOCAL_TEST=True`) **or** `serve_card_image()` (`LOCAL_TEST=False`) | main-card art (`<card_id>.png`) + support art (`<card_path>`) — local folder, or **server-cached** GitHub Release of `GlobeRunners_images` (`hosted_assets/art_cache/`, immutable `Cache-Control`) (see *Card art (`/art`)*) |
 | `GET /assets/*` | (mount) | game assets (biomes, markers, logos, engineer drops) |
 | `GET /cards_ex/*` | (mount) | faction placeholder art (dwelling card) |
 | `*` (everything else) | `api_app` (mounted at `/`) | `/create_game`, `/join_game/{id}`, `/cardpool`, `/game/{id}`, `/ws/{gid}/{player}`, … |
@@ -89,12 +89,23 @@ mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount 
 - **`serve_card_image(filename)`** — registered **only when `LOCAL_TEST` is False**:
   `GET /art/{filename}` first serves the file from the repo bundle
   `game_ui/hosted_assets/art/` **iff it exists there** (the 15 support cards,
-  path-traversal-guarded with `is_relative_to`) → `FileResponse`. Otherwise main
-  cards (Dwa/Dem/Twi/Mia/Orc/Mum) redirect (302) to the GitHub Release asset of
-  the `GlobeRunners_images` repo via `game_ui/github_assets.py` (a self-contained
+  path-traversal-guarded with `is_relative_to`) → `FileResponse` with
+  `Cache-Control: public, max-age=31536000, immutable`. Otherwise main cards
+  (Dwa/Dem/Twi/Mia/Orc/Mum) are served from the **server-side cache**
+  `game_ui/hosted_assets/art_cache/<card_id>.png` (gitignored runtime cache):
+  on a miss the server downloads the GitHub Release asset of the
+  `GlobeRunners_images` repo via `game_ui/github_assets.py` (a self-contained
   copy of the deckbuilding app's `lib/github_assets.py` — keep the two in sync if
   the releases change; incl. the Twigs/Orcs part2 split points and the Miaous 1–4
-  split). Anything else redirects to `/placeholder.svg`.
+  split) **once**, stores it, and serves it with the same immutable headers
+  (per-name `threading.Lock` so concurrent misses download only once; a download
+  failure falls back to the placeholder redirect). Anything else redirects to
+  `/placeholder.svg`. The cache exists because the GitHub release chain
+  (github.com 302 `Cache-Control: no-cache` with **no validator** → rotating
+  signed blob URL) is not reliably client-cacheable, and the frontend recreates
+  the hand's `<img>` elements on every ~2.5 s poll — before the cache, main-faction
+  cards re-downloaded ~1.2 MB per poll and flickered (the "one card re-animates
+  every ~2 s" glitch, 2026-09-24).
 - **`NoCacheStatic`** — pure-ASGI middleware: for any `http` request whose path
   starts with `/static/`, it appends `Cache-Control: no-cache, must-revalidate` to
   the response. Non-`/static/` requests pass straight through untouched. Implemented
@@ -116,11 +127,17 @@ The `/art` route depends on the **`LOCAL_TEST` toggle** (top of `app.py`):
   - the route `serve_card_image(filename)` handles `/art`: support art
     (`Eng_`/`Doc_`/`Mag_`) is **served from `game_ui/hosted_assets/art/`**
     (committed to this repo, 15 cards matching `support_factions.parquet`
-    `card_path`); main cards **redirect (302)** to the matching GitHub Release
-    asset of `jordyBonnet/GlobeRunners_images` — the same mechanism the
-    deckbuilding app uses (`game_ui/github_assets.py` mirrors
+    `card_path`); main cards are **served from the server-side cache**
+    `game_ui/hosted_assets/art_cache/` (runtime cache, gitignored) — on a miss the
+    server downloads the matching GitHub Release asset of
+    `jordyBonnet/GlobeRunners_images` **once** (same source the deckbuilding app
+    uses; `game_ui/github_assets.py` mirrors
     `GlobeRunners_deckbuild_app/lib/github_assets.py` — keep in sync if the
-    releases change); unknown files → redirect to `/placeholder.svg`.
+    releases change) — and every art response carries
+    `Cache-Control: public, max-age=31536000, immutable` (the GitHub release chain
+    is `no-cache` with no validator, so a direct 302 redirect made browsers
+    re-download the ~1.2 MB PNG on every hand re-render — see the 2026-09-24
+    change log); unknown files → redirect to `/placeholder.svg`.
   - the `/assets` and `/cards_ex` mounts point at the **repo bundle**
     `game_ui/hosted_assets/{assets,cards_ex}` — **pruned to exactly the files the
     frontend references** (32 board assets: playmat + `earth_cgf{1-4}_nomarker`,
@@ -178,13 +195,26 @@ support cards, but puts them in mana — see `ai_driver.py`).
 - **Route precedence**: UI routes + static mounts are declared **before** the `/`
   `api_app` mount, so they win. Keep new UI routes/mounts above the `api_app` mount.
 - **Card art is switchable**: `/art` is either the local `_ART_DIR` mount
-  (`LOCAL_TEST=True`) or the GitHub-redirect route `serve_card_image`
-  (`LOCAL_TEST=False`) — never both at once.
+  (`LOCAL_TEST=True`) or the GitHub-sourcing route `serve_card_image`
+  (`LOCAL_TEST=False`) — never both at once. In `False` mode the art is always
+  served **from the local server** (repo bundle or the `art_cache/` download
+  cache) with immutable `Cache-Control` — never a bare 302 to GitHub (that chain
+  is uncacheable client-side: `no-cache` without validator + rotating signed
+  URLs).
 - **One server**: the frontend only talks to this server; `API.py` is embedded, not
   a separate process, in this deployment.
 
 ## Change log
 
+- **2026-09-24** — main-card art is now **server-side cached**: `serve_card_image`
+  fetches each GitHub Release asset **once** into
+  `game_ui/hosted_assets/art_cache/<card_id>.png` (new gitignored runtime cache,
+  per-name lock, placeholder fallback on download failure) and serves every art
+  file with `Cache-Control: public, max-age=31536000, immutable`. Fixes the
+  "one card re-animates every ~2 s" glitch: the previous bare 302 → GitHub chain
+  (`no-cache`, no validator, rotating signed blob URL) was re-downloaded by
+  strict browsers on every hand re-render (the poll is ~2.5 s), so the
+  main-faction cards flickered every poll.
 - **2026-09-23** — `LOCAL_TEST` toggle for card art: `True` → local
   `cards_framed_0.6` mount (previous behavior); `False` → new route
   `serve_card_image()`: support art served from the new **repo bundle

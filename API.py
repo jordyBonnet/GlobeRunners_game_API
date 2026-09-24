@@ -34,6 +34,7 @@ from typing import List
 
 from engine import game_engine as ge
 from models import PlayerState
+import deck_rules
 
 
 # Support factions (engineers / mages / doctors): 5 cards each in
@@ -68,33 +69,14 @@ def _expected_player_name(state: str):
 
 
 def check_deck(deck: List[str]):
-    """Validate a player deck: main faction card ids (cardpool) + support card names.
-    Raises 400 if any card is unknown to either pool, if the same MAIN card id appears
-    more than once, or if a SUPPORT card appears more than twice (a standard deck carries
-    exactly 2 copies of each of its 5 support cards — a 3rd copy is how a player ended up
-    with duplicate cards in hand, e.g. 3x refinery, in game 26_09_02_18_54_10_PyaZf)."""
-    pool_ids = set(ge.get_cardpool()['card_id'].to_list())
-    sup = load_support_cards()
-    support_names = set(sup['card_name'].to_list()) if not sup.is_empty() else set()
-    pool_ids |= support_names
-    bad = [c for c in deck if c not in pool_ids]
-    if bad:
-        raise HTTPException(status_code=400, detail=f"unknown card id(s) in deck: {bad[:5]}")
-    seen, dups = set(), set()
-    sup_count = {}
-    for c in deck:
-        if c in support_names:
-            sup_count[c] = sup_count.get(c, 0) + 1
-            continue   # support cards legitimately appear up to twice
-        if c in seen:
-            dups.add(c)
-        else:
-            seen.add(c)
-    if dups:
-        raise HTTPException(status_code=400, detail=f"duplicate card(s) in deck (a main card can only appear once): {sorted(dups)[:5]}")
-    over = {c: n for c, n in sup_count.items() if n > 2}
-    if over:
-        raise HTTPException(status_code=400, detail=f"support card(s) appear more than twice in deck (max 2 copies each): {over}")
+    """Validate a player deck against the deck rules (single source of truth:
+    `deck_rules.py`) — exactly 20 main cards from ONE main faction, single-copy
+    format, max 5 cards per condition family / effect, no `face_point_*` yet,
+    plus the 10-card support deck (2 copies of each of the 5 cards of ONE
+    support faction). Raises 400 with the list of violations."""
+    problems = deck_rules.check_deck(deck)
+    if problems:
+        raise HTTPException(status_code=400, detail="; ".join(problems))
 
 
 @app.post("/create_game")

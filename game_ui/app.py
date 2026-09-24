@@ -96,21 +96,50 @@ def placeholder():
 
 if not LOCAL_TEST:
     # card art: support cards (Eng_/Doc_/Mag_) are served from the repo bundle
-    # (hosted_assets/art/); main cards redirect to their GitHub Release
-    # (github_assets.py); anything else -> placeholder.svg.
+    # (hosted_assets/art/); main cards come from their GitHub Release
+    # (github_assets.py) — fetched server-side ONCE and cached in
+    # hosted_assets/art_cache/; anything else -> placeholder.svg.
+    #
+    # Why the server-side cache (2026-09-24, the "one card re-animates every
+    # ~2 s" glitch): the GitHub release chain is github.com 302 (Cache-Control:
+    # no-cache, NO validator) -> rotating signed blob URL. Browsers that honor
+    # that no-cache cannot reuse the chain: every fresh <img> — and renderAll
+    # recreates the hand's <img> elements on EVERY ~2.5 s state poll —
+    # re-downloaded the ~1.2 MB PNG, so the main-faction cards flickered
+    # (re-appeared) every poll. Serving the art from a stable local URL with an
+    # immutable cache header makes the browser cache it for a year: one
+    # download per card, ever.
+    import threading  # noqa: E402
+    import urllib.request  # noqa: E402
     from github_assets import get_image_url, has_github_art  # noqa: E402
 
     _HOSTED_ART = (_HOSTED_DIR / "art").resolve()
+    _ART_CACHE = (_HOSTED_DIR / "art_cache").resolve()
+    _ART_CACHE_LOCK = threading.Lock()
+    _IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}
 
     @app.get("/art/{filename:path}")
     def serve_card_image(filename: str):
-        """Support art from the repo bundle; main art via GitHub Releases."""
+        """Support art from the repo bundle; main art server-cached from GitHub;
+        anything else -> placeholder.svg."""
         local = (_HOSTED_DIR / "art" / filename).resolve()
         if local.is_file() and local.is_relative_to(_HOSTED_ART):
-            return FileResponse(local)
+            return FileResponse(local, headers=_IMMUTABLE)
         name = filename[:-4] if filename.lower().endswith(".png") else filename
         if has_github_art(name):
-            return RedirectResponse(get_image_url(name), status_code=302)
+            cached = (_ART_CACHE / (name + ".png")).resolve()
+            if cached.is_file() and cached.is_relative_to(_ART_CACHE):
+                return FileResponse(cached, headers=_IMMUTABLE)
+            with _ART_CACHE_LOCK:            # one download per card, ever
+                if not (cached.is_file() and cached.is_relative_to(_ART_CACHE)):
+                    try:
+                        with urllib.request.urlopen(get_image_url(name), timeout=25) as r:
+                            data = r.read()
+                        _ART_CACHE.mkdir(parents=True, exist_ok=True)
+                        cached.write_bytes(data)
+                    except Exception:
+                        return RedirectResponse("/placeholder.svg", status_code=302)
+            return FileResponse(cached, headers=_IMMUTABLE)
         return RedirectResponse("/placeholder.svg", status_code=302)
 
 

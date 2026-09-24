@@ -218,3 +218,54 @@ export function buildSupportDeck(key) {
 /* ---------------- deck sizes ---------------- */
 export const MAIN_DECK_SIZE = 20;      // main faction starter deck (20 cards)
 export const SUPPORT_DECK_SIZE = 10;   // support faction deck (2 x 5 unique cards)
+
+/* ---------------- deck rules (mirror of deck_rules.py — keep in sync) ----------------
+   The MAIN deck must be:
+     * exactly 20 cards from ONE main faction
+     * single-copy format (a card can only appear once)
+     * max 5 cards per condition — the numeric variants of a condition count as ONE
+       condition (temp_inf_6~temp_inf_11, temp_sup_9~temp_sup_15,
+       dist_ahead_sup_1~dist_ahead_sup_3, dist_behind_sup_1~dist_behind_sup_3)
+     * max 5 cards per effect — the numeric variants of an effect (advancing +1/+2/+3,
+       i.e. the `effect_number` column) share the same `effect` value, so grouping by
+       effect name covers them
+     * no `face_point_left` / `face_point_right` yet (not implemented in the online
+       game — allowed later: remove them from BANNED_DECK_VALUES) */
+export const COND_FAMILY = {
+  temp_inf_6: "temp_inf",     temp_inf_11: "temp_inf",
+  temp_sup_9: "temp_sup",     temp_sup_15: "temp_sup",
+  dist_ahead_sup_1: "dist_ahead",   dist_ahead_sup_3: "dist_ahead",
+  dist_behind_sup_1: "dist_behind", dist_behind_sup_3: "dist_behind",
+};
+export const condFamily = (c) => COND_FAMILY[c] || c;
+export const MAX_PER_CONDITION = 5;
+export const MAX_PER_EFFECT = 5;
+export const BANNED_DECK_VALUES = new Set(["face_point_left", "face_point_right"]);
+
+// validate a MAIN deck (list of main card ids) — returns a list of human-readable
+// violations (empty = valid). Mirrors deck_rules.check_main_deck (the server is
+// the hard gate — this is for live feedback + the launch guard).
+export function checkMainDeck(ids) {
+  const problems = [];
+  if (!Array.isArray(ids) || !ids.length) return ["the main deck is empty"];
+  const known = ids.map((id) => CARDPOOL[id]).filter(Boolean);
+  const unknown = ids.filter((id) => !CARDPOOL[id]);
+  if (unknown.length) problems.push(`unknown card(s): ${unknown.slice(0, 3).join(", ")}`);
+  if (ids.length !== MAIN_DECK_SIZE) problems.push(`must contain exactly ${MAIN_DECK_SIZE} cards (has ${ids.length})`);
+  const facs = [...new Set(known.map((c) => c.faction).filter(Boolean))].sort();
+  if (facs.length > 1) problems.push(`all ${MAIN_DECK_SIZE} cards must come from a single main faction (found: ${facs.join(", ")})`);
+  const seen = new Set(); const dups = new Set();
+  for (const id of ids) { if (seen.has(id)) dups.add(id); seen.add(id); }
+  if (dups.size) problems.push(`single-copy format — duplicate card(s): ${[...dups].slice(0, 3).join(", ")}`);
+  const cc = {}; const ec = {};
+  for (const c of known) {
+    const f = condFamily(c.condition);
+    if (f) cc[f] = (cc[f] || 0) + 1;
+    if (c.effect) ec[c.effect] = (ec[c.effect] || 0) + 1;
+  }
+  for (const [k, n] of Object.entries(cc)) if (n > MAX_PER_CONDITION) problems.push(`max ${MAX_PER_CONDITION} cards per condition — \"${k}\" has ${n}`);
+  for (const [k, n] of Object.entries(ec)) if (n > MAX_PER_EFFECT) problems.push(`max ${MAX_PER_EFFECT} cards per effect — \"${k}\" has ${n}`);
+  const banned = known.filter((c) => BANNED_DECK_VALUES.has(c.condition) || BANNED_DECK_VALUES.has(c.effect));
+  if (banned.length) problems.push(`banned card(s) (face_point_left / face_point_right are not allowed yet): ${banned.slice(0, 3).map((c) => c.card_id).join(", ")}`);
+  return problems;
+}

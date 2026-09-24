@@ -107,7 +107,15 @@ export function applyState(st, fromPolling) {
   // stopover→discard, …) — see the anim module
   const oldSt = game.state;
   const snap = (oldSt && st && oldSt.players && st.players && oldSt.id === st.id && !REDUCED_MOTION) ? snapshotZones() : null;
-  exitCellSelect();   // any new state ends cell-selection mode (a placement / opponent move happened)
+  // cell-select (engineer drop) ends ONLY when the state actually CHANGED (a placement /
+  // opponent move / rejection happened). The 2.5 s poll re-applies the SAME state while the
+  // player is choosing a cell — an unconditional exit made the circle targets vanish within
+  // 2.5 s of entering the mode (the "circles disappear before I can click" glitch).
+  // Both states come from the same server serializer (stable key order), so a content
+  // comparison is reliable; the state has no per-request volatile fields (see GameState).
+  const stateChanged = !(oldSt && st && oldSt.id === st.id
+    && JSON.stringify(oldSt) === JSON.stringify(st));
+  if (stateChanged) exitCellSelect();
   game.state = st;
   renderAll();
   if (snap) animateZoneTransitions(oldSt, st, snap);

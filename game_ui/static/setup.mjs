@@ -2,7 +2,7 @@
 "use strict";
 
 import { $, $$, api, toast } from "./utils.mjs";
-import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey } from "./cards.mjs";
+import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey, checkMainDeck, condFamily } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
 import { loadFactionThemes, applyFactionTheme, factionTheme, THEME_DEFAULTS } from "./theme.mjs";
@@ -23,13 +23,21 @@ function buildStarterDeck(factionKey, seedStr) {
     const w = c.rare ? 1 : 3;
     for (let i = 0; i < w; i++) weighted.push(c);
   }
-  // weighted draw without replacement
+  // weighted draw without replacement — the starter deck respects the deck rules
+  // too (single-copy + max 5 per condition family / effect, see checkMainDeck)
   const deck = [];
+  const cc = {}; const ec = {};
   const bag = [...weighted];
   while (deck.length < MAIN_DECK_SIZE && bag.length) {
     const idx = Math.floor(rand() * bag.length);
     const card = bag.splice(idx, 1)[0];
-    if (!deck.includes(card.card_id)) deck.push(card.card_id);
+    if (deck.includes(card.card_id)) continue;
+    const cf = condFamily(card.condition);
+    if (cf && (cc[cf] || 0) >= 5) continue;
+    if (card.effect && (ec[card.effect] || 0) >= 5) continue;
+    if (cf) cc[cf] = (cc[cf] || 0) + 1;
+    if (card.effect) ec[card.effect] = (ec[card.effect] || 0) + 1;
+    deck.push(card.card_id);
   }
   return deck;
 }
@@ -135,7 +143,11 @@ function renderFactions() {
 function renderDeckPreview() {
   const box = $("#deck-preview");
   const title = $("#deck-preview-title");
-  if (!setup.deck.length) { box.classList.add("hidden"); title.classList.add("hidden"); return; }
+  if (!setup.deck.length) {
+    box.classList.add("hidden"); title.classList.add("hidden");
+    renderDeckIssues();
+    return;
+  }
   box.classList.remove("hidden"); title.classList.remove("hidden");
   $("#deck-count").textContent = setup.deck.length;
   box.innerHTML = "";
@@ -143,6 +155,24 @@ function renderDeckPreview() {
     const el = cardEl(id);   // shared render site: hoverId → the delegated 3x hover preview (modals.mjs)
     el.style.cursor = "default";
     box.appendChild(el);
+  }
+  renderDeckIssues();
+}
+
+// the deck-rules verdict (checkMainDeck — mirror of deck_rules.py): a green ✓ when
+// the deck is valid, a red list of violations otherwise (the server re-checks and
+// is the hard gate at launch)
+function renderDeckIssues() {
+  const el = $("#deck-issues");
+  if (!el) return;
+  if (!setup.deck.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  const problems = checkMainDeck(setup.deck);
+  el.classList.remove("hidden");
+  el.classList.toggle("deck-issues-ok", problems.length === 0);
+  if (!problems.length) {
+    el.innerHTML = '<div class="deck-issues-line ok">✓ Deck is valid — it follows the deck rules (single faction, single-copy, max 5 per condition/effect).</div>';
+  } else {
+    el.innerHTML = problems.map((p) => `<div class="deck-issues-line bad">✗ ${p}</div>`).join("");
   }
 }
 
@@ -185,11 +215,25 @@ function renderSupportPreview() {
 }
 
 function updateLaunchBtn() {
-  const okName = setup.name.trim().length >= 2;
-  const okMain = setup.deck.length === MAIN_DECK_SIZE;
-  const okSupport = setup.supportDeck.length === SUPPORT_DECK_SIZE;
-  const okGame = setup.mode === "join" ? $("#join-game-id").value.trim().length > 0 : true;
-  $("#btn-launch").disabled = !(okName && okMain && okSupport && okGame);
+  // WHY is Start disabled? — a vibrant-red list rendered just ABOVE the button
+  // (one ✗ line per missing piece), so the user sees exactly what to fix.
+  const blockers = [];
+  // order: 1. main faction  2. support faction  3. nickname
+  if (!setup.deck.length) blockers.push("Select a main faction");
+  else {
+    const problems = checkMainDeck(setup.deck);
+    if (problems.length) blockers.push(`Main deck invalid — ${problems.length} deck-rule violation(s), see the ✗ list above`);
+  }
+  if (setup.supportDeck.length !== SUPPORT_DECK_SIZE) blockers.push("Select a support faction");
+  if (setup.name.trim().length < 2) blockers.push("Write your nickname");
+  if (setup.mode === "join" && !$("#join-game-id").value.trim()) blockers.push("Write the game ID to join");
+
+  const el = $("#launch-blockers");
+  if (el) {
+    el.classList.toggle("hidden", blockers.length === 0);
+    el.innerHTML = blockers.map((b) => `<div class="launch-blocker">✗ ${b}</div>`).join("");
+  }
+  $("#btn-launch").disabled = blockers.length > 0;
 }
 
 export function initSetup() {
@@ -228,13 +272,10 @@ export function initSetup() {
       await loadCardpool();
       const text = await file.text();
       const ids = parseCsv(text);
-      const unknown = ids.filter((id) => !CARDPOOL[id]);
-      const picked = ids.slice(0, MAIN_DECK_SIZE);
-      const dupes = picked.filter((id, i, arr) => arr.indexOf(id) !== i);
-      $("#csv-filename").textContent = `${file.name} — ${ids.length} card(s)` + (unknown.length ? `, ${unknown.length} unknown: ${unknown.slice(0, 3).join(", ")}` : "") + (dupes.length ? `, DUPLICATES: ${[...new Set(dupes)].slice(0, 3).join(", ")}` : "");
       if (!ids.length) { toast("No card found in this file"); return; }
-      if (dupes.length) { toast(`File contains duplicate card(s) — a card can only appear once: ${[...new Set(dupes)].join(", ")}`); return; }
-      setup.deck = picked;
+      const picked = ids.slice(0, MAIN_DECK_SIZE);
+      $("#csv-filename").textContent = `${file.name} — ${ids.length} card(s)` + (ids.length > MAIN_DECK_SIZE ? ` (first ${MAIN_DECK_SIZE} used)` : "");
+      setup.deck = picked;   // rule violations (duplicates, unknowns, max-5, …) show in the issues panel below the preview
       // theme the setup page with the LOADED deck's faction (the majority of the
       // cards — normally all 20 are the same) so the palette follows the file
       const counts = {};
@@ -279,6 +320,7 @@ export function initSetup() {
 
   renderFactions();
   renderSupportFactions();
+  updateLaunchBtn();   // paint the "why Start is disabled" list on load
 }
 
 /* ------------------------------------------------------------------ launch & waiting */
@@ -297,7 +339,8 @@ async function launch() {
   errEl.textContent = "";
   const name = setup.name.trim();
   if (name.length < 2) { errEl.textContent = "Pick a nickname (2 characters min)."; return; }
-  if (setup.deck.length !== MAIN_DECK_SIZE) { errEl.textContent = `The main deck must contain exactly ${MAIN_DECK_SIZE} cards.`; return; }
+  const deckProblems = checkMainDeck(setup.deck);
+  if (deckProblems.length) { errEl.textContent = deckProblems.join(" • "); return; }
   if (setup.supportDeck.length !== SUPPORT_DECK_SIZE) { errEl.textContent = "Pick a support faction (its 10 cards are mixed into your main deck)."; return; }
   // the 20 main cards + 10 support cards are mixed (shuffled) into one 30-card deck
   const deck = shuffleDeck([...setup.deck, ...setup.supportDeck]);

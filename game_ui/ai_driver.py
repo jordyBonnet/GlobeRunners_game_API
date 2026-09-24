@@ -13,11 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 import re
-from pathlib import Path
-
-import polars as pl
 
 import engine.game_engine as ge
 from player_ai.playerai import PlayerAI, validate_message
@@ -28,55 +24,26 @@ PLAY_TURN_RE = re.compile(r"turn \d+ - waiting for (first|second) player \((.+?)
 # "turn N - waiting for NAME to discard K card(s)" (discard selection)
 DISCARD_RE = re.compile(r"turn \d+ - waiting for (.+?) to discard (\d+) card\(s\)")
 
-# support faction pool (engineers / mages / doctors): 5 cards each, the deck is
-# 2 copies of each (10 total) — mixed into the main deck, like a human's (20 + 10 = 30)
-SUPPORT_CARDS_PATH = Path(__file__).resolve().parent.parent / "cards" / "support_factions.parquet"
-
-
-def random_support_deck() -> list[str]:
-    """A random support faction deck: 2 copies of each of its 5 cards (10 total), shuffled.
-    Empty list if the support data file is missing (the deck stays main-only)."""
-    if not SUPPORT_CARDS_PATH.exists():
-        return []
-    sup = pl.read_parquet(SUPPORT_CARDS_PATH)
-    if sup.is_empty():
-        return []
-    fac = random.choice(sup["support_faction_name"].unique().to_list())
-    cards = sup.filter(pl.col("support_faction_name") == fac)["card_name"].to_list()
-    deck = [c for c in cards for _ in range(2)]   # 2 copies of each card
-    random.shuffle(deck)
-    return deck
+# Robot deck: built by `ai_deck.py` — a random main faction + a random support
+# faction, and a 20-card main deck that follows the support-faction strategy
+# rules (Engineers -> drop_on_board, Doctors -> pending, Mages -> temp/day-night/
+# biome, …) while staying valid under the deck rules (deck_rules.py).
+try:  # game_ui/ on sys.path (tests, app.py) → sibling import …
+    import ai_deck  # noqa: E402
+except ImportError:  # … or package import (game_ui.ai_driver)
+    from game_ui import ai_deck  # noqa: E402
 
 
 def random_ai_deck(n: int = 20) -> list[str]:
-    """Starting deck for the robot: n main-faction cards (20 by default) + a random
-    support faction deck (10 cards) -> 30 total, the same composition as a human's
-    deck (20 main + 10 support, shuffled together).
+    """Starting deck for the robot: 20 main cards of a RANDOM main faction + a
+    random support faction deck (10 cards) -> 30 total, shuffled — the same
+    composition as a human's deck (20 main + 10 support).
 
-    Same logic as the frontend starter deck (`buildStarterDeck`): we only draw from a
-    single faction (no mixing), and rare cards are less frequent (weighting rare x1 /
-    other x3, draw without replacement or duplicates)."""
-    df = ge.get_cardpool()
-    faction = random.choice(df["faction"].unique().to_list())
-    sub = df.filter(pl.col("faction") == faction)
-
-    # weighted bag: rare x1, other x3
-    bag: list[str] = []
-    for row in sub.iter_rows(named=True):
-        bag.extend([row["card_id"]] * (1 if row["rare"] else 3))
-
-    # weighted draw without replacement, no duplicates
-    deck: list[str] = []
-    while len(deck) < n and bag:
-        card = random.choice(bag)
-        bag.remove(card)
-        if card not in deck:
-            deck.append(card)
-
-    # mix in a random support faction deck (10 cards) -> 30 total, like a human's
-    deck += random_support_deck()
-    random.shuffle(deck)
-    return deck
+    The main deck is a "not so dumb" build: it respects the deck rules
+    (deck_rules.py) AND the support-faction strategy rules — see
+    `ai_deck.build_main_deck` / the `ai_deck` module docstring.
+    `n` is kept for signature compatibility (the main deck is always 20)."""
+    return ai_deck.build_ai_deck()
 
 
 def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
@@ -113,7 +80,11 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
             return {"cards": cards, "to": "mana", "mode": "", "pendings": []}
         return None
 
-    # 2. Mana/pass phase: put exactly 1 card in mana, or pass
+    # 2. Mana/pass phase: put exactly 1 card in mana, or pass.
+    #    I.1 (2026-09-24): the pool growth is a DECISION, not automatic — put_mana passes
+    #    when the available mana already covers the TOTAL cost of the hand (the pool can
+    #    already play everything the robot owns), and places a card only while the pool is
+    #    still short of that total.
     if state == "waiting for both players to mana or pass":
         if st["acted"]:
             return None

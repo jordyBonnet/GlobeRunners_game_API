@@ -7,7 +7,12 @@ const { pathToFileURL } = require('url');
 function makeEl() {
   const target = {
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
-    style: {},
+    // permissive style: property sets (`el.style.x = …`) AND method calls
+    // (`el.style.setProperty(…)`) — both appear in the modules
+    style: new Proxy({}, {
+      get(t, k) { return k in t ? t[k] : () => {}; },
+      set(t, k, v) { t[k] = v; return true; },
+    }),
     dataset: {},
     children: [],
     appendChild(c) { this.children.push(c); return c; },

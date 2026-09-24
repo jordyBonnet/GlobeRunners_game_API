@@ -14,3 +14,6 @@ nul
 
 # Server / analysis run logs
 *.log
+
+# Runtime card-art cache (lazy GitHub release downloads, game_ui/app.py)
+game_ui/hosted_assets/art_cache/

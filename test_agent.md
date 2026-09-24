@@ -7,6 +7,8 @@
 
 ```bash
 uv run python tests/_diag.py       # engine unit tests (NOTE: writes to games.db)
+uv run python tests/_deck_rules.py # deck-rules validation (deck_rules.py: size/faction/duplicates, max-5 per condition family — numeric variants merged — and per effect, face_point_* refused, support 2×5; pure, no games.db)
+uv run python tests/_ai_deck.py    # AI deck builder (all 18 main×support combinations × 25 builds = 6480 checks: deck rules + support-faction strategy rules + general + per-faction rules + randomness; pure, no games.db)
 uv run python tests/_copy_effect.py # copy_effect rule (also writes to games.db)
 uv run python tests/_pet_trap.py    # pet_trap rule (also writes to games.db; 2 games are persisted for the replay self-test)
 uv run python tests/_drop_on_board.py # drop_on_board condition (also writes to games.db)
