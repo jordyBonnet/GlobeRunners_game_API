@@ -64,7 +64,7 @@ only ever speaks to the HTTP/WS surface.
 | `POST /create_game_ai` | `create_game_ai()` | new game vs the Robot (see *AI wiring*) |
 | `GET /api/state/{game_id}/{player_name}` | `personalized_state()` | masked per-player state for polling |
 | `GET /static/*` | (mount) | `static/` — css, js modules, placeholder |
-| `GET /art/*` | (mount) | main-card art (`<card_id>.png`) + support art (`<card_path>`) |
+| `GET /art/*` | (mount, `LOCAL_TEST=True`) **or** `serve_card_image()` (`LOCAL_TEST=False`) | main-card art (`<card_id>.png`) + support art (`<card_path>`) — local folder, or redirect to the GitHub Releases of `GlobeRunners_images` (see *Card art (`/art`)*) |
 | `GET /assets/*` | (mount) | game assets (biomes, markers, logos, engineer drops) |
 | `GET /cards_ex/*` | (mount) | faction placeholder art (dwelling card) |
 | `*` (everything else) | `api_app` (mounted at `/`) | `/create_game`, `/join_game/{id}`, `/cardpool`, `/game/{id}`, `/ws/{gid}/{player}`, … |
@@ -86,6 +86,15 @@ mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount 
   doesn't exist. This is the frontend's way of seeing the **opponent's** actions
   (the WS only pushes a state when *we* send). It is distinct from `GET /game/{id}`
   in `api_app`, which returns the **full** state (debug/analysis).
+- **`serve_card_image(filename)`** — registered **only when `LOCAL_TEST` is False**:
+  `GET /art/{filename}` first serves the file from the repo bundle
+  `game_ui/hosted_assets/art/` **iff it exists there** (the 15 support cards,
+  path-traversal-guarded with `is_relative_to`) → `FileResponse`. Otherwise main
+  cards (Dwa/Dem/Twi/Mia/Orc/Mum) redirect (302) to the GitHub Release asset of
+  the `GlobeRunners_images` repo via `game_ui/github_assets.py` (a self-contained
+  copy of the deckbuilding app's `lib/github_assets.py` — keep the two in sync if
+  the releases change; incl. the Twigs/Orcs part2 split points and the Miaous 1–4
+  split). Anything else redirects to `/placeholder.svg`.
 - **`NoCacheStatic`** — pure-ASGI middleware: for any `http` request whose path
   starts with `/static/`, it appends `Cache-Control: no-cache, must-revalidate` to
   the response. Non-`/static/` requests pass straight through untouched. Implemented
@@ -94,21 +103,48 @@ mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount 
 - **`main()`** — reads `GLOBE_UI_PORT` (default `8001`) and runs uvicorn on
   `127.0.0.1`.
 
+## Card art (`/art`)
+
+The `/art` route depends on the **`LOCAL_TEST` toggle** (top of `app.py`):
+
+- **`LOCAL_TEST = True`** (local development): `_ART_DIR`
+  (`…/artdesign/cards_framed_0.6`) is mounted as `StaticFiles` — exactly like the
+  other asset mounts (mounted **iff the directory exists**, else a warning is
+  printed and the frontend falls back to `placeholder.svg`).
+- **`LOCAL_TEST = False`** (Hugging Face / remote hosting): **no local art folders
+  are used** — everything comes from the repo + GitHub:
+  - the route `serve_card_image(filename)` handles `/art`: support art
+    (`Eng_`/`Doc_`/`Mag_`) is **served from `game_ui/hosted_assets/art/`**
+    (committed to this repo, 15 cards matching `support_factions.parquet`
+    `card_path`); main cards **redirect (302)** to the matching GitHub Release
+    asset of `jordyBonnet/GlobeRunners_images` — the same mechanism the
+    deckbuilding app uses (`game_ui/github_assets.py` mirrors
+    `GlobeRunners_deckbuild_app/lib/github_assets.py` — keep in sync if the
+    releases change); unknown files → redirect to `/placeholder.svg`.
+  - the `/assets` and `/cards_ex` mounts point at the **repo bundle**
+    `game_ui/hosted_assets/{assets,cards_ex}` — **pruned to exactly the files the
+    frontend references** (32 board assets: playmat + `earth_cgf{1-4}_nomarker`,
+    logos, markers, banners, effect/env icons; 6 `placeholder_<Faction>.png`
+    dwelling cards) — copied from `…/artdesign/cards_assets` +
+    `…/artdesign/cards_ex`, ~63 MB. (If a new `*.mjs` references a new asset, add
+    it to `hosted_assets/` or the `onerror` placeholder fallback kicks in.)
+  - the 8 GB main-card art (`cards_framed_0.6`) is **never bundled** — it lives in
+    the GitHub Releases.
+
 ## Static mounts
 
 `STATIC_MOUNTS` is a list of `(path, directory, note-if-missing)`. Each is mounted
 with `StaticFiles` **iff the directory exists**; otherwise a warning is printed and
 the mount is skipped (the frontend degrades gracefully — placeholder art / plain
-board). The four mounts:
+board). The three mounts (`/art` is separate — see *Card art* above):
 
-| path | directory | missing → |
+| path | directory (`LOCAL_TEST=True` → `False`) | missing → |
 |---|---|---|
-| `/static` | `game_ui/static` | the app can't run (frontend) |
-| `/art` | `…/artdesign/cards_framed_0.6` | card images fall back to `placeholder.svg` |
-| `/assets` | `…/artdesign/cards_assets` | board backgrounds are plain |
-| `/cards_ex` | `…/artdesign/cards_ex` | dwelling placeholder images unavailable |
+| `/static` | `game_ui/static` (both) | the app can't run (frontend) |
+| `/assets` | `…/artdesign/cards_assets` → `game_ui/hosted_assets/assets` | board backgrounds are plain |
+| `/cards_ex` | `…/artdesign/cards_ex` → `game_ui/hosted_assets/cards_ex` | dwelling placeholder images unavailable |
 
-The art folders are **hard-coded external paths** (sibling project
+The asset folders are **hard-coded external paths** (sibling project
 `GlobeRunners_card_system`) — do not "fix" them without checking the fallback still
 works.
 
@@ -141,11 +177,24 @@ support cards, but puts them in mana — see `ai_driver.py`).
   creating the game — same validation as the 2-player path.
 - **Route precedence**: UI routes + static mounts are declared **before** the `/`
   `api_app` mount, so they win. Keep new UI routes/mounts above the `api_app` mount.
+- **Card art is switchable**: `/art` is either the local `_ART_DIR` mount
+  (`LOCAL_TEST=True`) or the GitHub-redirect route `serve_card_image`
+  (`LOCAL_TEST=False`) — never both at once.
 - **One server**: the frontend only talks to this server; `API.py` is embedded, not
   a separate process, in this deployment.
 
 ## Change log
 
+- **2026-09-23** — `LOCAL_TEST` toggle for card art: `True` → local
+  `cards_framed_0.6` mount (previous behavior); `False` → new route
+  `serve_card_image()`: support art served from the new **repo bundle
+  `game_ui/hosted_assets/`** (15 support cards in `art/`, plus `assets/` +
+  `cards_ex/` **pruned to the files the frontend references** — ~80 MB total, so
+  `/assets` and `/cards_ex` also come from the repo bundle in `False` mode),
+  main cards redirect to the
+  `GlobeRunners_images` GitHub Releases (new `game_ui/github_assets.py`, mirror
+  of the deckbuilding app's `lib/github_assets.py`); unknown → `placeholder.svg`.
+  `/art` moved out of `STATIC_MOUNTS`.
 - **2026-09-15** — Frontend split into ES modules (entry `app.mjs`); `app.py`
   cleaned up: `NoCacheStatic` rewritten as a pure-ASGI middleware (was
   `BaseHTTPMiddleware`), the three art mounts collapsed into the `STATIC_MOUNTS`

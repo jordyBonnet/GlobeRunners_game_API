@@ -103,6 +103,22 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 .supfac-btn:hover { border-color: var(--accent-2); transform: translateY(-1px); }
 .supfac-btn.selected { border-color: var(--accent); background: #20304d; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent) inset; }
 
+/* faction tooltips (setup page): a short role description revealed on hover,
+   background = the faction's OWN color (set inline by setup.mjs addFactionTip:
+   --tip-bg from faction_themes.json for the mains / the banner colors for the supports) */
+.faction-btn, .supfac-btn { position: relative; }
+.faction-tip {
+  display: none; position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: min(250px, 70vw); padding: 7px 10px; border-radius: 8px;
+  background: var(--tip-bg, #2a3550); font-size: .72rem; line-height: 1.45; text-align: center; font-weight: 500;
+  box-shadow: 0 6px 18px rgba(0,0,0,.5); pointer-events: none; z-index: 40;
+}
+.faction-tip::after {
+  content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: var(--tip-bg, #2a3550);
+}
+.faction-btn:hover .faction-tip, .supfac-btn:hover .faction-tip { display: block; }
+
 /* csv */
 .file-btn {
   display: inline-block; padding: 9px 14px; border-radius: 9px; cursor: pointer;
@@ -202,11 +218,11 @@ h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--text); }
 
 /* purple drop = mana zone */
 .mana-drop {
-  position: relative; width: clamp(116px, 13.5vw, 160px); aspect-ratio: 100 / 130;   /* more room for the mana drop */
+  position: relative; width: clamp(116px, 13.5vw, 160px); aspect-ratio: 1;   /* marker_mana.png is square */
   display: flex; align-items: center; justify-content: center; cursor: default;
   transition: transform .15s, filter .15s;
 }
-.mana-drop .drop-svg { width: 100%; height: 100%; filter: drop-shadow(0 6px 14px rgba(58,29,143,.6)); }
+.mana-drop .drop-ico { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(58,29,143,.6)); }
 .mana-drop .mana-cards {
   position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
   display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; pointer-events: none;
@@ -685,13 +701,20 @@ a.primary-btn { display: inline-block; text-decoration: none; text-align: center
 /* card hover preview: 3x bigger, vertically centered (at Earth level) */
 #card-hover {
   position: fixed; left: 16px; top: 50%; z-index: 55;
-  width: calc(clamp(58px, 6.6vw, 92px) * 3); aspect-ratio: 180 / 260;
+  width: calc(clamp(58px, 6.6vw, 92px) * 3);
   border-radius: 14px; overflow: hidden; pointer-events: none;
   box-shadow: 0 18px 44px rgba(0,0,0,.75), 0 0 0 2px var(--accent-2);
   opacity: 0; transform: translateY(calc(-50% + 10px)) scale(.98); transition: opacity .16s ease, transform .16s ease;
 }
 #card-hover.show { opacity: 1; transform: translateY(-50%); }
-#card-hover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#card-hover img { width: 100%; aspect-ratio: 180 / 260; object-fit: cover; display: block; }
+/* condition/effect legend under the image (filled by modals.mjs hoverCardText;
+   hidden for card backs / unknown ids) */
+#card-hover-text { display: none; background: rgba(7,11,22,.94); padding: 8px 10px 9px; }
+#card-hover-text.show { display: block; }
+#card-hover-text .ch-row { font-size: .72rem; line-height: 1.45; color: var(--text); margin-top: 5px; }
+#card-hover-text .ch-row:first-child { margin-top: 0; }
+#card-hover-text .ch-label { display: block; font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--accent-2); }
 
 /* ---------------- modals ---------------- */
 .modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; }

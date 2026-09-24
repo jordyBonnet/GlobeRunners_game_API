@@ -11,7 +11,10 @@ kill all running instances of the UI (PowerShell):
 Routes added on top of API.py:
     GET /                          index.html (setup page: deck + create/join)
     GET /static/*                  frontend css / js (the app is a set of ES modules, entry: app.mjs)
-    GET /art/<card_id>.png         card art (external folder, placeholder if absent)
+    GET /art/<card_id>.png         card art — LOCAL_TEST=True: external local folder;
+                                   LOCAL_TEST=False: support art from game_ui/hosted_assets/
+                                                       + GitHub Releases for main cards
+                                                       (see github_assets.py)
     GET /assets/*                  game assets (biomes, markers, logos...)
     GET /cards_ex/*                faction placeholder art (dwelling card)
     GET /placeholder.svg           fallback image for cards without art
@@ -37,7 +40,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 # the API.py app (engine REST + WebSocket) — the webapp "interacts" with it by embedding it
@@ -48,14 +51,33 @@ from ai_driver import random_ai_deck, run_ai_loop  # noqa: E402
 
 STATIC_DIR = HERE / "static"
 
-# external asset folders (card art + game assets + faction placeholders),
-# all under the same art root: (mount path, directory, note if missing)
+# ------------------------------------------------------------------ card art source
+# LOCAL_TEST = True  -> serve card art + board assets from the LOCAL art folders
+#                       (_ART_ROOT, the sibling project GlobeRunners_card_system).
+# LOCAL_TEST = False -> self-contained hosting (no local art folders — Hugging Face
+#                       / any other host):
+#                         - support art (Eng_/Doc_/Mag_)  -> game_ui/hosted_assets/art/
+#                         - main-card art (Dwa/Dem/Twi/Mia/Orc/Mum)
+#                                                           -> GitHub Releases of
+#                                                             GlobeRunners_images
+#                                                             (see github_assets.py)
+#                         - board assets (/assets, /cards_ex) -> game_ui/hosted_assets/
+LOCAL_TEST = False
+
+# external art root (LOCAL_TEST=True): (mount path, directory, note if missing)
 _ART_ROOT = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign")
+_ART_DIR = _ART_ROOT / "cards_framed_0.6"
+# self-contained hosting bundle (LOCAL_TEST=False), committed to this repo:
+#   hosted_assets/art/      the 15 support-faction cards (Eng_/Doc_/Mag_)
+#   hosted_assets/assets/   board assets (biomes, markers, logos, effect icons…)
+#   hosted_assets/cards_ex/  card backs + faction placeholder art
+_HOSTED_DIR = STATIC_DIR.parent / "hosted_assets"
 STATIC_MOUNTS = [
     ("/static", STATIC_DIR, "the frontend static folder is missing!"),
-    ("/art", _ART_ROOT / "cards_framed_0.6", "card images will use the placeholder"),
-    ("/assets", _ART_ROOT / "cards_assets", "board backgrounds will be plain"),
-    ("/cards_ex", _ART_ROOT / "cards_ex", "faction placeholder images will be unavailable"),
+    ("/assets", _ART_ROOT / "cards_assets" if LOCAL_TEST else _HOSTED_DIR / "assets",
+     "board backgrounds will be plain"),
+    ("/cards_ex", _ART_ROOT / "cards_ex" if LOCAL_TEST else _HOSTED_DIR / "cards_ex",
+     "faction placeholder images will be unavailable"),
 ]
 
 app = FastAPI(title="GlobeRunners - Web UI")
@@ -70,6 +92,26 @@ def index():
 @app.get("/placeholder.svg")
 def placeholder():
     return FileResponse(STATIC_DIR / "placeholder.svg", media_type="image/svg+xml")
+
+
+if not LOCAL_TEST:
+    # card art: support cards (Eng_/Doc_/Mag_) are served from the repo bundle
+    # (hosted_assets/art/); main cards redirect to their GitHub Release
+    # (github_assets.py); anything else -> placeholder.svg.
+    from github_assets import get_image_url, has_github_art  # noqa: E402
+
+    _HOSTED_ART = (_HOSTED_DIR / "art").resolve()
+
+    @app.get("/art/{filename:path}")
+    def serve_card_image(filename: str):
+        """Support art from the repo bundle; main art via GitHub Releases."""
+        local = (_HOSTED_DIR / "art" / filename).resolve()
+        if local.is_file() and local.is_relative_to(_HOSTED_ART):
+            return FileResponse(local)
+        name = filename[:-4] if filename.lower().endswith(".png") else filename
+        if has_github_art(name):
+            return RedirectResponse(get_image_url(name), status_code=302)
+        return RedirectResponse("/placeholder.svg", status_code=302)
 
 
 @app.post("/create_game_ai")
@@ -157,6 +199,14 @@ for path, directory, note in STATIC_MOUNTS:
         app.mount(path, StaticFiles(directory=str(directory)), name=path.strip("/"))
     else:
         print(f"[game_ui] {directory} not found: {note}")
+
+# card art: LOCAL_TEST=True -> local folder (mounted like the other assets);
+# LOCAL_TEST=False -> the github-redirect route registered above (no mount).
+if LOCAL_TEST:
+    if _ART_DIR.is_dir():
+        app.mount("/art", StaticFiles(directory=str(_ART_DIR)), name="art")
+    else:
+        print(f"[game_ui] {_ART_DIR} not found: card images will use the placeholder")
 
 
 # ------------------------------------------------------------------ game API

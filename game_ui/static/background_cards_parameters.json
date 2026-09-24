@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "cards_per_minute": 14,
-  "speed_px_per_s": 50,
+  "speed_px_per_s": 30,
   "card_width_px": 160,
   "size_jitter": 0.1,
   "rotation_speed_deg_per_s": 1,

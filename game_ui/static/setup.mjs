@@ -5,7 +5,7 @@ import { $, $$, api, toast } from "./utils.mjs";
 import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
-import { loadFactionThemes, applyFactionTheme } from "./theme.mjs";
+import { loadFactionThemes, applyFactionTheme, factionTheme, THEME_DEFAULTS } from "./theme.mjs";
 
 /* ------------------------------------------------------------------ deck building */
 
@@ -68,6 +68,45 @@ export const setup = {
 function setSetupTheme(factionName) {
   applyFactionTheme($("#view-setup"), factionName, "me");
 }
+
+/* ---------------- faction tooltips (setup page) ----------------
+   A short role description on every main + support faction button, revealed
+   on hover. The tooltip background follows the faction's OWN color:
+   main factions read faction_themes.json (re-painted once the async JSON
+   lands), support factions use their banner colors (SUPPORT_TIP_COLORS). */
+const FACTION_TIPS = {
+  Dwarves: "High shield, high mana curve (2–5): the natural blocker — the only faction rewarded for blocking, with Unstoppable cards. Signature: Avalanche (sends tokens back to the biome start).",
+  Demons: "Control & attrition on a low curve (1–4): pushes the opponent back and makes them discard, but the low shield makes full blocks hard. Signature: Effect cancelled.",
+  Twigs: "Speed through generosity, low curve (1–4): making the opponent draw or ramp is what makes you advance fast. Signature: Rooted (the card stays on the board one more turn).",
+  Miaous: "The deck-builder's faction: access to every condition/effect combo, but little raw advancing — choose your combinations carefully. Signature: Pet trap.",
+  Orcs: "Speed through sacrifice: discard mana or hand cards to accelerate. High curve (2–5), low defense. Signature: Unstoppable — and their Swap Cards keep plans unpredictable.",
+  Mummies: "Attrition & control, low curve (1–4): the only faction to exploit the opponent's current state, and their blocks actively penalize the opponent. Signature: Copy effect.",
+  Engineers: "Instant drops placed onto the map — they can affect BOTH players, so place them carefully. Dwelling: the refinery (tap once per turn to draw a card).",
+  Doctors: "Stack cards in the pending zone, then attach them later to a main card to add their effect to that play. Dwelling: the laboratory (tap to gain an epo pending).",
+  Mages: "Masters of nature: change the planet temperature, fix day/night, choose the cataclysm order, and rotate the Earth to keep their preferred biome.",
+};
+/* banner colors for the 3 support factions (no faction_themes.json entry) */
+const SUPPORT_TIP_COLORS = {
+  engineers: { bg: "#a36244", fg: "#fdf1e7" },
+  mages:     { bg: "#3d9df0", fg: "#f2f9ff" },
+  doctors:   { bg: "#e8555f", fg: "#fff0f0" },
+};
+function addFactionTip(btn, name, supportKey = null) {
+  const tip = document.createElement("span");
+  tip.className = "faction-tip";
+  tip.textContent = FACTION_TIPS[name] || "";
+  const paint = () => {
+    const c = supportKey
+      ? SUPPORT_TIP_COLORS[supportKey]
+      : { bg: (factionTheme(name) || THEME_DEFAULTS).accent, fg: (factionTheme(name) || THEME_DEFAULTS).onAccent };
+    tip.style.setProperty("--tip-bg", c.bg);
+    tip.style.color = c.fg;
+  };
+  paint();
+  if (!supportKey) loadFactionThemes().then(paint).catch(() => {});   // re-paint once the themes JSON lands
+  btn.appendChild(tip);
+}
+
 function renderFactions() {
   const grid = $("#faction-grid");
   grid.innerHTML = "";
@@ -75,6 +114,7 @@ function renderFactions() {
     const btn = document.createElement("button");
     btn.className = "faction-btn" + (setup.faction === f.key ? " selected" : "");
     btn.innerHTML = `<img src="${f.logo}" alt=""> <span>${f.name}</span>`;
+    addFactionTip(btn, f.name);
     btn.onclick = () => {
       setup.faction = f.key;
       setup.deck = buildStarterDeck(f.key, setup.name || f.key);
@@ -114,6 +154,7 @@ function renderSupportFactions() {
     const btn = document.createElement("button");
     btn.className = "supfac-btn" + (setup.support === f.key ? " selected" : "");
     btn.innerHTML = `<img src="${f.banner}" alt="${f.name}"> <span>${f.name}</span>`;
+    addFactionTip(btn, f.name, f.key);
     btn.onclick = () => {
       setup.support = f.key;
       setup.supportDeck = buildSupportDeck(f.key);

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
 <link rel="icon" href="/assets/GlobeRunners_icone.png">
-<link rel="stylesheet" href="/static/style.css?v=46">
+<link rel="stylesheet" href="/static/style.css?v=48">
 </head>
 <body>
 
@@ -127,13 +127,7 @@
       <span id="oppo-counts" class="chip-counts"></span>
     </div>
     <div class="mana-drop" id="oppo-mana" title="Opponent's mana zone">
-      <svg class="drop-svg" viewBox="0 0 100 130" aria-hidden="true">
-        <defs><linearGradient id="dg1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#3a1d8f"/>
-        </linearGradient></defs>
-        <path d="M50 4 C50 4 12 60 12 88 a38 38 0 0 0 76 0 C88 60 50 4 50 4 Z" fill="url(#dg1)" stroke="#241257" stroke-width="3"/>
-        <path d="M50 74 a16 16 0 1 0 16 16 a11 11 0 1 1 -11 -11 a6 6 0 1 0 6 6" fill="none" stroke="#c9b8ff" stroke-width="5" stroke-linecap="round"/>
-      </svg>
+      <img class="drop-ico" src="/assets/marker_mana.png" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">
       <div class="mana-cards" id="oppo-mana-cards"></div>
       <span class="drop-count" id="oppo-mana-count">0</span>
     </div>
@@ -229,13 +223,7 @@
       <span id="mana-info" class="chip-counts"></span>
     </div>
     <div id="dz-mana" class="mana-drop" title="Mana zone: drop a card here (1 per turn, or 3 at initialization)">
-      <svg class="drop-svg" viewBox="0 0 100 130" aria-hidden="true">
-        <defs><linearGradient id="dg2" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#3a1d8f"/>
-        </linearGradient></defs>
-        <path d="M50 4 C50 4 12 60 12 88 a38 38 0 0 0 76 0 C88 60 50 4 50 4 Z" fill="url(#dg2)" stroke="#241257" stroke-width="3"/>
-        <path d="M50 74 a16 16 0 1 0 16 16 a11 11 0 1 1 -11 -11 a6 6 0 1 0 6 6" fill="none" stroke="#c9b8ff" stroke-width="5" stroke-linecap="round"/>
-      </svg>
+      <img class="drop-ico" src="/assets/marker_mana.png" alt="" onerror="this.onerror=null;this.src='/placeholder.svg'">
       <div class="mana-cards" id="my-mana-cards"></div>
       <span class="drop-count" id="my-mana-count">0</span>
     </div>
@@ -258,7 +246,7 @@
 </div>
 
 <!-- card hover preview (3x, vertically centered) -->
-<div id="card-hover"><img id="card-hover-img" src="" alt=""></div>
+<div id="card-hover"><img id="card-hover-img" src="" alt=""><div id="card-hover-text"></div></div>
 
 <!-- card modal (zoom) -->
 <div id="card-modal" class="modal hidden">
@@ -275,6 +263,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/app.mjs?v=46"></script>
+<script type="module" src="/static/app.mjs?v=48"></script>
 </body>
 </html>

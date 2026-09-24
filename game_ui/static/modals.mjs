@@ -2,17 +2,120 @@
 "use strict";
 
 import { $, toast } from "./utils.mjs";
-import { cardEl, cardImg } from "./cards.mjs";
+import { cardEl, cardImg, CARDPOOL, SUPPORT } from "./cards.mjs";
 import { game } from "./game.mjs";
 import { stopPolling } from "./comm.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
 
 /* hover preview: the card shows at 3x in the bottom-left (delegation, robust to re-renders) */
-const hoverEl = $("#card-hover"), hoverImg = $("#card-hover-img");
+const hoverEl = $("#card-hover"), hoverImg = $("#card-hover-img"), hoverText = $("#card-hover-text");
+
+/* ---------------- condition / effect legend (hover preview text) ----------------
+   Human-readable explanations of the card `condition` / `effect` values, shown
+   under the image in the hover preview. "X" in an effect line is the card's
+   effect_number (e.g. "Move forward by X cells" → "Move forward by 3 cells").
+   Support cards have no condition/effect — they show their pool `description`. */
+const COND_TOOLTIPS = {
+  "no_condition": "Always met — the effect fires unconditionally.",
+  "block": "If card is in defense/block mode.",
+  "cataclysm": "This condition is a trigger. The top card of the cataclysm pile (one per biome) strikes its biome: all tokens on it are knocked back to the start of the biome",
+  "biome_Dwa": "If you stand on one of the Dwarves' biomes (Mountain/Ocean).",
+  "biome_Dem": "If you stand on one of the Demons' biomes (Ocean/Desert).",
+  "biome_Twi": "If you stand on one of the Twigs' biomes (Jungle/Ocean).",
+  "biome_Mia": "If you stand on one of the Miaous' biomes (Desert/Jungle).",
+  "biome_Orc": "If you stand on one of the Orcs' biomes (Mountain/Jungle).",
+  "biome_Mum": "If you stand on one of the Mummies' biomes (Desert/Mountain).",
+  "dist_ahead_sup_1": "If you are strictly more than 1 cell ahead of the opponent.",
+  "dist_ahead_sup_3": "If you are strictly more than 3 cells ahead of the opponent.",
+  "dist_behind_sup_1": "If the opponent is strictly more than 1 cell ahead of you.",
+  "dist_behind_sup_3": "If the opponent is strictly more than 3 cell ahead of you.",
+  "mana_inf_6": "If you have fewer than 6 cards in your mana zone.",
+  "mana_sup_5": "If you have more than 5 cards in your mana zone.",
+  "mana_inf_6_oppo": "If the opponent has fewer than 6 cards in their mana zone.",
+  "mana_sup_5_oppo": "If the opponent has more than 5 cards in their mana zone.",
+  "cards_in_hand_inf_4": "If you have fewer than 4 cards in hand.",
+  "cards_in_hand_sup_3": "If you have more than 3 cards in hand.",
+  "cards_in_hand_inf_4_oppo": "If the opponent has fewer than 4 cards in hand.",
+  "cards_in_hand_sup_3_oppo": "If the opponent has more than 3 cards in hand.",
+  "temp_inf_6": "If the planet temperature is less than 6.",
+  "temp_inf_11": "If the planet temperature is less than 11.",
+  "temp_sup_9": "If the planet temperature is greater than 9.",
+  "temp_sup_15": "If the planet temperature is greater than 15.",
+  "day": "If it is currently day.",
+  "night": "If it is currently night.",
+  "drop_on_board": "If any drop token (pet_trap) or trap cell exists on the board.",
+  "pending": "If you have at least one pending card in your own pending zone (Doctors).",
+  "face_point_left": "If the card's token faces left on the board. ⚠️ Condition not available in the online version of the game.",
+  "face_point_right": "If the card's token faces right on the board. ⚠️ Condition not available in the online version of the game.",
+};
+const EFF_TOOLTIPS = {
+  "advancing": "Move forward by X cells.",
+  "backward": "Move backward by X cells, clamped at cell 0.",
+  "advancing_oppo": "Opponent moves forward by X cells.",
+  "backward_oppo": "Opponent recoils by X cells, clamped at cell 0.",
+  "draw": "Draw X cards.",
+  "draw_oppo": "Opponent draws X cards.",
+  "discard": "Discard X chosen cards.",
+  "discard_oppo": "Opponent discards X chosen cards.",
+  "ramp": "Move X cards from your deck into your mana zone.",
+  "ramp_oppo": "Opponent moves X cards from their deck into their mana zone.",
+  "taxation": "Move X cards from your mana zone to your discard pile.",
+  "taxation_oppo": "Opponent moves X cards from their mana zone to their discard pile.",
+  "jump": "Jump by the amount of your basic advancing value.",
+  "unstoppable": "Ignores any negative effects.",
+  "avalanche": "All players tokens on the Mountain (MO) biome are knocked back to MO's first cell, then you apply your basic advancing from there.",
+  "grappling_hook": "You advance by your basic value, then copy the net advancing of the opponent's card facing you (same trip-chain position).",
+  "effect_canceled": "The effect of the facing card is canceled.",
+  "copy_effect": "The effect of the facing card is copied and applied to you.",
+  "pet_trap": "Instant, leaves a pet trap token (-1 knockback) on your current cell.",
+  "rooted": "The card stays on the board for another turn, move it back to the start of its trip-chain during cleaning phase.",
+  "wrecking_ball": "Instant, removes the opponent's dwelling card.",
+  "swap_cards": "Instant (optional), swap two cards in your trip-chain.",
+};
+
+/* the {condition, effect} legend lines for a card id (null = no legend: card
+   back, unknown id, or pool not loaded yet) */
+function hoverCardText(id) {
+  if (!id || id === "__back__") return null;
+  const main = CARDPOOL[id];
+  if (main && main.condition) {
+    const effectTxt = EFF_TOOLTIPS[main.effect] || main.effect || "";
+    // the pool stores effect_number signed (direction baked in: backward/discard are negative) —
+    // the legend lines already carry the direction, so show the magnitude ("Move backward by 1 cells")
+    const n = (main.effect_number != null && !Number.isNaN(main.effect_number)) ? Math.abs(main.effect_number) : null;
+    return {
+      condition: COND_TOOLTIPS[main.condition] || main.condition,
+      effect: n != null ? effectTxt.replace(/X/g, n) : effectTxt,
+    };
+  }
+  const sup = SUPPORT[id];
+  if (sup && sup.description) return { condition: null, effect: sup.description };
+  return null;
+}
+
 export function showCardHover(id) {
   if (!id) return;
   hoverImg.onerror = () => { hoverImg.onerror = null; hoverImg.src = "/placeholder.svg" };
   hoverImg.src = id === "__back__" ? "/assets/GR_cards_back.png" : cardImg(id);
+  const t = hoverCardText(id);
+  if (t) {
+    hoverText.innerHTML = "";
+    if (t.condition) {
+      const row = document.createElement("div"); row.className = "ch-row";
+      const lab = document.createElement("span"); lab.className = "ch-label"; lab.textContent = "Condition";
+      row.appendChild(lab); row.appendChild(document.createTextNode(t.condition));
+      hoverText.appendChild(row);
+    }
+    if (t.effect) {
+      const row = document.createElement("div"); row.className = "ch-row";
+      const lab = document.createElement("span"); lab.className = "ch-label"; lab.textContent = "Effect";
+      row.appendChild(lab); row.appendChild(document.createTextNode(t.effect));
+      hoverText.appendChild(row);
+    }
+    hoverText.classList.add("show");
+  } else {
+    hoverText.classList.remove("show");
+  }
   hoverEl.classList.add("show");
 }
 export function hideCardHover() { hoverEl.classList.remove("show"); }
