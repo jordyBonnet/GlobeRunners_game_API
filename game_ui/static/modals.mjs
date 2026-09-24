@@ -4,7 +4,7 @@
 import { $, toast } from "./utils.mjs";
 import { cardEl, cardImg, CARDPOOL, SUPPORT } from "./cards.mjs";
 import { game } from "./game.mjs";
-import { stopPolling } from "./comm.mjs";
+import { stopPolling, teardownWs } from "./comm.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
 
 /* hover preview: the card shows at 3x in the bottom-left (delegation, robust to re-renders) */
@@ -229,7 +229,7 @@ $("#btn-endgame-ok").onclick = () => {
 function leaveGame() {
   stopPolling();
   document.querySelectorAll(".discard-pile-popup").forEach((m) => m.remove());
-  if (game.ws) { try { game.ws.close(); } catch {} game.ws = null; }
+  teardownWs();   // close the socket, kill any pending reconnect, settle in-flight action promises
   game.state = null; game.id = null; game.selected.clear();
   game.logTurnsRendered = 0;
   $("#log-body").innerHTML = "";

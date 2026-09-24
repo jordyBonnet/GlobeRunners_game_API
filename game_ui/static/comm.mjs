@@ -17,15 +17,30 @@ export function wsUrl() {
 }
 
 let pendingResolvers = [];   // one resolver per WS message waiting for a reply
+let wsGen = 0;               // generation counter — a replaced/closed socket's late events are stale
+let reconnectTimer = null;   // the pending "retry in 2 s" timer (one at a time)
+let retryToasted = false;    // "Connection lost" is toasted once per disconnect period, not per retry
+
+/* In-flight actions never get their reply after a socket dies: settle them with a
+   rejection-shaped sentinel so awaiting UI (discard/defend popups, the init-mana loop)
+   un-hangs, toasts and lets the player retry — the 2.5 s poll re-syncs the state anyway. */
+function settlePending() {
+  if (!pendingResolvers.length) return;
+  const resolvers = pendingResolvers; pendingResolvers = [];
+  const r = { success: false, message: "Connection lost — the action may not have gone through" };
+  for (const fn of resolvers) fn(r);
+}
 
 export function connectWs() {
   if (game.ws && game.ws.readyState <= WebSocket.OPEN) return;
-  setConn(false);
+  const gen = ++wsGen;   // invalidate the previous socket's handlers (leaveGame / reconnect races)
   const ws = new WebSocket(wsUrl());
   game.ws = ws;
+  const isLive = () => gen === wsGen && game.ws === ws;
 
-  ws.onopen = () => setConn(true);
+  ws.onopen = () => { if (isLive()) { retryToasted = false; setConn(true); } };
   ws.onmessage = (ev) => {
+    if (!isLive()) return;   // reply that outlived its socket — the new socket owns the conversation
     let data;
     try { data = JSON.parse(ev.data); } catch { return; }
     // a rejection has the shape {success: false, message}; a game state has no 'success' key
@@ -34,7 +49,22 @@ export function connectWs() {
     const resolver = pendingResolvers.shift();
     if (resolver) resolver(data);
   };
-  ws.onclose = () => setConn(false);
+  ws.onclose = () => {
+    if (!isLive()) return;   // stale socket (a newer one exists / we left the game) — ignore
+    settlePending();
+    setConn(false);          // in-game: schedules the 2 s retry
+  };
+  ws.onerror = () => { /* onclose always follows; nothing to do */ };
+}
+
+/* Called when leaving the game: invalidates the socket (no spurious reconnect with the
+   old game id), closes it, and settles any in-flight action promises. */
+export function teardownWs() {
+  wsGen++;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  const had = !!game.ws;
+  if (had) { try { game.ws.close(); } catch {} game.ws = null; }
+  settlePending();
 }
 
 export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight = null, tempChange = null, cataclysmOrder = null, rotation = null, swapWith = null) {
@@ -55,14 +85,16 @@ export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight
      — the position of the OWN chain entry the card swaps with (a play, a board
      placeholder, a rooted card); omitted when the card is played without a swap. */
   return new Promise((resolve) => {
+    let inFlight = false;   // the resolver is queued (sent, reply pending) — a close settles it,
+                            // and a retry must not queue it twice (double-send / mis-resolved reply)
     const doSend = () => {
       if (!game.ws || game.ws.readyState !== WebSocket.OPEN) {
-        toast("Connection lost — retrying…");
+        if (!retryToasted) { retryToasted = true; toast("Connection lost — retrying…"); }
         connectWs();
         setTimeout(doSend, 1500);
         return;
       }
-      pendingResolvers.push(resolve);
+      if (!inFlight) { inFlight = true; pendingResolvers.push(resolve); }
       const msg = { cards: cards || [], to: to || "", mode: mode || "", pendings };
       if (cell != null) msg.cell = cell;
       if (dayNight != null) msg.day_night = dayNight;
@@ -78,9 +110,22 @@ export function sendAction(cards, to, mode, pendings = [], cell = null, dayNight
 
 function setConn(ok) {
   const el = $("#conn-state");
-  el.textContent = ok ? (game.id ? `● connected to game ${game.id}` : "● connected") : "○ disconnected";
-  el.className = ok ? "conn-ok" : "conn-bad";
-  if (!ok && game.id) setTimeout(connectWs, 2000);   // auto-reconnect
+  if (ok) {
+    el.textContent = game.id ? `● connected to game ${game.id}` : "● connected";
+    el.className = "conn-ok";
+    return;
+  }
+  // in-game → keep retrying until the socket is back (e.g. after a host sleep/wake);
+  // out of a game (setup page) → just report disconnected, no reconnect loop
+  if (game.id) {
+    el.textContent = "○ reconnecting…";
+    el.className = "conn-bad";
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectWs, 2000);
+  } else {
+    el.textContent = "○ disconnected";
+    el.className = "conn-bad";
+  }
 }
 
 /* ---------------- state polling (see the opponent's actions) ---------------- */
