@@ -185,6 +185,26 @@ Creates a game the human plays immediately, with the Robot already in:
 `random_ai_deck()` builds a 20-main + 10-support deck for the Robot (never plays
 support cards, but puts them in mana — see `ai_driver.py`).
 
+## Game-over backup (`game_ui/hf_backup.py`)
+
+Every finished game is backed up to the Hugging Face dataset
+`jordyBonnet/globerunners-games` (overridable with `GLOBE_BACKUP_REPO`) as
+`games/<game_id>.json` — the **full** unmasked state.
+
+- The **engine** exposes a rule-pure hook: `ge.set_game_over_hook(fn)` / `fn(game_id,
+  current_game)`, fired **once per game** from the single exit of
+  `handle_websocket_message` when the state transitions to `"game over"`
+  (win, mid-chain win, or deadlock — human OR robot, both go through that
+  function). A failing callback is caught + logged, never raised.
+- **`hf_backup.register()`** (called at `app.py` startup) installs
+  `hf_backup.on_game_over`, which serializes `current_game.to_json()` and uploads
+  it in a **background daemon thread** (`huggingface_hub.upload_file`, lazy
+  import) — a slow network never blocks the WebSocket, and a backup failure never
+  breaks the game (logged, swallowed). Token resolution: `HF_TOKEN` (auto-injected
+  on HF Spaces) or a cached `hf auth login` token locally.
+- Test: `tests/_game_over_hook.py` (hook fires exactly once + real upload round-trip
+  with cleanup).
+
 ## Invariants
 
 - **Masking**: `personalized_state` returns `current_game_json(player, …)` — the
@@ -203,6 +223,10 @@ support cards, but puts them in mana — see `ai_driver.py`).
   URLs).
 - **One server**: the frontend only talks to this server; `API.py` is embedded, not
   a separate process, in this deployment.
+- **Game-over backup is fire-and-forget**: the engine only *notifies*
+  (`_fire_game_over_hook`, exceptions swallowed); all I/O lives in
+  `game_ui/hf_backup.py` on a daemon thread. Never add network calls to the
+  engine, and never let a backup failure surface into a game response.
 
 ## Change log
 
@@ -215,6 +239,13 @@ support cards, but puts them in mana — see `ai_driver.py`).
   (`no-cache`, no validator, rotating signed blob URL) was re-downloaded by
   strict browsers on every hand re-render (the poll is ~2.5 s), so the
   main-faction cards flickered every poll.
+- **2026-09-24** — Game-over backup: engine gained the rule-pure hook
+  `ge.set_game_over_hook(fn)` (fired once, from the single exit of
+  `handle_websocket_message`, on the transition to `"game over"`); new
+  `game_ui/hf_backup.py` (registered at startup) uploads each finished game's
+  full state to the HF dataset `jordyBonnet/globerunners-games` on a background
+  thread; `huggingface-hub` added to the dependencies; test
+  `tests/_game_over_hook.py`.
 - **2026-09-23** — `LOCAL_TEST` toggle for card art: `True` → local
   `cards_framed_0.6` mount (previous behavior); `False` → new route
   `serve_card_image()`: support art served from the new **repo bundle

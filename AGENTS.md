@@ -7,7 +7,7 @@
 - `engine/game_engine.py` — **the only layer that knows the rules**. API, UI, AI and analysis call it, never the other way around.
 - `models.py` — shared Pydantic models (`Card`, `PlayerState`, `GameState`; `engine_version` records the rules version a game was created under).
 - `API.py` — standalone REST + WS layer (port 8000).
-- `game_ui/` — full web app (port 8001): vanilla frontend, `ai_driver.py` (Robot).
+- `game_ui/` — full web app (port 8001): vanilla frontend, `ai_driver.py` (Robot), `hf_backup.py` (backs up each finished game to the HF dataset `jordyBonnet/globerunners-games` via the engine's `set_game_over_hook`, fired once from `handle_websocket_message` on the transition to `"game over"` — the engine stays I/O-free; see *Game-over backup* in `game_ui/APP_OVERVIEW.md`).
 - `player_ai/` — `PlayerAI` heuristics, orchestrated by `game_ui/ai_driver.py`.
 - `games/` — `games.db` (SQLite, final state of games) + `games/analysis/` (replay, port 8017).
 - `cards/cardpool.parquet` — **single source of truth for cards** (~7600), read directly by engine/AI/analysis.

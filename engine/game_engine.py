@@ -428,6 +428,32 @@ def _end_turn(current_game, message):
     current_game.state = f"waiting for both players to mana or pass"
     return current_game, True, message
 
+# ---------------------------------------------------------------------------
+# Game-over hook (optional): called ONCE per game, when the state transitions
+# to "game over" (win, mid-chain win, or deadlock). The engine stays rule-pure:
+# the callback does whatever I/O it wants (e.g. game_ui/hf_backup.py backing the
+# game up to a Hugging Face dataset) and a failing callback never breaks the
+# game (exceptions are caught + logged). Register with set_game_over_hook(fn).
+# ---------------------------------------------------------------------------
+_game_over_hook = None
+
+
+def set_game_over_hook(fn):
+    """Register `fn(game_id, current_game)` to be called once when a game ends.
+    Pass None to clear. Exceptions inside `fn` are caught and logged."""
+    global _game_over_hook
+    _game_over_hook = fn
+
+
+def _fire_game_over_hook(game_id, current_game):
+    if _game_over_hook is None:
+        return
+    try:
+        _game_over_hook(game_id, current_game)
+    except Exception as e:
+        print(f'\t\t[engine] game-over hook failed (game {game_id}): {e!r}')
+
+
 def handle_websocket_message(game_id: str, player: PlayerState):   # main part of the game code
     """ handle websocket message this is the main code of the game
     messages are expected to be in the format:
@@ -439,6 +465,7 @@ def handle_websocket_message(game_id: str, player: PlayerState):   # main part o
     }
     """
     conn, c, current_game = get_current_game(game_id)
+    was_over = current_game.state == "game over"
     
     success = True
     message = f"Action successful for {player.name}"
@@ -613,6 +640,9 @@ def handle_websocket_message(game_id: str, player: PlayerState):   # main part o
     c.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (current_game.to_json(), game_id))
     conn.commit()
     conn.close()
+    # game ended during this message -> fire the (optional) game-over hook once
+    if not was_over and current_game.state == "game over":
+        _fire_game_over_hook(game_id, current_game)
     return current_game_json(player.name, current_game)
 
 # ---------------------------------------------------------------------------

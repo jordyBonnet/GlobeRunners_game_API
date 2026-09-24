@@ -48,6 +48,7 @@ from API import CreateGameRequest, check_deck, app as api_app  # noqa: E402
 import engine.game_engine as ge  # noqa: E402
 from models import PlayerState  # noqa: E402
 from ai_driver import random_ai_deck, run_ai_loop  # noqa: E402
+import hf_backup  # noqa: E402
 
 STATIC_DIR = HERE / "static"
 
@@ -81,6 +82,11 @@ STATIC_MOUNTS = [
 ]
 
 app = FastAPI(title="GlobeRunners - Web UI")
+
+# game-over backup: every finished game is uploaded (background thread) to the
+# Hugging Face dataset — see game_ui/hf_backup.py. I/O stays out of the engine;
+# failures are logged, never raised.
+hf_backup.register()
 
 
 # ------------------------------------------------------------------ routes UI
