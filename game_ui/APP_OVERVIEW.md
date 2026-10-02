@@ -67,7 +67,7 @@ only ever speaks to the HTTP/WS surface.
 | `GET /art/*` | (mount, `LOCAL_TEST=True`) **or** `serve_card_image()` (`LOCAL_TEST=False`) | main-card art (`<card_id>.png`) + support art (`<card_path>`) — local folder, or **server-cached** GitHub Release of `GlobeRunners_images` (`hosted_assets/art_cache/`, immutable `Cache-Control`) (see *Card art (`/art`)*) |
 | `GET /assets/*` | (mount) | game assets (biomes, markers, logos, engineer drops) |
 | `GET /cards_ex/*` | (mount) | faction placeholder art (dwelling card) |
-| `*` (everything else) | `api_app` (mounted at `/`) | `/create_game`, `/join_game/{id}`, `/cardpool`, `/game/{id}`, `/ws/{gid}/{player}`, … |
+| `*` (everything else) | `api_app` (mounted at `/`) | `/create_game`, `/join_game/{id}`, `/cardpool`, `/support_factions`, `/starter_decks`, `/game/{id}`, `/ws/{gid}/{player}`, … |
 
 Route resolution order: the four **route** handlers first, then the **static
 mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount at
@@ -229,6 +229,8 @@ Every finished game is backed up to the Hugging Face dataset
   engine, and never let a backup failure surface into a game response.
 
 ## Change log
+
+- 2026-10-02 — **no change to `app.py`** (route map updated only): `API.py` gained `GET /starter_decks` — the designer 20-card starter decks read from `cards/starter_decks/*.txt` (see `cards/starter_decks/README.md`) — plus a `Cache-Control: no-store` middleware on `/cardpool`, `/support_factions`, `/starter_decks` (without it the browser heuristically caches them, so an edited file + restart would still serve the old list). Both reach the UI through the existing catch-all `api_app` mount; the frontend side is documented in `static/app-js-overview.md` (same date).
 
 - **2026-09-24** — main-card art is now **server-side cached**: `serve_card_image`
   fetches each GitHub Release asset **once** into

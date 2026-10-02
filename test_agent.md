@@ -9,6 +9,7 @@
 uv run python tests/_diag.py       # engine unit tests (NOTE: writes to games.db)
 uv run python tests/_deck_rules.py # deck-rules validation (deck_rules.py: size/faction/duplicates, max-5 per condition family — numeric variants merged — and per effect, face_point_* refused, support 2×5; pure, no games.db)
 uv run python tests/_ai_deck.py    # AI deck builder (all 18 main×support combinations × 25 builds = 6480 checks: deck rules + support-faction strategy rules + general + per-faction rules + randomness; pure, no games.db)
+uv run python tests/_starter_decks.py # designer starter decks (cards/starter_decks/*.txt -> GET /starter_decks): the 6 files are read + keyed by card_id prefix, each list is 20 cards / single-copy / single faction / all in the PLAYABLE pool / no face_point_* / check_main_deck clean, all 18 main×support combinations pass check_deck, the route + the no-store middleware are registered; pure, no games.db)
 uv run python tests/_copy_effect.py # copy_effect rule (also writes to games.db)
 uv run python tests/_pet_trap.py    # pet_trap rule (also writes to games.db; 2 games are persisted for the replay self-test)
 uv run python tests/_drop_on_board.py # drop_on_board condition (also writes to games.db)

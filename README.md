@@ -20,6 +20,7 @@ in **Parquet** (polars), vanilla JS/CSS/HTML frontend.
 ├── games/             # SQLite database of played games (games.db) + game analysis
 │   └── analysis/      #   dedicated web app for replay/analysis (see its README)
 ├── cards/             # cardpool.parquet — the pool of ~7600 cards (source of truth)
+│   └── starter_decks/ #   the 6 designer-authored 20-card starter decks (GET /starter_decks)
 ├── tests/             # E2E / smoke tests and diagnostic scripts
 └── pyproject.toml     # Dependencies (uv): fastapi, uvicorn, polars, numpy, pillow, websockets
 ```
@@ -121,6 +122,8 @@ python API.py          # -> http://127.0.0.1:8000
 | POST | `/join_game/{game_id}` | p2 joins, initialization, personalized state |
 | GET | `/game/{game_id}` | **full** state (hidden info included — debug/analysis) |
 | GET | `/cardpool` | card pool as JSON |
+| GET | `/support_factions` | support faction cards as JSON |
+| GET | `/starter_decks` | designer 20-card starter deck per main faction (`{"Dwa": [...], …}`, read from `cards/starter_decks/*.txt`) |
 | WS | `/ws/{game_id}/{player_name}` | sends 1 action message → receives the personalized state |
 
 The WebSocket rejects out-of-turn actions (checked against the official state in

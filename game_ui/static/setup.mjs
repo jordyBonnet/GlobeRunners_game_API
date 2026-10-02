@@ -2,14 +2,34 @@
 "use strict";
 
 import { $, $$, api, toast } from "./utils.mjs";
-import { CARDPOOL, loadCardpool, loadSupportCards, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey, checkMainDeck, condFamily } from "./cards.mjs";
+import { CARDPOOL, loadCardpool, loadSupportCards, loadStarterDecks, STARTER_DECKS, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey, checkMainDeck, condFamily } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
 import { loadFactionThemes, applyFactionTheme, factionTheme, THEME_DEFAULTS } from "./theme.mjs";
 
 /* ------------------------------------------------------------------ deck building */
 
+/* The faction buttons give out the DESIGNER starter deck: the authored 20-card list
+   of that faction (`cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt`,
+   served by GET /starter_decks — see cards.mjs STARTER_DECKS / API.py).
+   Fallback = the old seeded random build, used when no authored list is loaded yet
+   (or the endpoint is unreachable), and when an authored list FAILS the deck rules
+   — in that case a one-shot toast says so instead of silently substituting. */
+const starterFallbackWarned = new Set();
+
 function buildStarterDeck(factionKey, seedStr) {
+  const authored = STARTER_DECKS[factionKey];
+  if (authored && authored.length) {
+    const poolReady = Object.keys(CARDPOOL).length > 0;
+    const problems = poolReady ? checkMainDeck(authored) : ["card pool not loaded"];
+    if (!problems.length) return [...authored];
+    if (poolReady && !starterFallbackWarned.has(factionKey)) {
+      starterFallbackWarned.add(factionKey);
+      const fname = (FACTIONS.find((f) => f.key === factionKey) || {}).name || factionKey;
+      toast(`Designer starter deck for ${fname} breaks ${problems.length} deck rule(s) — using a random build instead.`);
+    }
+  }
+
   const pool = Object.values(CARDPOOL).filter((c) => c.faction && c.faction.startsWith(factionKey));
   if (!pool.length) return [];
   // deterministic for the same name: the deck is identical if you reload the page
@@ -419,8 +439,15 @@ function stopWaiting() {
 /* ------------------------------------------------------------------ boot */
 export async function boot() {
   initSetup();
-  const results = await Promise.allSettled([loadCardpool(), loadSupportCards(), loadFactionThemes()]);
+  const results = await Promise.allSettled([loadCardpool(), loadSupportCards(), loadStarterDecks(), loadFactionThemes()]);
   for (const r of results) if (r.status === "rejected") toast(`Cannot load the cards: ${r.reason.message}`);
+  // a faction picked BEFORE the pools landed got the random fallback (no authored list
+  // yet) — rebuild it now so the designer starter deck is what is actually shown/played
+  if (setup.faction && !$("#csv-input").files.length) {
+    setup.deck = buildStarterDeck(setup.faction, setup.name || setup.faction);
+    renderDeckPreview();
+    updateLaunchBtn();
+  }
   // re-render the support section now that the card data is available
   renderSupportFactions();
   if (setup.support) renderSupportPreview();

@@ -26,6 +26,23 @@ export async function loadSupportCards() {
   supportLoaded = true;
 }
 
+/* ---------------- designer starter decks (authored lists) ----------------
+   The 20-card starter deck of each MAIN faction, authored by the designer in
+   `cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt` and served by
+   `GET /starter_decks` (see API.py). Edit the file + restart to change them.
+   faction key (Dwa/Dem/Twi/Mia/Orc/Mum) -> [card_id x20]. */
+export const STARTER_DECKS = {};
+let starterLoaded = false;
+
+export async function loadStarterDecks() {
+  if (starterLoaded) return;
+  const decks = await api("/starter_decks");
+  for (const [key, ids] of Object.entries(decks || {})) {
+    if (Array.isArray(ids) && ids.length) STARTER_DECKS[key] = ids;
+  }
+  starterLoaded = true;
+}
+
 /* ---------------- card helpers (single lookup path) ----------------
    All card display goes through these — NEVER read CARDPOOL directly for a
    card that might be a support card. */

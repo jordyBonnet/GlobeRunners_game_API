@@ -9,6 +9,9 @@ POST /join_game/{game_id}      body {"name": str, "deck": [...]}
                                   returns p2's personalized state
 GET  /game/{game_id}           -> full game state as JSON (no hidden info, for debugging/analysis)
 GET  /cardpool                 -> card pool as a list of dicts
+GET  /support_factions         -> support faction cards as a list of dicts
+GET  /starter_decks            -> designer starter deck per main faction
+                                   {"Dwa": [20 card_id], "Dem": [...], ...}
 
 WS   /ws/{game_id}/{player_name}
                                the client sends one JSON message at a time:
@@ -43,6 +46,41 @@ import deck_rules
 # The card id in a deck is `card_name`; its art is `card_path` (served at /art/<card_path>).
 SUPPORT_CARDS_PATH = Path(__file__).resolve().parent / "cards" / "support_factions.parquet"
 
+# Designer-authored starter decks — one file per main faction, one card_id per line:
+#   cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt
+# Edit the file and restart to change what the setup page's "Starter decks" buttons
+# give out (the frontend re-validates the list and falls back to a random build if
+# it breaks a deck rule). See cards/starter_decks/README.md for their provenance.
+STARTER_DECKS_DIR = Path(__file__).resolve().parent / "cards" / "starter_decks"
+_CARD_ID_RE = re.compile(r"^[A-Za-z]{3}\d+_[0-9a-f]{4,}$")
+_starter_decks_cache: dict[str, list[str]] | None = None
+
+
+def load_starter_decks() -> dict[str, list[str]]:
+    """faction key -> the authored main card_ids (read once, then cached).
+
+    The faction key is taken from the card_id prefix (Dwa/Dem/Twi/Mia/Orc/Mum), so
+    the file NAMES are not part of the contract. A file whose cards mix two faction
+    prefixes is ignored (with a warning) rather than half-served.
+    """
+    global _starter_decks_cache
+    if _starter_decks_cache is None:
+        decks: dict[str, list[str]] = {}
+        if STARTER_DECKS_DIR.is_dir():
+            for path in sorted(STARTER_DECKS_DIR.glob("*.txt")):
+                ids = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines()
+                       if _CARD_ID_RE.match(ln.strip())]
+                if not ids:
+                    print(f"[API] {path.name}: no card_id found — ignored")
+                    continue
+                key = ids[0][:3]
+                if any(i[:3] != key for i in ids):
+                    print(f"[API] {path.name}: mixed faction prefixes — ignored")
+                    continue
+                decks[key] = ids
+        _starter_decks_cache = decks
+    return _starter_decks_cache
+
 
 def load_support_cards() -> "pl.DataFrame":
     """The support faction card pool (empty DataFrame if the file is missing)."""
@@ -57,6 +95,19 @@ class CreateGameRequest(BaseModel):
 
 
 app = FastAPI(title="GlobeRunners API")
+
+
+@app.middleware("http")
+async def no_store_card_data(request, call_next):
+    """`/cardpool`, `/support_factions` and `/starter_decks` are read live from
+    cards/*.parquet and cards/starter_decks/*.txt. Without an explicit directive the
+    browser heuristically caches them, so after the designer edits a starter deck (or
+    the cardpool) and restarts the server, a plain reload would still serve the OLD
+    list. `no-store` keeps the setup page honest about what is on disk."""
+    response = await call_next(request)
+    if request.url.path in ("/cardpool", "/support_factions", "/starter_decks"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 # "turn N - waiting for first/second player (NAME) to play" -> only NAME may act
 _TURN_RE = re.compile(r"waiting for (?:first|second) player \((.+?)\) to play")
@@ -131,6 +182,18 @@ def support_factions():
     """Support faction cards (engineers / mages / doctors) as a list of dicts.
     The setup page uses it to render the support faction selection + its 10-card deck."""
     return load_support_cards().to_dicts()
+
+
+@app.get("/starter_decks")
+def starter_decks():
+    """The designer-authored 20-card starter deck of each main faction
+    ({"Dwa": [card_id x20], ...}), read from cards/starter_decks/*.txt.
+
+    The setup page's "Starter decks" buttons serve these lists. They are NOT
+    validated here: the frontend checks them against the deck rules and falls back
+    to a seeded random build when a list is missing or invalid, and `check_deck`
+    (deck_rules.py) stays the hard gate at launch."""
+    return load_starter_decks()
 
 
 @app.websocket("/ws/{game_id}/{player_name}")
