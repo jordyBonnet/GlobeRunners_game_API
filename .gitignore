@@ -17,3 +17,9 @@ nul
 
 # Runtime card-art cache (lazy GitHub release downloads, game_ui/app.py)
 game_ui/hosted_assets/art_cache/
+
+# Remotion video sub-project (own Node project + generated art/renders) — not part of the game repo
+video/
+
+# AI games to check the balance of the game
+balance_lab/

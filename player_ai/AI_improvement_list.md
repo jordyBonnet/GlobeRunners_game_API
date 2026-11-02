@@ -223,6 +223,130 @@ Left for §C/§D: the deliberate self-harm denial exception (#16), drop placemen
 
 ---
 
+## J. Effect-coverage audit — every mechanic actually USED — ✅ DONE (2026-11-09)
+
+**Question:** does the Robot actually USE every main-faction special effect and every support-faction
+card? `tests/_ai_effect_coverage.py` now measures it: it plays real AI-vs-AI games (both seats driven
+by `ai_driver.ai_decide` through `run_lab._drive`, into temp shards — never `games.db`/`balance_lab.db`)
+and reports, per pool effect / condition / support card: plays at resolution (FIRED vs condition-not-met
+vs blocked vs canceled), whether the required CHOICE fields were sent (`swap_with`, `cell`, `day_night`,
+`temp_change`, `cataclysm_order`, `rotation`, `pendings`), where every support copy ENDED (played vs
+burned into the mana zone), and self-checks for illegal messages (must stay 0).
+
+**Baseline (before this section, 18 games / 36 seats):** all 22 pool effects and all 6 faction special
+effects were played — but `Apocalypticritual` 0 times, `thermic_flux` ~0, `nobodymoves` 3 times with
+19/24 copies ending the game in the mana zone, and ep0 stockpiled in pending zones (~50 copies at game
+end over 36 seats). Four causes, all fixed:
+
+1. **#44 `put_mana` deleted the Mages' mechanics before they could be used (P0).** `_mana_keep_value`
+   ranked mains on a 13..17 scale (`18 - mana`) but support cards on the *instantaneous* `_support_value`
+   scale — so `nobodymoves` (6 while no threat is live THIS tick) and `Apocalypticritual` (12 while no
+   strike is imminent) sank BELOW every main and were the FIRST cards sacrificed at INIT and in the mana
+   phases. `put_mana` sorts by keep-value and burns the three lowest: the Mages' answer cards were being
+   deleted by design. **Fix:** new `_support_keep_value(name)` (durable keep-value) = `max(_support_value,`
+   `ANSWER_KEEP 26 / RITUAL_KEEP 24 / DROP_KEEP 20)` for the cards whose moment has not come yet —
+   `nobodymoves` (the only answer to a race-winning play), the ritual (a PERMANENT pile order, while I own
+   any cataclysm card: `_cataclysm_relevant`) and engineer drops (placeable on a later turn even when every
+   cell is busy). A card that is genuinely spent (a flux whose ±4 can never improve my own temperature
+   cards, a 2nd dwelling with one on the board, a neutral `Celestial_reversal`) keeps its low value and is
+   still sacrificed — that part of #6 was correct.
+2. **#45 The cataclysm gate conflated "play now" with "keep" (P1).** `_cataclysm_soon()` (an affordable /
+   already-declared cataclysm play) is the right gate for REORDERING NOW — the value depends on where the
+   tokens stand, so reordering for a strike turns away is stale — but it is the wrong gate for KEEPING the
+   card. Split into `_cataclysm_soon()` (play; now also true when the OPPONENT declared a cataclysm play,
+   since their strike knocks both tokens back) and `_cataclysm_relevant()` (keep: any cataclysm main in
+   hand or deck).
+3. **#46 The AI's Mages decks had nothing to strike with (P1, `game_ui/ai_deck.py`).** The Mages profile
+   required extreme-temp / day-night / own-biome cards but no `cataclysm` card: 55 % of lab-built Mages
+   decks contained ZERO of them, so even a held ritual had no strike to order. Added the third support-axis
+   requirement `2-3 cataclysm cards` (tier 1, same idea as the Engineers' 5 `drop_on_board` and the Doctors'
+   5 `pending`): the profile minimums still total 20, and `tests/_ai_deck.py` now checks it (6630 checks).
+4. **#47 The three MAIN-pool INSTANTS were priced as conditioned effects (P1).** `pet_trap`,
+   `wrecking_ball` and `swap_cards` fire inside `ge._apply_instant_effects` at PLAY time: not
+   condition-gated, not blockable, not effect-cancelable (their `apply_effect` branches are no-op markers).
+   `play_card` scored their tempo `if met else 0` (and 0 when blocked), and `_choose_swap_target` was only
+   priced for an UNBLOCKED swap card — so a not-met Miaous trap, a not-met wrecking_ball or a decoy swap
+   into a defended column all looked worthless. **Fix:** `INSTANT_EFFECTS` + `_instant_tempo(row)`, added to
+   every scoring branch of `play_card` / `_entry_value` (blocked, locked and unmet included), and the swap
+   target is always priced. Mirror rule in `_facing_gain` / `_denied_effect_value`: an instant facing me
+   denies nothing, and `COPYABLE_EFFECTS` (the effects with a real `apply_effect` branch) is what a facing
+   `copy_effect` can actually replay — rooted tokens, grappling, cancels and instants copy nothing.
+5. **#48 ep0 / bloodtest left in the pending zone (P1, the user's doubt).** #8 only attached ep0 as tempo
+   with a laboratory or `len(zone) >= 2`, i.e. the LAST pending of the zone was never spent even when nothing
+   needed it — ep0 stockpiles (and the `bloodtest` rule had the same shape via `_pending_condition_count()`,
+   which counts the whole DECK). **Fix:** `_pending_condition_imminent()` — the zone must stay non-empty only
+   while a `pending`-condition MAIN of mine resolves THIS turn (in hand, or already declared in my chain);
+   cards still in the deck do not count, because the zone is refillable (free laboratory tap, a placement on
+   a later fallback tick) before they are drawn. `may_spend` now gates both ep0 and bloodtest; the `virus`
+   (self-knockback) and no-trigger cases are unchanged, and a play that already crosses the finish line on
+   its own attaches nothing (the engine stops the chain at the win, so the +1 would be consumed for nothing).
+   Also: a zone that already holds ≥3 pendings makes further copies dead weight (`_support_value` floors them
+   to 10, below the mains, so `put_mana` converts them into mana tokens).
+   **Verified:** the ep0/landmine cases were re-read against the engine — a landmine on the path does NOT void
+   the +1 (`process_advancing`'s `was_blocked` rule lets the pending's own step walk past the mine), so the
+   ep0 now attaches there too.
+
+**After (same harness, 144 games / 288 seats, 96 per support faction):** every one of the 15 support cards
+and all 22 pool effects is used — `Apocalypticritual` 26 plays (was 0), `nobodymoves` 121 with 3 burned
+(was 3 played / 19 burned per 36 seats), `thermic_flux` 19, drops/dwellings unchanged and healthy,
+`swap_with` on 24 of 99 swap_cards plays, 526 pending placements with 264 attachments (202 ep0), 0 illegal
+messages. `thermic_flux` stays the rarest by design: the temperature is permanent, so if ±4 cannot strictly
+improve my own `temp_*` total the card IS dead and sacrificing it for mana is right (a Mages deck built with
+2-4 extreme-temp cards at a temperature rolled near 10 is often in exactly that situation — a card/deck
+design observation, not an AI bug).
+Tests: `tests/_ai_effect_coverage.py` (the audit), + new checks in `_ai_a2_doctors.py` (39), `_ai_a3_mages.py`
+(46), `_ai_e_reactive.py` (54), `_ai_deck.py` (6630). `tests/_ai_b_conditions.py`'s stale "block is always
+met" check was corrected to the 2026-09-22 engine rule (it now passes, 63 checks — the pre-existing failure
+noted in §I is gone).
+
+**Re-confirmed 2026-11-02 with the final code** (`python tests/_ai_effect_coverage.py --games 6
+--workers 6`, 108 games / 216 seats — after the `_entry_value` instant double-count fix and the
+`_completes_win` / `_choose_attachment` estimator unification): all 22 pool effects, all 15 support
+cards, **0 illegal messages** again — `Apocalypticritual` 21 plays, `nobodymoves` 97 played vs 3
+burned, `thermic_flux` 14, 398 pending placements → 206 attachments (158 ep0), `swap_with` on 19 of
+76 accepted `swap_cards` plays, dwellings 206 placements / 576 taps. #47 is visible in the numbers:
+`pet_trap` 63 plays over 216 seats vs 49 in the pre-#47 sample of the same size — the traps whose
+condition is unmet (and the ones aimed at a defended column) are now worth playing, because their
+effect has already fired at play time. Balance re-run of that same code:
+[balance_lab/FINDINGS.md](../balance_lab/FINDINGS.md) §F.
+
+### J.1 Attachment lifecycle — measured, and one open item (#49, OPEN)
+
+The user's doubt was specifically: *does the robot actually take a card out of its pending zone and
+ride it on a main-faction card played afterwards?* Now answered at engine level, not from the AI's
+intent. `messages_history` is only appended **when the play is accepted** (`player_play`,
+`if success:`) and `pending_card` is stamped by the engine **where it consumes the zone**
+(`game_engine.py:1078-1091`), so the counters below are facts about applied plays:
+
+| epo lifecycle in 108 games (per play, key = player + stopover + card) | | |
+|---|---|---|
+| **attached** | 152 | pending really left `PlayerState.pendings` onto a main move card |
+| fired the `+1` | 91 (60 %) | log note `pending epo — +1 advancing` |
+| resolved, **produced nothing** | **45 (30 %)** | the ride-card resolved but its effect did not activate |
+| never resolved | 16 (11 %) | the chain ended earlier (mid-chain win) — the pending goes to the discard, costs nothing |
+
+Support-side totals of the same sample: 206 attachments = 158 `epo` + 29 `mercurochrome` +
+19 `bloodtest`, **all 206 stamped by the engine** (`pendings requested, engine consumed nothing` =
+0), 8 epo suppressed by `nobodymoves`, 0 `virus` attached (by design: −1 to myself, it stays in the
+zone where it still satisfies the `pending` condition). Per spec (`sup_fact_agent.md`, *the 4 pending
+cards*: "Effect (when attached to a main card **whose condition is met**)") the 45 silent ones are
+**not** an engine bug.
+
+**#49 (OPEN, P2): the ride-card choice ignores how *fragile* it is.** `_choose_attachment` correctly
+refuses to attach when *its own* estimate says the condition will fail or a facing
+`effect_canceled` waits there, but it attaches to the play it is currently scoring — it never
+*picks* the most reliable mount. 30 % of the epo stock therefore dies on a card that gets blocked or
+fails its condition at resolution, which the AI cannot see at decision time: the opponent plays
+*after* it in the alternation (a `defend` it cannot know about), and a `dist_*` / `cards_in_hand_*`
+condition is re-evaluated at resolution after the opponent's earlier chain index has moved.
+Direction: when the zone is scarce (1 pending, no laboratory) prefer mounting a play whose effect
+cannot be undone — `no_condition` / `unstoppable` / a card whose `mana` exceeds the opponent's
+declared shields — over a high-tempo but flippable one, and keep the pending instead of attaching
+when every candidate is fragile. (Cost/benefit is bounded: the wasted card is 1 mana and would
+otherwise sit in the zone, so this is a few percent of tempo, not a P0.)
+
+---
+
 ## Suggested order of work
 
 | Step | Items | Effect |
@@ -232,3 +356,4 @@ Left for §C/§D: the deliberate self-harm denial exception (#16), drop placemen
 | 3 | A.2 / A.3 / A.4 (Doctors → Mages → Engineers or any order) | Faction-specific tactics (attachments, mage choices, drop placement, dwelling taps) |
 | 4 | E #31–#34, F #35–#36, G #37–#38, H rest | Tactical depth + hardening + docs/tests |
 | 5 | I #43 | Mana pool managed by decision (pass when the pool covers the hand), not automatic sacrifice |
+| 6 | J #44-#48 | Effect-coverage audit: nothing is burned/undervalued anymore (Mages instants, ep0 stock, play-time instants) |

@@ -22,6 +22,7 @@ in **Parquet** (polars), vanilla JS/CSS/HTML frontend.
 ├── cards/             # cardpool.parquet — the pool of ~7600 cards (source of truth)
 │   └── starter_decks/ #   the 6 designer-authored 20-card starter decks (GET /starter_decks)
 ├── tests/             # E2E / smoke tests and diagnostic scripts
+├── video/             # Remotion sub-project: explainer videos (Node, isolated from the engine)
 └── pyproject.toml     # Dependencies (uv): fastapi, uvicorn, polars, numpy, pillow, websockets
 ```
 
@@ -224,6 +225,28 @@ require the `game_ui` server running locally:
 | `_diag.py` | engine diagnostics: unit tests of `process_advancing`, game creation, etc. (uses the DB — pollutes `games.db`) | `python tests/_diag.py` |
 | `_block_mode.py` | defense mode tests (condition "block"): block holds/fails, unstoppable, message validation | `python tests/_block_mode.py` |
 | `_sample_deck.csv` | sample deck for the tests | — |
+
+## `video/` — Remotion explainer videos
+
+A **Node sub-project** (its own `package.json`, never imports the Python engine) that
+renders the animated rules explainers with [Remotion](https://remotion.dev).
+The only coupling with the game is a Python export: `video/tools/export_clip.py` reads
+`games/games.db` + `cards/cardpool.parquet` + `game_ui/static/faction_themes.json`
+and writes `video/src/data/clip.json` (a real game, replayed beat by beat); it also
+stages the **real art** into `video/public/` — the printed card images
+(`cards_framed_0.6`), the markers/icons/logos, and a globe composited from the four
+biome quadrant paintings **in that game's own biome order**.
+
+| Cut | Length | Format | File |
+|---|---|---|---|
+| `Explainer` | 3:12 | 1920×1080 | `video/out/explainer.mp4` |
+| `Micro-Chain` | 0:24 | 1920×1080 | `video/out/micro_chain.mp4` |
+| `Micro-Block` | 0:20 | 1920×1080 | `video/out/micro_block.mp4` |
+
+All cuts are arrangements of the **same 14 scene components**; see `video/README.md`
+for the pipeline, the timeline (`src/timeline.ts`) and the layout audit tool
+(`npm run audit`). Remotion is **not free for companies of 5+ employees** — check the
+license before publishing.
 
 ## Environment & dependencies
 

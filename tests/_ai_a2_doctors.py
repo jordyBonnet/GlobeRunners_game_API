@@ -103,9 +103,12 @@ def fresh_ps(pendings, pos, dwelling=None):
                        pendings=list(pendings), play_count=0, dwelling=dwelling)
 
 
-def attach(pendings, pos, oppo_actions=None, board_drops=None, dwelling=None, locked=False, row=None, oppo_hand=None):
+def attach(pendings, pos, oppo_actions=None, board_drops=None, dwelling=None, locked=False, row=None, oppo_hand=None, hand=None):
     """Run _choose_attachment with a synthetic state (opponent public plays = oppo_actions)."""
-    ai.player_state = fresh_ps(pendings, pos, dwelling)
+    ps = fresh_ps(pendings, pos, dwelling)
+    if hand is not None:
+        ps.hand = list(hand)
+    ai.player_state = ps
     ai.oppo_actions = oppo_actions or []
     ai.board_drops = board_drops or []
     ai.nobodymoves_active = locked
@@ -127,8 +130,23 @@ check("no epo attach when the base card already wins (pos+est>=24)", attach(['ep
 check("epo tempo attach with laboratory dwelling", attach(['epo'], 5, dwelling='laboratory') == 'epo')
 # 4. tempo attach with >=2 pendings in zone (at least one stays for the `pending` condition)
 check("epo tempo attach keeps one pending when zone has >=2", attach(['epo', 'virus'], 5) == 'epo')
-# 5. NO tempo attach without lab and a single pending (keep it - unlocks `pending`-condition mains, #9)
-check("no epo tempo attach: no lab + single pending stays in zone", attach(['epo'], 5) is None)
+# 5. the LAST pending of the zone (A.2 #9 refined): the zone may be spent unless one of MY OWN
+#    `pending`-condition mains resolves this turn (in hand / already declared in my chain).
+PEND_ID = pick(cond='pending')[0]   # a `pending`-condition main (for the keep guard)
+check("epo tempo attach with a single pending when no `pending`-condition main is in hand",
+      attach(['epo'], 5) == 'epo')
+check("single pending KEPT in zone while a `pending`-condition main sits in my hand (imminent, #9)",
+      attach(['epo'], 5, hand=[ADV4_ID, PEND_ID]) is None)
+_ai = ai
+_ai.player_state = fresh_ps(['epo'], 5)
+_ai.player_state.hand = [ADV4_ID]          # nothing pending in hand any more
+_ai.player_state.action_chain = [{'mode': 'move', 'to': 'stopover_3', 'cards': [PEND_ID]}]
+_ai.oppo_actions, _ai.board_drops, _ai.nobodymoves_active, _ai.oppo_hand = [], [], False, None
+check("single pending KEPT while a `pending`-condition main is DECLARED in my action_chain",
+      _ai._choose_attachment(ADV_ROW) is None)
+_ai.player_state.action_chain = []
+check("same play WITHOUT the declared pending-condition card -> the epo is spent",
+      _ai._choose_attachment(ADV_ROW) == 'epo')
 
 MY_COL = 'stopover_4'   # play_count=0, no rooted -> position 1 -> column 4
 # 6. BLOCKED + mercurochrome in zone -> unstoppable buys back the whole play (prefer over epo)
@@ -137,17 +155,18 @@ check("mercurochrome attaches when the card would be blocked",
 # 7. BLOCKED without mercurochrome -> attach NOTHING (the pending would be consumed and wasted)
 check("no attach at all when blocked and no mercurochrome",
       attach(['epo'], 5, oppo_actions=[{'mode': 'defend', 'to': MY_COL, 'cards': [SHIELD_CARD]}]) is None)
-# shields below the cost -> block fails, plain tempo rules apply again (single pending, no lab)
+# shields below the cost -> block fails, plain tempo rules apply again (no pending main in hand -> spend)
 ZERO_SHIELD = DB.filter(pl.col('shield') == 0)['card_id'].to_list()[0]
-check("shields < cost: block fails, single-pending keep rule applies",
-      attach(['epo'], 5, oppo_actions=[{'mode': 'defend', 'to': MY_COL, 'cards': [ZERO_SHIELD]}]) is None)
+check("shields < cost: block fails, the plain tempo attach applies again",
+      attach(['epo'], 5, oppo_actions=[{'mode': 'defend', 'to': MY_COL, 'cards': [ZERO_SHIELD]}]) == 'epo')
 
 # 8. landmine on the path + mercurochrome -> unstoppable dodges it
 check("mercurochrome attaches over a landmine on its path",
       attach(['epo', 'mercurochrome'], 5, board_drops=[{'cell': 7, 'kind': 'landmine', 'owner': 'B'}]) == 'mercurochrome')
-# 9. ...same mine, no mercurochrome -> nothing attached (no way to save the play)
-check("no attach over a landmine path without mercurochrome",
-      attach(['epo'], 5, board_drops=[{'cell': 7, 'kind': 'landmine', 'owner': 'B'}]) is None)
+# 9. ...same mine, no mercurochrome: the mine stops the CURRENT movement only, and the epo's own
+#    process_advancing(1) walks a fresh cell past it (engine `was_blocked` rule) -> still worth it
+check("epo still attaches over a landmine path (the +1 fires past the mine)",
+      attach(['epo'], 5, board_drops=[{'cell': 7, 'kind': 'landmine', 'owner': 'B'}]) == 'epo')
 
 # 10. movement LOCKED this turn (nobodymoves) + mercurochrome -> unstoppable+met still moves
 check("mercurochrome attaches when my movement is locked (nobodymoves)", attach(['mercurochrome'], 5, locked=True) == 'mercurochrome')
@@ -170,7 +189,6 @@ if CANCEL_ID is not None:
 #     attach when the effect can fire and the opponent has cards in hand (public count),
 #     keeping the pending-condition guard (single pending + `pending`-condition mains in
 #     hand+deck -> keep the zone non-empty).
-PEND_ID = pick(cond='pending')[0]   # a `pending`-condition main (for the keep guard)
 check("virus never auto-attached (even win-completing)", attach(['virus'], 23 - est4) is None)
 check("bloodtest attaches when the effect can fire and the opponent has cards in hand",
       attach(['bloodtest'], 23 - est4, oppo_hand=3) == 'bloodtest')

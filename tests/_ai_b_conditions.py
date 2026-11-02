@@ -97,8 +97,9 @@ check("no board info -> conservatively not met", ai._condition_met('biome_Orc') 
 # =====================================================================================
 print("\n--- Unit: remaining branches (regression) ---")
 set_ai(pos=0, hand=['x'], temp=8, dn='day')
-check("no_condition / cataclysm / block are always met",
-      ai._condition_met('no_condition') is True and ai._condition_met('cataclysm') is True and ai._condition_met('block') is True)
+check("no_condition / cataclysm always met; 'block' NEVER met in move mode (2026-09-22 engine fix)",
+      ai._condition_met('no_condition') is True and ai._condition_met('cataclysm') is True
+      and ai._condition_met('block') is False)
 check("day/night from the global phase", ai._condition_met('day') is True and ai._condition_met('night') is False)
 set_ai(temp=8, dn='night')
 check("night on night", ai._condition_met('night') is True)

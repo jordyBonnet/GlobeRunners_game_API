@@ -130,7 +130,7 @@ The **avalanche** effect is the fixed-MO variant of the cataclysm knockback, fir
 
 - Implementation: `apply_effect('avalanche', …)` → `_knockback_biome('MO', …)` — the same shared knockback helper as the cataclysm trigger.
 - **Replay**: the replay pins the rules a game was played under automatically (it preserves the stored `engine_version` in `_build_initial_state`).
-- **AI**: no mirror needed — `avalanche` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring).
+- **AI**: modelled — `PlayerAI._situational_tempo` prices `avalanche` (+3 when the opponent stands on MO, −2 when only I do) and `_threat_value` prices DENYING it with a defend; the card itself scores `TEMPO_VALUES`+situational only when its condition is met.
 
 ### Grappling hook (effect `grappling_hook`)
 
@@ -149,7 +149,7 @@ The **grappling_hook** effect makes a card **copy the advancement of the card it
 
 - Implementation: `apply_effect('grappling_hook', …)` is a **no-op marker**; the copy is applied in `process_trip_chain` via `grappling_copy_amount()` + `apply_grappling_copy()`. `_resolve_card` returns whether the grappling card **activated** (effect + condition met); `process_card` propagates that flag to the trip chain.
 
-- **AI**: no mirror needed — `grappling_hook` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring).
+- **AI**: modelled — `_facing_gain` adds the facing card's public worst-case advance (`_oppo_potential_adv`) when my own condition is met, and zeroes it under a `nobodymoves` lock (the engine gates movement copies).
 
 ### Effect canceled (effect `effect_canceled`)
 
@@ -164,7 +164,7 @@ The **effect_canceled** card is a **reactive marker**: it does nothing to itself
 
 - Implementation: `_oppo_has_valid_effect_canceled(oppo, stopover, game)` (the check) + the cancel branch in `_resolve_card` (which receives the stopover from `process_card`). `apply_effect('effect_canceled', …)` stays a no-op (the cancel is applied to the **facing** card, not to the canceler).
 
-- **AI**: no mirror needed — `effect_canceled` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring).
+- **AI**: modelled — `_facing_gain` + `_denied_effect_value` place the cancel on the column FACING a declared opponent card whose effect is worth denying (TEMPO + situational + the extra `advancing` movement it would have caused; a self-recoil `backward` prices negative). A **play-time instant** facing me prices 0 — it already fired before the chain.
 
 ### Copy effect (effect `copy_effect`)
 
@@ -182,7 +182,7 @@ The **copy_effect** card copies the **effect of the card it faces** — the oppo
 
 - Implementation: `apply_copy_effect(game, copier, copier_action, facing_player, facing_action, log_entry)` (guards + call to `apply_effect`); `_resolve_card` now returns a third flag `effect_activated` (condition met and not canceled) and `process_card` propagates it as a 3-tuple; `process_trip_chain` captures both players' flags per index and calls `apply_copy_effect` for each valid copier. The log entry of the copier gets the note `copy_effect — copied "<effect>" (<name>)`.
 - **Replay**: the replay mirrors the copy in `_replay_trip_chain` (pinning the cards a copied zone-effect will move, then calling `ge.apply_copy_effect`).
-- **AI**: no mirror needed — `copy_effect` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring).
+- **AI**: modelled — `_facing_gain` replays the facing card's effect with me as actor (movement effects → `_forward_if_met`, zone effects → TEMPO + situational), and returns 0 when the facing effect is in `COPYABLE_EFFECTS` **not** (the instants, `rooted`, `grappling_hook`, `effect_canceled`, `unstoppable`, `copy_effect` are no-op markers in `apply_effect` → nothing to copy).
 
 ### Pet trap (effect `pet_trap`)
 
@@ -201,7 +201,7 @@ The **pet_trap** effect is an **INSTANT board effect**: it fires **at play time*
 
 **Replay**: the replay mirrors the instant placement in `_replay_trip_chain` — every pet_trap move-card's token is placed on its owner's **pre-chain** position (the instant effect fired at play time, before any card moved) — and the final **drop tokens are compared** to the stored ones (a warning on divergence, like the zone checks).
 
-**AI**: no mirror needed — the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring); a pet_trap card is simply worth its base advancing in its current valuation.
+**AI**: modelled — `pet_trap` is a **play-time instant**, so `PlayerAI._instant_tempo` counts its value in every scoring branch (condition met or not, blocked or not, movement locked or not — see `INSTANT_EFFECTS`), plus `_situational_tempo` +2 when the opponent trails me by ≤ 8 cells (they will step over my cell).
 
 **Frontend**: the drop tokens render on the Earth (`.drop-token` at the cell's `POS24` point, `/assets/effect_pettrap.png`); `effectLabel` shows `trap — drop token here`. **Multi-token display**: each trap on a cell is drawn as its own marker in a slightly offset up-right fan (`MAX_FAN = 6` visible per cell, `FAN_STEP_PX = 5` deliberate overlap, z-index increases along the fan) so a stack of N traps reads as N tokens; the top token carries the exact-count badge when N > 1 (with the 6-cap, the badge is the source of truth for N > 6). Preview page: `tests/_drop_tokens_preview.html` (copy it into `game_ui/static/` and screenshot via headless Chrome to eyeball the fan).
 
@@ -229,7 +229,7 @@ The **rooted** effect (self-effect: the card roots itself) gives the playing pla
 
 **Model**: the card is **active** on the trip chain (basic advancing, blockable) and sits on the **per-player** position of its owner. The placement is engine-computed (`process_trip_chain`, `_process_rooted_cards`, `ge._player_stopover`).
 
-**AI**: no mirror needed — `rooted` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring). A rooted card is simply worth its base advancing in its current valuation (the token is a one-shot bonus the AI does not model). The robot places its cards using `ge._player_stopover` (per-player positions).
+**AI**: `TEMPO_VALUES['rooted'] = 3` (the extra advance the rooted token buys next turn) when the condition is met; the token is NOT copyable by a facing `copy_effect` (granted in `_resolve_card`, outside `apply_effect`), so `_facing_gain` prices it 0 (`COPYABLE_EFFECTS`). The robot places its cards using `ge._player_stopover` (per-player positions) and counts its own rooted tokens in `_my_next_stopover`.
 
 **Frontend**: the rooted token image (`/assets/effect_rooted.png`) renders on the card in the trip-chain display when the card is in `rooted_on_board`. The `effectLabel` shows `rooted` for `rooted` effect cards. The stopover board renders **per-player** slots — each player has their own 5 positions (1-5), and the rooted card sits on the owner's position 1 (the plays go after it).
 
@@ -251,7 +251,7 @@ The **wrecking_ball** effect is an **INSTANT board effect**: it fires **at play 
 
 **Replay**: the replay mirrors the instant removal in `_replay_trip_chain` and keeps the placeholder in its local state (see the *The wreck* bullet above).
 
-**AI**: no mirror needed — `wrecking_ball` is an effect, and the AI does not simulate effects (`PlayerAI` only evaluates conditions for scoring). A wrecking_ball card is simply worth its base advancing in its current valuation (the wreck is a one-shot bonus the AI does not model; it is a real play today, since the Engineers' refinery can occupy the dwelling spot).
+**AI**: modelled — like `pet_trap` a **play-time instant**: `_instant_tempo` gives it +4 (`_situational_tempo`) while the opponent's dwelling token is visible, counted even when the card's condition is NOT met or the card is blocked (the wreck already happened). Blocking an opponent wrecking_ball still only denies its advancing (`_threat_value`).
 
 ### Swap cards (effect `swap_cards`)
 
@@ -260,7 +260,7 @@ The **swap_cards** effect is an **INSTANT chain effect**: it fires **at play tim
 **The swap** (the instant part):
 - The player chooses the target with **`message["swap_with"]`** (an int 1..5 = a **position of the player's OWN trip chain** — validated by `message_check`). The target can be **any entry of the owner's own chain**: a **play** (move or defend), a **board placeholder** (a doctor pending placeholder or a dwelling placeholder), or a **rooted card** on the board.
 - **The two entries exchange their stopover columns at play time**: the played card's recorded `to` becomes the target's stopover, and the target's slot becomes the played card's original stopover. The trip chain then resolves **by the recorded columns** (positions, facing, blocking, grappling/copy all read the `to` values — `ge._player_chain`), so the **swapped order is applied automatically**: resolution order (the card now resolves earlier/later), facing (it now faces the opponent's card at its new position), and blocking (defend cards on the new stopover now block it).
-- **`swap_with` is OPTIONAL** — a swap_cards card played without it **simply advances as usual** (no swap; the condition/effect still apply at resolution). This is what the robot does (it never sends `swap_with`).
+- **`swap_with` is OPTIONAL** — a swap_cards card played without it **simply advances as usual** (no swap; the condition/effect still apply at resolution). The robot sends it only when the re-ordering is worth ≥ `SWAP_MIN_GAIN` (see *AI* below).
 - **The card still applies its condition/effect at resolution** (from the swapped position) — the swap is an instant play-time effect, like every other instant. A swap_cards card with a condition that **fails** still advances by the **reduced amount** (mana − 1) from its swapped position; the swap itself is not rolled back.
 - **The engine annotates the action** with `swapped_with` (the target's card name / id), `swapped_with_kind` (`'play'` / `'pending'` / `'dwelling'` / `'rooted'`) and `swapped_from` (the played card's original stopover) — recorded on the **shared action dict** (so it lands in `action_chain`, `messages_history`, and the turn log). The log note: `🔁 swap_cards — <card> swaps places with <target>`.
 - **Pre-validation**: `player_play` pre-checks the swap target **before** any state change (an invalid target → the play is **rejected with no state change**; no partial swap). The swap is applied after the play succeeds (inside `_apply_instant_effects`).
@@ -274,7 +274,7 @@ The **swap_cards** effect is an **INSTANT chain effect**: it fires **at play tim
 
 **Note**: `swap_with` is optional — without it the card simply advances by its basic value from its normal position (no swap).
 
-**AI**: no change — `PlayerAI` does not simulate effects (it only evaluates conditions for scoring) and **never sends `swap_with`**, so the robot simply plays swap_cards as a normal advancing card. (A future enhancement: the robot could choose a swap target.)
+**AI**: modelled (E #31) — `_choose_swap_target(row)` scores every legal target position of my own chain (`_entry_value` before/after the exchange) and the play carries `swap_with` when the gain reaches `SWAP_MIN_GAIN = 2` (dodging a defended column, promoting a play). Because the swap is a **play-time instant**, the gain is priced even when the swap card itself would be blocked or the movement is locked — a blocked decoy swap is a legitimate play. Its own `TEMPO_VALUES` entry is 0 (all the value comes from the re-ordering).
 
 **Replay**: the swap mirror in `analyze_game`'s play-loop: the played card's recorded `to` is **already post-swap** in `messages_history` (the engine rewrote the action in place, and `messages_history` shares the dict) — so the play and a **play** target need nothing. Only a **placeholder/rooted target** (which the replay reconstructs itself) is mirrored: the replay rewrites the pending `[card, slot]` pair's slot (or `dwelling_slot`, or the rooted entry's `stopover`) to the played card's original column (`swapped_from`). The trip chain then resolves the swapped order via `ge._player_chain` (the same function the engine uses). Records a `swap_cards` event.
 

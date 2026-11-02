@@ -6,6 +6,7 @@ Builds decks for ALL 18 (main faction, support faction) combinations and checks:
   * support-faction rules:
       engineers : 5 drop_on_board, NO pending, NO temp_sup_15/temp_inf_6, NO draw
       mages     : 2-4 temp_sup_15/temp_inf_6, 4 day/night, 4 biome_<F>,
+                  2-3 cataclysm (the Apocalypticritual needs a strike to order),
                   NO drop_on_board, NO pending
       doctors   : 5 pending, NO drop_on_board, NO temp_sup_15/temp_inf_6
   * general rules: 2 wrecking_ball, 2 jump, 2-4 draw (EXCEPT engineers),
@@ -88,6 +89,7 @@ for fac in FACTIONS:
                 ok(cond.get("temp_sup_15", 0) + cond.get("temp_inf_6", 0) >= 2, f"{fac}+{sup} #{i}: 2+ extreme temp (family caps enforced by deck rules)")
                 ok(cond.get("day", 0) + cond.get("night", 0) >= 4, f"{fac}+{sup} #{i}: 4 day/night")
                 ok(cond.get(BIOME[fac], 0) >= 4, f"{fac}+{sup} #{i}: 4 own-biome")
+                ok(cond.get("cataclysm", 0) >= 2, f"{fac}+{sup} #{i}: 2+ cataclysm (Apocalypticritual target)")
                 ok(cond.get("drop_on_board", 0) == 0, f"{fac}+{sup} #{i}: no drop_on_board")
                 ok(cond.get("pending", 0) == 0, f"{fac}+{sup} #{i}: no pending")
             elif sup == "doctors":

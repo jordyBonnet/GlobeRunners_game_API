@@ -12,6 +12,8 @@ support-faction strategy rules (designer-specified 2026-09-24):
               2-4 `temp_sup_15` / `temp_inf_6` condition cards (whichever the
               main faction has access to) • exactly 4 `day`/`night` condition
               cards • exactly 4 own-biome (`biome_<faction>`) condition cards
+              2-3 `cataclysm` condition cards (the `Apocalypticritual` pile
+              order only pays when a cataclysm card actually strikes)
   Doctors   : NO `drop_on_board` • NO `temp_sup_15` / `temp_inf_6`
               exactly 5 `pending` condition cards
 
@@ -76,6 +78,11 @@ SUPPORT_PROFILES: dict[str, dict] = {
         "reqs": [
             {"kind": "cond", "values": set(EXTREME_TEMP), "count": 2, "max": 4},   # random 2-4
             {"kind": "cond", "values": {"day", "night"}, "count": 4},
+            # the Apocalypticritual (a Mages card) SETS the cataclysm pile order — with no
+            # `cataclysm`-condition card in the deck there is no strike to order and the card is
+            # dead weight (measured: 55 % of lab-built Mages decks had 0 of them, and the ritual
+            # was played 0 times in 12 Mages seats)
+            {"kind": "cond", "values": {"cataclysm"}, "count": 2, "max": 3},
         ],
     },
     "doctors": {
@@ -183,7 +190,7 @@ def build_main_deck(faction: str, support: str | None, rng: random.Random | None
     # rules — first relax the general 2-4 ranges (still inside range) so the
     # per-faction flavor cards survive; only when NO in-range combination fits
     # (Mummies+Mages: minimums total 22) drop the per-faction rules (priority 3
-    # is last); the support minimums always fit (worst case Mages: 2+4+4 +
+    # is last); the support minimums always fit (worst case Mages: 2+4+4+2 +
     # 2+2+2+2 = 18 <= 20).
     def total() -> int:
         return sum(r["count"] for r in tier1 + tier2 + tier3)

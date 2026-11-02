@@ -182,6 +182,47 @@ order = ai._choose_cataclysm_order()
 check("shared biome where I am DEEPER: park it last, strike an empty biome first",
       order is not None and order[0] != 'OC' and order[-1] == 'OC', f"(order={order})")
 
+# the two cataclysm gates are SEPARATE now: PLAY needs an imminent strike, KEEP only needs the
+# mechanic to still matter (the pile order is permanent, so the card must survive the mana sacrifice)
+set_ai(pos=4, hand=['Apocalypticritual'], deck=[CAT_AFFORD], oppo_pos=1, earth=SEG_EARTH)
+check("_cataclysm_relevant: a cataclysm card in my DECK makes the ritual worth KEEPING",
+      ai._cataclysm_relevant() is True and ai._cataclysm_soon() is False)
+check("...but the pile is NOT reordered yet (the positions will have moved on by then)",
+      ai._choose_cataclysm_order() is None)
+set_ai(pos=4, hand=['Apocalypticritual'], deck=[], oppo_pos=1, earth=SEG_EARTH)
+check("_cataclysm_relevant False with no cataclysm card anywhere (-> the ritual is sacrificial)",
+      ai._cataclysm_relevant() is False)
+
+# =====================================================================================
+# #13/#14 DURABLE keep-value: the mana sacrifice must not eat the Mages' answer cards
+# =====================================================================================
+print("\n--- Unit: durable support keep-value (put_mana must not delete the mechanic) ---")
+M5 = pick((pl.col('faction') == 'Orcs') & (pl.col('mana') == 5), n=4)   # keep-value 13 = the lowest band
+mage_hand = ['nobodymoves', 'Apocalypticritual'] + M5
+set_ai(pos=5, faction='Twigs', hand=mage_hand, deck=[CAT_AFFORD], oppo_pos=6)
+knm, krit = ai._support_keep_value('nobodymoves'), ai._support_keep_value('Apocalypticritual')
+check("nobodymoves keep-value is above EVERY main keep-value (18-mana = 13..17) even with no live threat",
+      knm > 17, f"(keep={knm}, threat={ai._nobodymoves_threat()})")
+check("Apocalypticritual keep-value is above every main while I own a cataclysm card", krit > 17,
+      f"(keep={krit})")
+sac = ai.put_mana(3, in_turn=False)
+check("the INIT sacrifice gives the 3 mains to the mana zone and KEEPS both Mages cards",
+      set(sac) == set(M5[:3]), f"(sacrificed={sac})")
+set_ai(pos=5, faction='Twigs', hand=['Apocalypticritual'] + M5, deck=[], oppo_pos=6)
+check("...with NO cataclysm card in hand/deck the ritual drops below the mains again (dead weight)",
+      ai._support_keep_value('Apocalypticritual') < 13,
+      f"(keep={ai._support_keep_value('Apocalypticritual')})")
+set_ai(pos=5, faction='Twigs', hand=['boost', 'gluetrap'] + M5, oppo_pos=6)
+check("an engineer drop stays keepable even when no cell is free right now",
+      ai._support_keep_value('gluetrap') > 17 or ai._choose_drop_cell('gluetrap') is not None,
+      f"(keep={ai._support_keep_value('gluetrap')})")
+
+# the opponent's OWN declared cataclysm play also makes a strike imminent
+set_ai(pos=0, hand=['Apocalypticritual'], oppo_pos=9, earth=SEG_EARTH)
+ai.oppo_actions = [{'mode': 'move', 'to': 'stopover_4', 'cards': [CAT_AFFORD]}]
+check("gate: the OPPONENT's declared cataclysm play is imminent too (their strike hits both tokens)",
+      ai._cataclysm_soon() is True and ai._choose_cataclysm_order() is not None)
+
 # =====================================================================================
 # #15 black_hole rotation - faction bonus vs my biome_*-condition mains
 # =====================================================================================

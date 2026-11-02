@@ -195,6 +195,71 @@ m = ai.play_card()
 check("no opponent behind: the trap is net-zero -> plain mover goes", m and m['cards'][0] == BWD, f"(got {m})")
 
 # =====================================================================================
+# The three MAIN-pool INSTANTS (pet_trap / wrecking_ball / swap_cards) fire at PLAY TIME
+# inside ge._apply_instant_effects: NOT condition-gated, not blockable, not cancelable.
+# The robot must price them that way (regression: they used to score 0 unless met).
+# =====================================================================================
+print("\n--- Unit: play-time instants are not conditioned / not blockable ---")
+PET_N = 'Mia11_758898'      # m1 adv0 NIGHT pet_trap  -> unmet while it is day
+WRECK_N = 'Dem10_34d2f0'    # m1 adv0 NIGHT wrecking_ball
+SWAP_N = 'Mia11_458255'     # m1 adv0 NIGHT swap_cards
+assert ROWS[PET_N]['effect'] == 'pet_trap' and ROWS[WRECK_N]['effect'] == 'wrecking_ball'
+assert ROWS[SWAP_N]['effect'] == 'swap_cards'
+
+set_ai(pos=10, hand=[PET_N], oppo_pos=6)
+check("pet_trap with an UNMET condition still carries its play-time trap value",
+      ai._condition_met(ROWS[PET_N]['condition']) is False and ai._instant_tempo(row_of(PET_N)) == 3,
+      f"(instant={ai._instant_tempo(row_of(PET_N))})")
+m = ai.play_card()
+check("...so the unmet trap is PLAYED (net 3 > 0) instead of being passed on", m and m['cards'][0] == PET_N,
+      f"(got {m})")
+
+set_ai(pos=10, hand=[WRECK_N], oppo_pos=6)
+ai.oppo_dwelling = 'refinery'
+check("wrecking_ball with an UNMET condition still removes the dwelling (+4) at play time",
+      ai._instant_tempo(row_of(WRECK_N)) == 4, f"(instant={ai._instant_tempo(row_of(WRECK_N))})")
+set_ai(pos=10, hand=[WRECK_N], oppo_pos=6)
+check("...and 0 when the opponent has no dwelling to remove", ai._instant_tempo(row_of(WRECK_N)) == 0)
+
+# blocked pet_trap: the block cancels the effect/advancing of the CHAIN, not the placed token
+set_ai(pos=10, oppo_pos=6, hand=[PET_N], play_count=0,
+       oppo_actions=[{'mode': 'defend', 'to': 'stopover_4', 'cards': [D1, D2]}])
+check("a BLOCKED pet_trap keeps its instant value (_entry_value)",
+      ai._will_be_blocked(row_of(PET_N)) and ai._entry_value(row_of(PET_N), 'stopover_4') == 3,
+      f"(entry={ai._entry_value(row_of(PET_N), 'stopover_4')})")
+
+# the swap is instant too: it happens even when the swap card itself is blocked on its own column
+set_ai(hand=[SWAP_N], play_count=1, faction='Miaous',
+       oppo_actions=[{'mode': 'defend', 'to': 'stopover_4', 'cards': [D1, D2]},     # blocks my W5
+                     {'mode': 'defend', 'to': 'stopover_3', 'cards': [D1]}])        # blocks the swap card
+ai.player_state.action_chain = [{'mode': 'move', 'to': 'stopover_4', 'cards': [W5]}]
+check("the swap card itself IS blocked on its own column",
+      ai._will_be_blocked(row_of(SWAP_N)) is True)
+opt = ai._choose_swap_target(row_of(SWAP_N))
+check("the swap target is still priced (W5 escapes to the column that cannot out-shield it)",
+      opt is not None and opt[0] == 1, f"(got {opt})")
+m = ai.play_card()
+check("and the play carries 'swap_with' despite the swap card being blocked",
+      m and m['cards'][0] == SWAP_N and m.get('swap_with') == 1, f"(got {m})")
+
+# my effect_canceled / copy_effect gain against an INSTANT is zero: nothing is left to deny
+ROOTEDC = 'Twi11_a679f5'    # m1 adv-1 no_condition rooted (the token is granted OUTSIDE apply_effect)
+set_ai(hand=[CANCEL], oppo_actions=[{'mode': 'move', 'to': 'stopover_4', 'cards': [PET_N]}])
+check("canceling a face-up pet_trap denies nothing (the token was placed at play time)",
+      ai._denied_effect_value(ROWS[PET_N]) == 0)
+set_ai(hand=[COPY], oppo_actions=[{'mode': 'move', 'to': 'stopover_4', 'cards': [WRECK_N]}])
+fg = ai._facing_gain(row_of(COPY), 'stopover_4')
+check("copying a face-up wrecking_ball copies nothing (its apply_effect branch is a no-op marker)",
+      fg == (0, 0), f"(got {fg})")
+set_ai(hand=[COPY], oppo_actions=[{'mode': 'move', 'to': 'stopover_4', 'cards': [ROOTEDC]}])
+fg2 = ai._facing_gain(row_of(COPY), 'stopover_4')
+check("copying a rooted card copies nothing either (the token is granted outside apply_effect)",
+      fg2 == (0, 0), f"(got {fg2})")
+set_ai(hand=[COPY], oppo_actions=[{'mode': 'move', 'to': 'stopover_4', 'cards': [F_RAMP]}])
+check("...while a copyable effect still prices normally", fg2 == (0, 0) and ai._facing_gain(row_of(COPY), 'stopover_4')[1] > 0,
+      f"(got {ai._facing_gain(row_of(COPY), 'stopover_4')})")
+
+# =====================================================================================
 # E2E - decoy swap through the real engine (instant swap + block materializes)
 # =====================================================================================
 print("\n--- E2E: decoy swap accepted by the engine ---")

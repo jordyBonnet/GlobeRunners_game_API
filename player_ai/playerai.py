@@ -76,9 +76,41 @@ TEMPO_VALUES = {
 # regardless of this threshold (survival first - see choose_defend).
 DEFEND_THRESHOLD = 4
 
+# INSTANT effects of the MAIN pool: they fire at PLAY TIME inside
+# `ge._apply_instant_effects` (right after the play is accepted), BEFORE the trip chain -
+# so they are NOT gated on the card's condition, cannot be blocked and cannot be
+# effect_canceled (their `apply_effect` branch at resolution is a no-op marker). Only their
+# ADVANCING still goes through the normal condition / block / movement-lock rules.
+# The robot used to price them as conditioned effects (`tempo = … if met else 0`, and the swap
+# target only on an unblocked play), which undervalued every Miaous pet_trap, every wrecking_ball
+# and every swap_cards dodge.
+INSTANT_EFFECTS = ('pet_trap', 'wrecking_ball', 'swap_cards')
+
+# Which effects a facing `copy_effect` card can actually REPLAY. `ge.apply_copy_effect` re-runs
+# `apply_effect(facing.effect, ...)`, and several pool effects are no-op markers THERE (their real
+# work happened earlier: at play time for the instants above, or in `_resolve_card` for the rooted
+# token; grappling_hook / effect_canceled / unstoppable / copy_effect have no apply_effect behaviour
+# at all). Copying one of those buys nothing - which the robot must not price as a gain.
+COPYABLE_EFFECTS = ('advancing', 'backward', 'jump', 'advancing_oppo', 'backward_oppo',
+                    'draw', 'draw_oppo', 'discard', 'discard_oppo',
+                    'ramp', 'ramp_oppo', 'taxation', 'taxation_oppo', 'avalanche')
+
 # E #31: minimum net-value gain (cells + denied effects, same scale as play_card's score) for a
 # swap_cards play to actually carry a 'swap_with' target. Below that, the card plays in its natural slot.
 SWAP_MIN_GAIN = 2
+
+# A.3 #13/#14 (durable keep-values, see `_support_keep_value`): the floor a support card gets when it
+# is put to the MANA zone - above EVERY main card's keep-value (18 - mana = 13..17), because these
+# three cards are worth more than their current tick: nobodymoves is the only ANSWER to a race-winning
+# play (the threat exists only in the turn it happens), the Apocalypticritual reorders the cataclysm
+# pile PERMANENTLY (its moment comes when a cataclysm card is drawn), and an engineer DROP is
+# placeable again on a later turn even when every cell is busy right now. Before this, `put_mana`
+# sorted by the instantaneous `_support_value` and burned the Mages' instants first, every copy:
+# measured over 36 seat-games, 19/24 nobodymoves and 20/24 Apocalypticritual copies ended the game in
+# the mana zone and the ritual was played 3 times in 12 Mages seats.
+ANSWER_KEEP = 26         # nobodymoves - the defensive answer to a winning opponent
+RITUAL_KEEP = 24         # Apocalypticritual - permanent pile order, while I own a cataclysm card
+DROP_KEEP = 20           # engineers' drops - cheap setup, placeable on a later turn
 
 
 def validate_message(msg, dwelling=None, pendings_zone=None):
@@ -245,6 +277,12 @@ class PlayerAI:
 			# `pending`-condition mains to unlock (they are always-not-met for me while the zone is empty)
 			if not (self.player_state.pendings or []) and self._pending_condition_count() > 0:
 				base += 6
+			# A STOCK IS NOT A NEED: the engine consumes at most ONE pending per play, so a zone that
+			# already holds a reserve makes further copies dead weight - they drop BELOW the mains so
+			# `put_mana` turns them into the mana tokens they can no longer be used as (measured: a
+			# laboratory seat ending a game with 3+ unused ep0 in its zone was still placing more).
+			elif len(self.player_state.pendings or []) >= 3:
+				base = min(base, 10)
 			return base
 		if name == 'Celestial_reversal':
 			# strong permanent lever ONLY when a strictly better phase exists for my own deck
@@ -277,7 +315,8 @@ class PlayerAI:
 		hand; put_mana sacrifices the lowest values first). A.1 baseline - sections B/C
 		replace it with a real value model:
 		  * main cards: expensive ones sacrificed first (previous behavior);
-		  * support cards: their current play-utility (_support_value) - dead copies
+		  * support cards: their DURABLE keep-value (_support_keep_value = the current play
+		    utility, floored for the cards whose moment has not come yet) - dead copies
 		    (2nd dwelling with the zone full, a useless instant...) sink below mains,
 		    playable ones stay in hand.
 		"""
@@ -287,7 +326,29 @@ class PlayerAI:
 		info = self.SUPPORT_INFO.get(cid)
 		if info is None or info['kind'] is None:
 			return 0.0                     # unknown support card - pure dead weight
-		return self._support_value(cid)
+		return self._support_keep_value(cid)
+
+	def _support_keep_value(self, name):
+		"""Value of KEEPING this support card in hand instead of burning it as a mana token.
+
+		`_support_value(name)` prices the card for the CURRENT tick ("play it now?"), which is the
+		right yardstick for choosing between support plays but the wrong one for the sacrifice: three
+		cards are worthless right now and valuable later, and the INIT/mana-phase sacrifice sorts by
+		keep-value and burns the three lowest - so the instantaneous numbers (nobodymoves 6 without a
+		live threat, ritual 12 without an imminent strike, drop 6 while every cell is busy) ranked the
+		Mages' answer cards BELOW every main card and deleted the faction's mechanics before they could
+		ever be played. Floors (`ANSWER_KEEP` / `RITUAL_KEEP` / `DROP_KEEP`) keep them in hand.
+		A card that is genuinely spent - a flux whose ±4 can never improve my own temperature cards
+		(temperature is permanent, hand+deck fully known), a 2nd dwelling with one on the board, a
+		neutral Celestial_reversal - keeps its low value and is sacrificed, as intended."""
+		v = self._support_value(name)
+		if name == 'nobodymoves':
+			return max(v, ANSWER_KEEP)
+		if name == 'Apocalypticritual':
+			return max(v, RITUAL_KEEP) if self._cataclysm_relevant() else v
+		if name in ENGINEER_DROPS:
+			return max(v, DROP_KEEP)
+		return v
 
 	def put_mana(self, num_cards=3, in_turn=False):
 		"""Select `num_cards` from the hand to put into the mana zone.
@@ -503,9 +564,13 @@ class PlayerAI:
 		return best_dir
 
 	def _cataclysm_soon(self):
-		"""A.3 #14 gate: do I actually have a cataclysm card resolving SOON - an affordable
-		cataclysm-condition main in hand, or my own already-declared (unresolved) move play with
-		the condition this turn? Without one the reorder has no near-term value."""
+		"""A.3 #14 PLAY gate: is a cataclysm STRIKE imminent - i.e. does the pile order decide something
+		THIS turn? An affordable cataclysm-condition main in my hand, one of my own already-declared
+		unresolved move plays with the condition, or one of the OPPONENT's declared plays (their strike
+		knocks both tokens back, so the order is worth fixing for it too).
+		Deliberately NOT "a cataclysm card somewhere in my deck": by then the positions - and with them
+		the value of a given order - will have moved on; `_cataclysm_relevant` is the durable question
+		used for KEEPING the card."""
 		me = self.player_state
 		mana_available = len(me.mana or []) - (me.mana_spend or 0)
 		for cid in (me.hand or []):
@@ -519,6 +584,23 @@ class PlayerAI:
 				row = self.MAIN_ROWS.get(cid)
 				if row is not None and row['condition'] == 'cataclysm':
 					return True
+		for a in (self.oppo_actions or []):        # PUBLIC: the opponent's declared plays
+			if a and a.get('mode') == 'move':
+				for cid in (a.get('cards') or []):
+					row = self.MAIN_ROWS.get(cid)
+					if row is not None and row['condition'] == 'cataclysm':
+						return True
+		return False
+
+	def _cataclysm_relevant(self):
+		"""A.3 #14 KEEP gate (durable): do I own a `cataclysm`-condition main at all (hand OR deck)?
+		The ritual's pile order is PERMANENT (until the next ritual), so a cataclysm card I still have
+		to draw makes the reorder relevant later this game - which is exactly what `put_mana` must not
+		destroy by sacrificing the ritual before its turn comes."""
+		for cid in (self.player_state.hand or []) + (self.player_state.deck or []):
+			row = self.MAIN_ROWS.get(cid)
+			if row is not None and row['condition'] == 'cataclysm':
+				return True
 		return False
 
 	def _biome_knockback(self, pos, biom):
@@ -1066,7 +1148,11 @@ class PlayerAI:
 		"""E #32: value of DENYING the declared opponent card `t`'s effect (my facing effect_canceled).
 		The engine still applies its BASIC advancing; denied = TEMPO + situational + the extra movement
 		the effect itself would have caused ('advancing' adds en cells - also canceled). Denying a
-		self-recoil 'backward' HELPS them, so it prices NEGATIVE (we never face our cancel there)."""
+		self-recoil 'backward' HELPS them, so it prices NEGATIVE (we never face our cancel there).
+		A PLAY-TIME instant (pet_trap / wrecking_ball / swap_cards) prices 0: it already fired when the
+		card was played, and `_oppo_has_valid_effect_canceled` can only stop the resolution part."""
+		if t['effect'] in INSTANT_EFFECTS:
+			return 0
 		v = max(0, TEMPO_VALUES.get(t['effect'], 0)) + self._situational_tempo(t)
 		en = int(t.get('effect_number') or 0)
 		if t['effect'] == 'advancing':
@@ -1096,7 +1182,10 @@ class PlayerAI:
 			# potential advance (drops / a later cancel of theirs on it are a deliberate P2 refinement)
 			return (0 if locked else max(0, self._oppo_potential_adv(t))), 0
 		# copy_effect: I apply THEIR effect with me as actor. Movement effects -> forward cells (my
-		# estimator on their stats); zone effects -> their TEMPO + situational value for ME.
+		# estimator on their stats); zone effects -> their TEMPO + situational value for ME. Effects
+		# that are no-op markers in apply_effect (the instants, rooted, grappling, ...) copy NOTHING.
+		if t['effect'] not in COPYABLE_EFFECTS:
+			return 0, 0
 		if t['effect'] in ('advancing', 'backward', 'jump'):
 			return (0 if locked else max(0, self._forward_if_met(t))), 0
 		return 0, max(0, TEMPO_VALUES.get(t['effect'], 0)) + self._situational_tempo(t)
@@ -1104,19 +1193,23 @@ class PlayerAI:
 	def _entry_value(self, row, to):
 		"""E #31: net expected value (fwd+tempo) of MY card `row` if it resolved on column `to` - the
 		play_card score model without the win flag, facing interactions included. Used to price swap
-		targets; mercurochrome buy-through is approximated as "in my zone + blocked"."""
+		targets; mercurochrome buy-through is approximated as "in my zone + blocked". The PLAY-TIME
+		instants (pet_trap / wrecking_ball / swap_cards) keep their value even on a defended column:
+		the block only cancels the card's effect and advancing, never the instant that already fired."""
 		met = self._condition_met(row['condition'])
+		inst = self._instant_tempo(row)
+		res = row['effect'] if row['effect'] not in INSTANT_EFFECTS else None   # never counted twice
+		res_tempo = (TEMPO_VALUES.get(res, 0) + self._situational_tempo(row)) if (res and met) else 0
 		if self._oppo_shields_at(to) >= int(row['mana']):
 			buythrough = met and (row['effect'] == 'unstoppable'
 					or 'mercurochrome' in (self.player_state.pendings or []))
 			if not buythrough:
-				return 0
+				return inst
 		if self._movement_locked():
-			tempo = TEMPO_VALUES.get(row['effect'], 0) if met else 0
 			cf, ct = self._facing_gain(row, to)
-			return tempo + ct   # the lock suppresses all of my movement (cf is already 0 inside)
+			return inst + res_tempo + ct   # the lock suppresses all of my movement (cf is already 0 inside)
 		fwd = self._forward_if_met(row) if met else self._forward_if_unmet(row)
-		tempo = (TEMPO_VALUES.get(row['effect'], 0) + self._situational_tempo(row)) if met else 0
+		tempo = inst + res_tempo
 		if fwd > 0:
 			fwd += self._drop_path_bonus(row, fwd)
 		cf, ct = self._facing_gain(row, to)
@@ -1166,20 +1259,13 @@ class PlayerAI:
 
 	def _move_estimate(self, row):
 		"""Baseline estimate of the total FORWARD cells this card moves me when its condition is met
-		and it is not blocked: base advancing + faction-biome bonus (+1 while my token stands on a
-		home biome - forward only, like the engine) + the extra 'advancing'-effect cells. Kept as the shared
-		baseline estimator for win-completion detection (the epo attach rule and the threat responses); the full
-		§C scoring model is _forward_if_met / _forward_if_unmet + _drop_path_bonus."""
-		est = int(row['advancing'] or 0)
-		if est > 0:
-			my_pos = self.player_state.current_position or 0
-			biome = self.earth_biomes[my_pos] if (self.earth_biomes and len(self.earth_biomes) > my_pos) else None
-			home = FACTION_BIOMES.get(getattr(self.player_state, 'faction', None))
-			if biome is not None and home and biome in home:
-				est += 1
-			if row['effect'] == 'advancing':
-				est += int(row.get('effect_number') or 0)
-		return est
+		and it is not blocked - the effect-aware mirror of `_forward_if_met` (base + home-biome +1 for a
+		positive move; `advancing` adds effect_number on the TOTAL, `jump` teleports the base, `backward`
+		recoils by |effect_number|). Board drops are NOT included (that is `_drop_path_bonus`). Kept as
+		the shared estimator for the epo win-completion check (`_completes_win`, which uses it exactly
+		like `_choose_attachment` does), the drop-target reach (`_my_reach_cells`) and the nobodymoves
+		self-deny guard."""
+		return self._forward_if_met(row)
 
 	def _home_bonus(self):
 		"""C #22: the +1 faction biome bonus for forward movement - the engine applies it once per
@@ -1262,18 +1348,31 @@ class PlayerAI:
 
 	def _completes_win(self, row, fwd, blocked):
 		"""C #23: does this play WIN the game at resolution? pos + effective forward >= 24 (drops on my
-		path are already included in `fwd`), or an attachable epo (+1) completes it - mirroring
-		_choose_attachment's epo rule with its own estimator (_move_estimate)."""
+		path are already included in `fwd`), or an epo that _choose_attachment WOULD actually attach
+		completes it - the SAME predicate, so the win flag and the message can never disagree (an epo the
+		attachment policy keeps in the zone for a `pending`-condition main does not buy a win)."""
 		if blocked or self._movement_locked():
 			return False
 		pos = self.player_state.current_position or 0
 		if pos + fwd >= 24:
 			return True
-		if 'epo' in (self.player_state.pendings or []):
-			est = self._move_estimate(row)   # the same estimator _choose_attachment uses for the attach
-			if pos + est == 23:
-				return True
+		if 'epo' in (self.player_state.pendings or []) \
+				and self._choose_attachment(row) == 'epo' and pos + self._move_estimate(row) == 23:
+			return True
 		return False
+
+	def _instant_tempo(self, row):
+		"""Value of the card's PLAY-TIME effect (pet_trap token, wrecking_ball dwelling removal,
+		swap_cards re-ordering). It fires inside `_apply_instant_effects` as soon as the play is
+		accepted, so it is counted whatever the condition, the block race or the movement lock say -
+		this is the engine's own asymmetry (`if success: _apply_instant_effects(...)`, and the
+		`apply_effect` branches for these three effects are no-op markers).
+		swap_cards has no flat value of its own (TEMPO_VALUES 0): its gain is priced per target by
+		`_choose_swap_target`, which is where the play-time semantics are applied."""
+		fx = row['effect']
+		if fx not in INSTANT_EFFECTS:
+			return 0
+		return TEMPO_VALUES.get(fx, 0) + self._situational_tempo(row)
 
 	def _situational_tempo(self, row):
 		"""C #24: public-info adjustments on top of the flat TEMPO_VALUES (only when the effect fires)."""
@@ -1310,6 +1409,26 @@ class PlayerAI:
 				n += 1
 		return n
 
+	def _pending_condition_imminent(self):
+		"""A.2 #9 refined: does one of MY OWN `pending`-condition main cards need the zone to stay
+		NON-EMPTY at resolution, i.e. RIGHT NOW? True when such a card is in my HAND (I may still play
+		it this turn) or already DECLARED in my action_chain. Cards still in the DECK do NOT count:
+		the zone is refillable (free laboratory tap, or a pending placement on a later fallback tick)
+		before they are ever drawn, while the +1 of an `epo` is a cell gained now.
+		(Replaces the old blanket `len(zone) >= 2` rule, which parked whole `epo` stockpiles in the
+		zone - measured: ~50 ep0 still sitting in pending zones at the end of a 36-seat sample.)"""
+		for cid in (self.player_state.hand or []):
+			row = self.MAIN_ROWS.get(cid)
+			if row is not None and row['condition'] == 'pending':
+				return True
+		for a in (self.player_state.action_chain or []):
+			if a and a.get('mode') == 'move':
+				for cid in (a.get('cards') or []):
+					row = self.MAIN_ROWS.get(cid)
+					if row is not None and row['condition'] == 'pending':
+						return True
+		return False
+
 	def _choose_attachment(self, row):
 		"""A.2 #8/#9: which pending card (if any) to attach to this main MOVE play.
 
@@ -1317,13 +1436,14 @@ class PlayerAI:
 		* mercurochrome = UNSTOPPABLE modifier (only while my condition is met): attach when the card
 		  would be BLOCKED by shields on the facing column, or a landmine sits on its path, or my movement
 		  is locked this turn (nobodymoves / my own landmine block) - it buys back the whole play.
-		* epo = +1 advance: DECISIVE when it completes the win (pos+est == 23); otherwise tempo — attach
-		  only with a laboratory dwelling (it refills every turn) or ≥2 pendings in zone (so at least one
-		  stays to keep the `pending` condition met, #9).
+		* epo = +1 advance: DECISIVE when it completes the win (pos+est == 23); otherwise plain tempo -
+		  attach whenever the play is unblocked, unlocked and the zone may be spent (`may_spend`:
+		  laboratory refill, ≥2 pendings in zone, or no `pending`-condition main of mine resolving
+		  this turn - see `_pending_condition_imminent`). Never when the card already wins alone (the
+		  engine stops the chain at the win, so the +1 would be consumed for nothing).
 		* bloodtest = the OPPONENT discards 1 card (treated as a `discard_oppo` effect): tempo +
 		  denial - attach when the effect can fire, the play is unblocked and the opponent has
-		  cards in hand (public count), keeping ≥1 pending in the zone while I hold
-		  `pending`-condition mains.
+		  cards in hand (public count), with the same `may_spend` zone rule.
 		* virus is self-penalizing (-1 knockback to me): NEVER auto-attached; it stays in the
 		  zone where it still counts for the `pending` condition.
 		Never attaches when the effect cannot fire (my condition not met, or a facing move-mode
@@ -1347,23 +1467,30 @@ class PlayerAI:
 				or self._landmine_on_path(max(est, 1))
 		):
 			return 'mercurochrome'
+		# Can this play spend the LAST pending of the zone? Only when no `pending`-condition main of
+		# mine resolves this turn (a laboratory tap refills the zone for free every turn, so with the
+		# lab on board the answer is always yes).
+		may_spend = (self.player_state.dwelling == 'laboratory'
+				 or len(zone) >= 2
+				 or not self._pending_condition_imminent())
+		# A play that already crosses the finish line on its own ends the trip chain: the engine
+		# returns before `_apply_pending_effect`, so an attached pending would only be burned.
+		wins_alone = not will_be_blocked and not self._movement_locked() and pos + est >= 24
 		# --- epo: +1 advance ---
-		if 'epo' in zone and not will_be_blocked and not self._movement_locked():
-			if pos + est == 23:
-				return 'epo'             # the +1 crosses the finish line (pos+est >= 24 already wins without it)
-			if self.player_state.dwelling == 'laboratory':
-				return 'epo'             # the lab refills one epo per turn - take the tempo
-			if len(zone) >= 2:
-				return 'epo'             # keep at least one pending in zone for the `pending` condition
+		# A landmine on the path does NOT void the +1: the mine stops the CURRENT movement only, and
+		# the pending's `process_advancing(1)` then walks one fresh cell past it (see process_advancing,
+		# `was_blocked`), so the attach still buys a cell.
+		if 'epo' in zone and may_spend and not wins_alone and not will_be_blocked \
+				and not self._movement_locked():
+			return 'epo'                # the win completion (pos+est == 23) and plain tempo are the same act now
 		# --- bloodtest: the OPPONENT discards 1 card (a discard_oppo effect) ---
 		# Tempo + denial (≈ TEMPO_VALUES['discard_oppo']): the guard above already ensures my
 		# condition is met and no facing effect_canceled; the play must also be unblocked
 		# (a blocked play does not activate the pending effect). It is a ZONE effect, so the
-		# nobodymoves movement lock does NOT suppress it. Like epo: keep ≥1 pending in the
-		# zone while I hold `pending`-condition mains in hand+deck.
-		if 'bloodtest' in zone and not will_be_blocked and (self.oppo_hand or 0) >= 1:
-			if len(zone) >= 2 or self._pending_condition_count() == 0:
-				return 'bloodtest'
+		# nobodymoves movement lock does NOT suppress it. Same `may_spend` zone rule as epo.
+		if 'bloodtest' in zone and may_spend and not wins_alone and not will_be_blocked \
+				and (self.oppo_hand or 0) >= 1:
+			return 'bloodtest'
 		# --- virus: self-penalizing (-1 knockback to me), never auto-attached (still counts for `pending`) ---
 		return None
 
@@ -1400,17 +1527,22 @@ class PlayerAI:
 		def score(row):
 			met = self._condition_met(row['condition'])
 			blocked = self._will_be_blocked(row)
+			# the play-time instant is kept in EVERY branch (it already fired before the chain);
+			# `res` is the part of the card that still goes through condition / block / lock rules
+			inst = self._instant_tempo(row)
+			res = row['effect'] if row['effect'] not in INSTANT_EFFECTS else None
 			if blocked:
-				fwd, tempo = 0, 0        # Step A before Step B: no effect AND no advancing at all
+				fwd, tempo = 0, inst   # Step A before Step B: no effect AND no advancing at all
 			elif self._movement_locked():
 				# nobodymoves / my landmine lock suppresses ALL my movement this turn; zone effects still fire
 				fwd = 0
-				tempo = TEMPO_VALUES.get(row['effect'], 0) if met else 0
+				tempo = inst + (((TEMPO_VALUES.get(res, 0) if res else 0)) if met else 0)
 				cf, ct = self._facing_gain(row, self._my_next_stopover())   # E: a cancel still denies under lock
 				tempo += ct
 			else:
 				fwd = self._forward_if_met(row) if met else self._forward_if_unmet(row)
-				tempo = (TEMPO_VALUES.get(row['effect'], 0) + self._situational_tempo(row)) if met else 0
+				tempo = inst + ((((TEMPO_VALUES.get(res, 0) if res else 0) + self._situational_tempo(row))
+						  if met else 0) if res else 0)
 				if fwd > 0:
 					fwd += self._drop_path_bonus(row, fwd)     # C #23: drops on my path adjust the reach
 				# E #32/#34: what my NEXT column FACES is public - cancel / copy / grappling gains fold in
@@ -1423,8 +1555,13 @@ class PlayerAI:
 				if self._oppo_defend_rate() >= 0.5 and (self.oppo_hand or 0) >= 1:
 					fwd = max(0, fwd - 1)
 			wins = 1 if self._completes_win(row, fwd, blocked) else 0
-			net = fwd + tempo
-			if row['effect'] == 'swap_cards' and not blocked and not self._movement_locked():
+			if row['effect'] == 'fwd_placeholder':
+				net = 0
+			else:
+				net = fwd + tempo
+			if row['effect'] == 'swap_cards':
+				# E #31 + the play-time rule: the swap is INSTANT, so it happens even when the card
+				# is blocked or the movement is locked this turn - always price the best target.
 				opt = self._choose_swap_target(row)
 				if opt is not None:
 					pos, gain = opt
