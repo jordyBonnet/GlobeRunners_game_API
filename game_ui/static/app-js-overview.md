@@ -280,6 +280,30 @@ engine coupling.
 - **Closing**: `✕ Close` button or backdrop click; `leaveGame` removes it.
 - CSS: `.modal.discard-pile-popup` in `style.css` (760px box, scrollable `minmax(84px, 1fr)` grid, `max-height:55vh`).
 
+## Setup-page outbound links (`index.html` panels 4 + 5)
+
+The setup page's right column ends with two **plain `<a class="primary-btn">`
+links** — no JS, no module, no state: they leave the SPA, so the deck selection
+(`setup` in `setup.mjs`) stays intact behind them.
+
+- **4. Build your own deck** → `🧪 Open the deck builder` — the external HF Space
+  (`https://huggingface.co/spaces/jordyBonnet/GlobeRunners`, `target="_blank"`).
+- **5. Balance lab** (added 2026-11-07) → `📊 Open the balance report` —
+  **same-origin** `href="/report"`, `target="_blank" rel="noopener"`: the balance-lab
+  report (AI-vs-AI win rates of the 18 archetypes) rendered by `balance_lab/report.py`
+  and served by `game_ui/app.py` (see *Balance-lab report* in `APP_OVERVIEW.md`). It is
+  a **read-only generated page**: it does not import the modules, reads no game state,
+  and sends no message — its own inline script only sorts/filters its tables.
+- Both work with `#view-setup { pointer-events: none }` because that rule re-enables
+  `button, input, label, **a**, .card` (see the `bg.mjs` row above); the buttons take
+  the current faction accent automatically (`.primary-btn` is built from `--accent`
+  with `color-mix()`), so no CSS was added.
+- `/report` answers **404 + a "run the lab" page** when there is no report to serve
+  (`balance_lab/report.html` + `assets/` are **committed** so the deployed site shows
+  the real report; the lab data/code stay gitignored — see *Balance-lab report* in
+  `APP_OVERVIEW.md`). The link itself is static markup, so it is always visible; only
+  its target degrades.
+
 ## Checklist when modifying the frontend
 
 1. New engine rule / message field (e.g. a new `to:` target, a new board field) → mirror it in: `sendAction` call site (`comm.mjs`), `renderAll`/zone renderers (`state.mjs`/`zones.mjs`/`board.mjs`), **and** the "mirrors the engine" table above.
@@ -290,6 +314,9 @@ engine coupling.
 
 ## Change log
 
+- **2026-11-07 — "Balance lab" panel on the setup page (link to the report).** `index.html` only — new section **5. Balance lab** in the right `setup-col`, after the deck-builder panel: a hint + `<a class="primary-btn balance-report" href="/report" target="_blank" rel="noopener">📊 Open the balance report</a>`. **No `*.mjs` change** (no module, no state, no message — see the new *Setup-page outbound links* section), **no CSS** (`.primary-btn` + `a.primary-btn` already style it and the faction accent themes it), **no cache-bust bump** (neither `style.css` nor `app.mjs` changed; `index.html` is served fresh by `GET /`). Server side (same change, in `game_ui/app.py`): `balance_report()` on `GET /report` + `GET /report/` serving `balance_lab/report.html` (re-read per request, `no-store`, relative `assets/` refs rewritten) and the new `/report/assets` static mount — documented in `APP_OVERVIEW.md`); `.gitignore`
+  `balance_lab/` → `balance_lab/*` + `!balance_lab/report.html` + `!balance_lab/assets`
+  so the committed report ships to the deployed Space (its data/code stay ignored). Verified in the browser: the panel renders under "4. Build your own deck", the link's computed `pointer-events: auto`, clicking it opens `/report` in a **new tab** with **0 broken images of 410** and its filter working (171 → 93 rows on `eng`). No engine / message-shape / AI / game-page change.
 - **2026-10-02 — The starter-deck buttons now serve the DESIGNER decks instead of a random build.** The 20-card lists the designer authored in `GlobeRunners_card_system` (deleted there in 2026-02, recovered from its git history) live in `cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt` and are now what the setup page gives out. **`cards.mjs`**: new `STARTER_DECKS` + `loadStarterDecks()` (fetches the new `GET /starter_decks` endpoint; `API.py` reads the files once per process and keys them by the card_id prefix — see `cards/starter_decks/README.md`). **`setup.mjs`**: `buildStarterDeck(factionKey, seedStr)` returns `STARTER_DECKS[key]` **as-is** when `checkMainDeck` reports no violation; otherwise the previous seeded random build takes over — silently while no list is loaded yet, with a **one-shot toast per faction** (`starterFallbackWarned`, names the faction via `FACTIONS`) when the authored list exists but breaks a deck rule; `boot()` adds `loadStarterDecks()` to the `Promise.allSettled` batch and **rebuilds** a starter deck picked before the pools landed (that click had fallen back to the random build). **`index.html`**: starter-panel hint reworded ("you get that faction's designer starter deck"), cache-bust `app.mjs?v=55` → `?v=56`. Server side (same change, in `API.py`): `load_starter_decks()` + the `/starter_decks` route + a `Cache-Control: no-store` middleware on `/cardpool`, `/support_factions`, `/starter_decks` (without it the browser heuristically caches them, so an edited file + server restart would still serve the OLD list on a plain reload). **Verified in the browser**: Dwarves and Mummies previews match their file order card-for-card; with the directory removed → 20-card valid random build, no toast; with a duplicate injected into the Dwarves file → toast `Designer starter deck for Dwarves breaks 1 deck rule(s) — using a random build instead.` + random build; `cache-control: no-store` on `/starter_decks` through the `game_ui` mount. No engine / message-shape / AI / rendering change.
 
 - **2026-09-24 — WebSocket auto-reconnect (surviving host sleep/wake on free tiers — Render spin-down, HF hibernation).** `comm.mjs` only: the WS layer is now resilient to the connection dying mid-game. (1) **Socket generation counter** — `connectWs` bumps `wsGen`; every handler checks `isLive()` (`gen === wsGen && game.ws === ws`), so a stale socket's late events can no longer flap the connection label, double-schedule a reconnect, or resolve a reply on the wrong socket. (2) **`settlePending()`** — on a live close (or on `teardownWs`), every in-flight action Promise is resolved with the rejection-shaped sentinel `{success:false, message:"Connection lost — the action may not have gone through"}`: awaiting UI (the discard/defend popups, the init-mana loop in `zones.mjs`) un-hangs, toasts, re-enables its button; the 2.5 s poll re-syncs the true state (engine = source of truth). (3) **Reconnect loop** — `setConn(false)` in-game shows `○ reconnecting…` and keeps ONE 2 s retry timer (cleared/replaced on every close); out of a game it shows `○ disconnected` with no loop. (4) **`sendAction` while disconnected** — one `Connection lost — retrying…` toast per disconnect period (was: every 1.5 s), then the send re-attempts every 1.5 s until the socket is OPEN and resolves with the server's real reply; a per-action `inFlight` guard queues the resolver at most once (no double-send after a close-during-retry). (5) **`teardownWs()`** (new export) — `modals.mjs` `leaveGame` now calls it instead of the inline `game.ws.close()`: it invalidates the socket generation, clears the reconnect timer, closes, and settles in-flight Promises — no more spurious `ws://…/ws/null/null` attempt + `○ disconnected` flap after leaving. **Verified end-to-end in the browser** (local server, AI game): killed the server mid-game → label `○ reconnecting…` → an action fired while down stayed pending in the retry loop → restarted the server → socket reconnected, label `● connected to game <id>`, the pending action was resent and resolved with the real game state (25 s total, no hang, no double-send); and `teardownWs` while an action was in flight settled it in 0 ms with the sentinel. No engine / message-shape / AI change. `index.html` cache-bust `?v=54` → `?v=55`.

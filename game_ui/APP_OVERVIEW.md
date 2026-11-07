@@ -18,7 +18,8 @@ things:
 1. **Serves the frontend** — `static/index.html` + the ES-module app (entry
    `static/app.mjs`), the CSS, and the card/game art from external folders.
 2. **Adds UI routes** on top of the engine API — `GET /`, `GET /placeholder.svg`,
-   `POST /create_game_ai`, `GET /api/state/{game}/{player}`.
+   `POST /create_game_ai`, `GET /api/state/{game}/{player}`, `GET /report`
+   (the balance-lab report).
 3. **Embeds the engine API** — everything else (`/create_game`, `/join_game/{id}`,
    `/cardpool`, `/ws/{gid}/{player}`, …) is delegated to the `API.py` app, mounted
    at `/` **last** (so the UI routes above win over any same-path route in `api_app`).
@@ -47,7 +48,7 @@ game_ui/app.py
 │                                        get_current_game, current_game_json
 ├── models            -> PlayerState
 ├── ai_driver         -> random_ai_deck, run_ai_loop                      (the Robot)
-└── fastapi / starlette -> FastAPI, FileResponse, JSONResponse, StaticFiles
+└── fastapi / starlette -> FastAPI, FileResponse, HTMLResponse, JSONResponse, StaticFiles
 ```
 
 `sys.path` is seeded with the project root (so `import API`, `import engine…` work
@@ -63,15 +64,18 @@ only ever speaks to the HTTP/WS surface.
 | `GET /placeholder.svg` | `placeholder()` | `static/placeholder.svg`, `image/svg+xml` |
 | `POST /create_game_ai` | `create_game_ai()` | new game vs the Robot (see *AI wiring*) |
 | `GET /api/state/{game_id}/{player_name}` | `personalized_state()` | masked per-player state for polling |
+| `GET /report` (and `/report/`) | `balance_report()` | the **balance-lab report** — `balance_lab/report.html`, re-read per request, `no-store`; `404` + a how-to page when there is no committed/generated report (see *Balance-lab report*) |
+| `GET /report/assets/*` | (mount) | the report's own images (`balance_lab/assets/` — faction logos + support banners) |
 | `GET /static/*` | (mount) | `static/` — css, js modules, placeholder |
 | `GET /art/*` | (mount, `LOCAL_TEST=True`) **or** `serve_card_image()` (`LOCAL_TEST=False`) | main-card art (`<card_id>.png`) + support art (`<card_path>`) — local folder, or **server-cached** GitHub Release of `GlobeRunners_images` (`hosted_assets/art_cache/`, immutable `Cache-Control`) (see *Card art (`/art`)*) |
 | `GET /assets/*` | (mount) | game assets (biomes, markers, logos, engineer drops) |
 | `GET /cards_ex/*` | (mount) | faction placeholder art (dwelling card) |
 | `*` (everything else) | `api_app` (mounted at `/`) | `/create_game`, `/join_game/{id}`, `/cardpool`, `/support_factions`, `/starter_decks`, `/game/{id}`, `/ws/{gid}/{player}`, … |
 
-Route resolution order: the four **route** handlers first, then the **static
-mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount at
-`/`. A more specific mount (`/static`, `/art`, …) always wins over the `/` mount.
+Route resolution order: the **route** handlers first (`/`, `/placeholder.svg`,
+`/create_game_ai`, `/api/state/…`, `/report`), then the **static mounts** (in the
+`STATIC_MOUNTS` order), then the **catch-all** `api_app` mount at `/`. A more
+specific mount (`/static`, `/art`, …) always wins over the `/` mount.
 
 ## Function-by-function
 
@@ -79,6 +83,7 @@ mounts** (in the `STATIC_MOUNTS` order), then the **catch-all** `api_app` mount 
 - **`placeholder()`** — returns `static/placeholder.svg` (the card-art fallback the
   frontend's `onerror` handlers use). Served as a file (not an inline string).
 - **`create_game_ai(req)`** — see *AI wiring* below.
+- **`balance_report()`** — the balance-lab report page (see *Balance-lab report*).
 - **`personalized_state(game_id, player_name)`** — the polling endpoint. Reads the
   **full** game via `ge.get_current_game`, then returns
   `ge.current_game_json(player_name, current_game)` — i.e. the state **masked for
@@ -153,17 +158,54 @@ The `/art` route depends on the **`LOCAL_TEST` toggle** (top of `app.py`):
 `STATIC_MOUNTS` is a list of `(path, directory, note-if-missing)`. Each is mounted
 with `StaticFiles` **iff the directory exists**; otherwise a warning is printed and
 the mount is skipped (the frontend degrades gracefully — placeholder art / plain
-board). The three mounts (`/art` is separate — see *Card art* above):
+board). The four mounts (`/art` is separate — see *Card art* above):
 
 | path | directory (`LOCAL_TEST=True` → `False`) | missing → |
 |---|---|---|
 | `/static` | `game_ui/static` (both) | the app can't run (frontend) |
 | `/assets` | `…/artdesign/cards_assets` → `game_ui/hosted_assets/assets` | board backgrounds are plain |
 | `/cards_ex` | `…/artdesign/cards_ex` → `game_ui/hosted_assets/cards_ex` | dwelling placeholder images unavailable |
+| `/report/assets` | `balance_lab/assets` (both) | the report shows without its logos/banners |
 
 The asset folders are **hard-coded external paths** (sibling project
 `GlobeRunners_card_system`) — do not "fix" them without checking the fallback still
 works.
+
+## Balance-lab report (`/report`)
+
+The setup page's **5. Balance lab** panel links to `GET /report`, which serves the
+AI-vs-AI balance report (`balance_lab/report.py` → `balance_lab/report.html` — see
+`balance_lab/README.md`). Nothing about the report is re-implemented here:
+
+- **Read per request** — `report.html` is read from disk on every hit (no caching,
+  no copy), so `python balance_lab/report.py` + a browser reload is enough to see a
+  regenerated report. The response carries `Cache-Control: no-store` for the same
+  reason (the page is regenerated in place; a heuristic browser cache would keep
+  showing the previous run).
+- **Relative images rewritten on the fly** — the report references its art
+  RELATIVELY (`src="assets/logo_Dwa.png"`, 10 files, ~220 KB). Served flat, those
+  would resolve to `/assets/…` (the *game* assets, which have no `logo_Dwa.png`), so
+  the handler rewrites `src="assets/` → `src="/report/assets/` and the
+  `STATIC_MOUNTS` entry `/report/assets` → `balance_lab/assets` serves them
+  (`StaticFiles` = path-traversal-safe; `/report/assets/../results.csv` is a 404).
+- **What ships, what does not** — `.gitignore` uses **`balance_lab/*`** plus
+  `!balance_lab/report.html` + `!balance_lab/assets`, so the **report and its images
+  (~470 KB) are committed** — a deployed Space (Docker `COPY . .`) therefore serves
+  the real report — while the lab **data and code stay local** (`results.csv`,
+  `balance_lab.db`, `shards/`, `audit.json`, archives, `*.py`). The `balance_lab/*`
+  form matters: Git cannot re-include a file whose parent **directory** is excluded,
+  so a plain `balance_lab/` + `!balance_lab/report.html` would silently ship nothing.
+  **Refreshing the online report = regenerate it, commit `report.html` (+ any new
+  `assets/*.png`), push.**
+- **No report to serve** (never generated, or not committed) → `/report` answers
+  **404** with a small styled page (`_REPORT_MISSING_HTML`) naming the two commands
+  that create it (`run_lab.py`, `report.py`) and a link back to `/`. The setup-page
+  button is a plain `<a href="/report" target="_blank">`, so it is always visible;
+  only the target degrades.
+- **Read-only** — no engine, no game state, no masking concerns: the route only
+  serves a generated HTML file + its images. `results.csv` / `balance_lab.db` are
+  neither served nor reachable (only the `assets/` subfolder is mounted, and they are
+  not in the deployed image either).
 
 ## AI wiring (`/create_game_ai`)
 
@@ -229,6 +271,34 @@ Every finished game is backed up to the Hugging Face dataset
   engine, and never let a backup failure surface into a game response.
 
 ## Change log
+
+- **2026-11-07 — Balance-lab report served by the UI (`/report`) + committed.** New route
+  `balance_report()` (`GET /report` + `GET /report/`) serves `balance_lab/report.html`
+  — the AI-vs-AI balance report — so the setup page can link to it, plus a fourth
+  `STATIC_MOUNTS` entry `/report/assets` → `balance_lab/assets` for the report's
+  images. The file is **re-read on every request** with `Cache-Control: no-store`, so
+  `python balance_lab/report.py` + a reload shows the new run (no copies to keep in
+  sync), and the relative `src="assets/…"` refs are rewritten to `/report/assets/…`
+  on the fly (flat, they would resolve to the *game* `/assets` folder, which has none
+  of those files). When `balance_lab/` is absent — it is gitignored, so a deployed
+  host has no lab data — the route answers **404 with a styled how-to page**
+  (`_REPORT_MISSING_HTML`: the two commands to generate a report + a link back to
+  `/`). Frontend side in `static/app-js-overview.md` (same date: new
+  **5. Balance lab** panel + `📊 Open the balance report` link). Verified in the
+  browser on `:8031`: setup page shows the panel; the click opens `/report` in a new
+  tab — **410/410 images load, 0 broken**, the matchup filter works (171 → 93 rows on
+  `eng`); headers: `200 + cache-control: no-store` on `/report` and `/report/`,
+  `200 image/png` on `/report/assets/logo_Dwa.png`; `404` (JSON) on
+  `/report/assets/../results.csv` — raw request, unnormalized — and `404` + the
+  how-to page with `report.html` moved aside. No engine / message-shape / AI change.
+  Same change, **`.gitignore`**: `balance_lab/` → `balance_lab/*` +
+  `!balance_lab/report.html` + `!balance_lab/assets` — the report and its 10 PNGs
+  (~470 KB) are now **committed**, so the deployed Space serves the real report
+  instead of the 404 page, while `results.csv`, `balance_lab.db`, `shards/`,
+  `audit.json`, the archives and the lab `*.py` stay ignored (verified with
+  `git add -n balance_lab/` → exactly those 11 files, and `git check-ignore -v` → the
+  data files still ignored). A plain `balance_lab/` + negation would have shipped
+  nothing (Git cannot re-include inside an excluded directory).
 
 - 2026-10-02 — **no change to `app.py`** (route map updated only): `API.py` gained `GET /starter_decks` — the designer 20-card starter decks read from `cards/starter_decks/*.txt` (see `cards/starter_decks/README.md`) — plus a `Cache-Control: no-store` middleware on `/cardpool`, `/support_factions`, `/starter_decks` (without it the browser heuristically caches them, so an edited file + restart would still serve the old list). Both reach the UI through the existing catch-all `api_app` mount; the frontend side is documented in `static/app-js-overview.md` (same date).
 

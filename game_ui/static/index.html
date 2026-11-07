@@ -29,7 +29,7 @@
 
       <!-- starter decks -->
       <div id="starter-panel" class="deck-source">
-        <p class="hint">Pick a faction: you get that faction's <b>designer starter deck</b> — 20 cards (3 mana + 6 hand + 11 deck). Authored in <code>cards/starter_decks/</code>.</p>
+        <p class="hint">Pick a main faction starter deck bellow <b>OR</b> Load a custom deck from a text file</p>
         <div id="faction-grid" class="faction-grid"></div>
       </div>
 
@@ -52,7 +52,7 @@
     <!-- support faction column -->
     <section class="panel">
       <h2>2. Support faction</h2>
-      <p class="hint">Pick a support faction: its 10 cards (2× 5 unique) are mixed into your main deck — <b>20 main + 10 support = 30 cards</b>.</p>
+      <p class="hint">Pick a support faction deck: its 10 cards (2× 5 unique) are mixed into your 20 main faction cards deck</p>
       <div id="support-grid" class="support-grid"></div>
       <h3 id="support-preview-title" class="hidden">Support deck (<span id="support-count">0</span>/10)</h3>
       <div id="support-preview" class="card-row hidden"></div>
@@ -101,6 +101,13 @@
       <h2>4. Build your own deck</h2>
       <p class="hint">Build your own deck, that you can load later as text file.</p>
       <a class="primary-btn deck-builder" href="https://huggingface.co/spaces/jordyBonnet/GlobeRunners" target="_blank" rel="noopener">🧪 Open the deck builder</a>
+    </section>
+
+    <!-- balance lab column -->
+    <section class="panel">
+      <h2>5. Balance lab</h2>
+      <p class="hint">The robot plays itself thousands of times: win rate of every deck archetype, head-to-head matrix, and the decks the numbers flag as over / under-powered.</p>
+      <a class="primary-btn balance-report" href="/report" target="_blank" rel="noopener">📊 Open the balance report</a>
     </section>
     </div>
   </div>

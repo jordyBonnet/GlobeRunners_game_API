@@ -21,5 +21,12 @@ game_ui/hosted_assets/art_cache/
 # Remotion video sub-project (own Node project + generated art/renders) — not part of the game repo
 video/
 
-# AI games to check the balance of the game
-balance_lab/
+# AI games to check the balance of the game — the lab DATA stays local (results.csv,
+# balance_lab.db, shards/, archives, its own logs), but the GENERATED REPORT ships on
+# purpose: game_ui/app.py serves it at GET /report (main menu -> 5. Balance lab) and a
+# deployed Space only ever gets what Git tracks (~470 KB: report.html + its 10 PNGs).
+# NOTE the `balance_lab/*` form (NOT `balance_lab/`): Git cannot re-include a file whose
+# parent directory is excluded, so the negations below need the contents pattern.
+balance_lab/*
+!balance_lab/report.html
+!balance_lab/assets

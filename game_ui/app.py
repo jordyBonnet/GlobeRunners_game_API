@@ -21,6 +21,8 @@ Routes added on top of API.py:
     GET /api/state/{gid}/{player}  personalized state on demand (polling) — the
                                    opponent's hidden info stays masked (unlike
                                    GET /game/{id} which is reserved for debug).
+    GET /report                    the balance-lab report (AI vs AI mass simulation,
+                                   balance_lab/report.py) + GET /report/assets/*
 
 Everything else (/create_game, /join_game/{id}, /cardpool, /ws/{gid}/{player})
 is delegated to the API.py app.
@@ -40,7 +42,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 # the API.py app (engine REST + WebSocket) — the webapp "interacts" with it by embedding it
@@ -73,12 +75,24 @@ _ART_DIR = _ART_ROOT / "cards_framed_0.6"
 #   hosted_assets/assets/   board assets (biomes, markers, logos, effect icons…)
 #   hosted_assets/cards_ex/  card backs + faction placeholder art
 _HOSTED_DIR = STATIC_DIR.parent / "hosted_assets"
+# Balance lab (AI vs AI mass simulation) — see balance_lab/README.md. What ships and
+# what does not (see .gitignore): `report.html` + `assets/` ARE committed on purpose
+# (a deployed Space only gets what Git tracks, and this route serves exactly those two),
+# while the lab DATA/code (results.csv, balance_lab.db, shards/, *.py) stays local.
+# So a server without a committed report answers the "not generated yet" page.
+_LAB_DIR = ROOT / "balance_lab"
+_LAB_REPORT = _LAB_DIR / "report.html"
+
 STATIC_MOUNTS = [
     ("/static", STATIC_DIR, "the frontend static folder is missing!"),
     ("/assets", _ART_ROOT / "cards_assets" if LOCAL_TEST else _HOSTED_DIR / "assets",
      "board backgrounds will be plain"),
     ("/cards_ex", _ART_ROOT / "cards_ex" if LOCAL_TEST else _HOSTED_DIR / "cards_ex",
      "faction placeholder images will be unavailable"),
+    # the report's own images (faction logos + support banners, ~220 KB) — the report
+    # HTML references them RELATIVELY (src="assets/logo_Dwa.png"), and GET /report
+    # rewrites that prefix to /report/assets/ (see balance_report).
+    ("/report/assets", _LAB_DIR / "assets", "the balance report will be missing its images"),
 ]
 
 app = FastAPI(title="GlobeRunners - Web UI")
@@ -199,6 +213,66 @@ def personalized_state(game_id: str, player_name: str):
             status_code=404,
         )
     return json.loads(ge.current_game_json(player_name, current_game))
+
+
+# ------------------------------------------------------------------ balance lab report
+# `balance_lab/report.py` renders a standalone report.html (self-contained apart from
+# its relative `assets/` images). It is served here so the main menu can link to it —
+# re-reading the file on every request means a regenerated report shows immediately,
+# and `no-store` stops the browser from keeping the previous one on a plain reload.
+_NO_STORE = {"Cache-Control": "no-store"}
+
+_REPORT_MISSING_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlobeRunners — balance lab report</title>
+<link rel="icon" href="/assets/GlobeRunners_icone.png">
+<style>
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 700px at 50% -10%,#1a2444 0%,#0b1020 60%) fixed;
+       color:#e8eefc;font-family:"Segoe UI",system-ui,Arial,sans-serif;display:grid;place-items:center;padding:28px}
+  .box{max-width:620px;background:#182036;border:1px solid #2d3a5f;border-radius:14px;padding:26px 28px;line-height:1.7}
+  h1{font-size:1.25rem;margin:0 0 10px;color:#4fd1c5}
+  code{background:#131a2e;border:1px solid #2d3a5f;border-radius:5px;padding:1px 6px;font-size:.85em;color:#9fd4ff}
+  pre{background:#131a2e;border:1px solid #2d3a5f;border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:.82rem;color:#c0e884}
+  a{color:#f6ad55}
+  p.dim{color:#9fb0d0;font-size:.9rem}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>📊 No balance report on this server</h1>
+    <p>The report is rendered offline from the AI-vs-AI simulation results
+       (<code>balance_lab/results.csv</code>). Only <code>balance_lab/report.html</code>
+       and its <code>assets/</code> are committed — the lab data is not — so this page
+       appears when no report has been generated/committed yet. Run the lab and
+       regenerate it, then reload:</p>
+    <pre>python balance_lab/run_lab.py --games 20   # the simulation (all 171 matchups)
+python balance_lab/report.py               # render report.html (+ assets/)</pre>
+    <p class="dim">No server needed either: <code>balance_lab/report.html</code> is a single
+       self-contained page — open it straight from disk.</p>
+    <p><a href="/">&larr; Back to the game</a></p>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/report")
+@app.get("/report/")
+def balance_report():
+    """The balance-lab report (AI vs AI win rates over the 18 deck archetypes).
+
+    Serves `balance_lab/report.html` with its relative image paths rewritten to
+    /report/assets/* (the STATIC_MOUNTS entry). 404 + a how-to page when there is no
+    report to serve — i.e. the lab was never run here and no report.html is committed
+    (`balance_lab/report.html` + `assets/` are committed, its data/code are not).
+    """
+    if not _LAB_REPORT.is_file():
+        return HTMLResponse(_REPORT_MISSING_HTML, status_code=404, headers=_NO_STORE)
+    html = _LAB_REPORT.read_bytes().replace(b'src="assets/', b'src="/report/assets/')
+    return HTMLResponse(html, headers=_NO_STORE)
 
 
 # ------------------------------------------------------------------ statiques
