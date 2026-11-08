@@ -101,6 +101,36 @@ check('state C: turn 3 has its stopover', turns()[2].querySelectorAll('.log-sv')
 check('state C: first render rule — latest open, others closed',
       turns()[2].open === true);
 
+// --- STATE D (2026-11-09): support-faction lines, placements, ⚙ tag, titles -----
+const turn4 = { turn: 4, instant: [
+  { player: 'Alice', what: '🏭 refinery placed on the board — tap: draw 1 card' },
+  { player: 'Alice', what: '💊 epo — pending card placed, attach it to one of your move cards' },
+  { player: 'Bob', what: '⚗️ laboratory tap — adds an \'epo\' pending card' } ],
+  stopovers: [ { stopover: 'stopover_4', entries: [
+    { player: 'Alice', order: 1, mode: 'move', to: 'stopover_4', cards: ['refinery'],
+      pos_before: 4, pos_after: 4, condition_met: null, effect: null,
+      shield: null, negatives: [], notes: [] },
+    { player: 'Bob', order: 2, mode: 'move', to: 'stopover_4', cards: ['BBB'],
+      pos_before: 1, pos_after: 4, condition_met: true, effect: 'advancing',
+      shield: null, negatives: [], notes: ['🧲 boost on cell 3 — Alice +2 advancing'] } ] } ] };
+renderLog({ log: [ turn1, turn2_resolved2, turn3, turn4 ] });
+const t4 = turns()[3];
+check('state D: turn 4 appended', turns().length === 4, `(got ${turns().length})`);
+check('support play: the ⚙ faction tag stands in for the effect label',
+      Array.from(t4.querySelectorAll('.log-tag.sup')).some(e => e.textContent === '⚙ engineers'),
+      `(tags=${JSON.stringify(Array.from(t4.querySelectorAll('.log-tag')).map(e => e.textContent))})`);
+check('card thumb hover title is support-aware (name + faction + description)',
+      Array.from(t4.querySelectorAll('.log-card')).some(e =>
+        e.title.includes('engineers') && e.title.includes('draw 1 card')),
+      `(titles=${JSON.stringify(Array.from(t4.querySelectorAll('.log-card')).map(e => e.title))})`);
+check('instant box shows the dwelling PLACE + the pending PLACE + the tap',
+      t4.querySelectorAll('.log-instant-row').length === 3
+      && t4.textContent.includes('refinery placed on the board')
+      && t4.textContent.includes('epo — pending card placed'),
+      `(rows=${t4.querySelectorAll('.log-instant-row').length})`);
+check('a drop trigger that caught the OPPONENT renders exactly as written',
+      t4.textContent.includes('boost on cell 3 — Alice +2 advancing'));
+
 out.textContent += `\nRESULT: ${ok} passed, ${fail} failed\n`;
 if (fail) document.title = 'TEST-FAILED';
 </script>

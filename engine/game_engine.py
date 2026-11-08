@@ -113,6 +113,21 @@ MAGE_APOCALYPTICRITUAL = 'Apocalypticritual'
 # earth_initial_b0 (cell-0 biome at game init, the base for the background art) record it.
 MAGE_BLACK_HOLE = 'black_hole'
 
+# Log phrase of a dwelling PLACE (refinery / laboratory / black_hole). Placing a
+# dwelling is a play-phase action that puts PERMANENT board furniture — like a tap it
+# is outside the trip chain, so it is recorded in the turn's 'instant' section (see
+# _append_instant) and never on a card line. The phrase states the tap it just granted,
+# which is the part the board alone cannot show later on.
+DWELLING_PLACE_NOTE = {
+    ENGINEER_DWELLING: '🏭 refinery placed on the board — tap: draw 1 card',
+    DOCTOR_DWELLING: "⚗️ laboratory placed on the board — tap: add an 'epo' pending card",
+    MAGE_BLACK_HOLE: '🕳️ black_hole placed on the board — tap: rotate the earth 3 cells',
+}
+# Log phrase of a pending-zone PLACE (epo / virus / bloodtest / mercurochrome): the card
+# leaves the hand and waits in the pending zone, invisible on the log until it is
+# attached — so the placement itself is recorded in the 'instant' section too.
+PENDING_PLACE_NOTE = '💊 {card} — pending card placed, attach it to one of your move cards'
+
 DB_PATH = os.path.join(os.path.dirname(__file__), '../games/games.db')
 
 start_cards_in_hand = 6
@@ -873,6 +888,10 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
             player.mana_spend = (player.mana_spend or 0) + cost
             print(f'\t\t\tDWELLING place: {player.name} places {card_id} on the board (cost {cost})')
             message = f"{player.name} places the dwelling card {card_id} on the board"
+            # the placement is a permanent board change — record it in the turn's
+            # 'instant' section (only the TAP used to be recorded there)
+            _append_instant(current_game, player.name, DWELLING_PLACE_NOTE.get(
+                card_id, f'⚙ {card_id} placed on the board as a dwelling'))
 
             # alternation (same as a play: control passes to the opponent unless they already passed)
             if first_second == 'first':
@@ -946,6 +965,9 @@ def player_play(first_second: str, player: PlayerState, current_game: GameState)
         player.play_count = played_before + 1
         print(f'\t\t\tPENDING ZONE: {player.name} places {pz_card} in the pending zone (cost {pz_cost})')
         pz_message = f"{player.name} places {pz_card} in the pending zone"
+        # the pending zone is public board furniture: record the placement (the card is
+        # then invisible on the log until its effect fires, see process_card's spent note)
+        _append_instant(current_game, player.name, PENDING_PLACE_NOTE.format(card=pz_card))
         # Alternation (same as a play)
         if first_second == 'first':
             current_game.state = f"turn {current_game.turn} - waiting for second player ({current_game.turn_order[1]}) to play"
@@ -1416,6 +1438,11 @@ def _trigger_board_drops(current_game, player, log_entry=None):
     here = [d for d in (current_game.board_drops or []) if (d or {}).get('cell') == cell]
     if not here:
         return current_game
+    # The note goes on the log line of the card being RESOLVED. When the token that
+    # arrives is the OPPONENT's (an advancing_oppo / backward_oppo effect stepped it
+    # onto the cell), the line still reports the event — naming whose token the drop
+    # caught — instead of dropping it (the effect itself always happened).
+    _mover = '' if (log_entry is None or log_entry.get('player') == player.name) else f'{player.name} '
     was_blocked = bool(player.landmine_blocked)
     for d in here:
         # a previous drop may have moved the token OFF the cell (boost / trampoline /
@@ -1427,22 +1454,22 @@ def _trigger_board_drops(current_game, player, log_entry=None):
         current_game.board_drops.remove(d)   # consumed on trigger
         if kind == 'boost':
             print(f'\t\t\tengineer drop BOOST on cell {cell}: {player.name} +2 advancing')
-            if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append(f'🧲 boost on cell {cell} — +2 advancing')
+            if log_entry is not None:
+                log_entry['notes'].append(f'🧲 boost on cell {cell} — {_mover}+2 advancing')
             current_game = process_advancing(2, player, current_game, allow_bonus=False, log_entry=log_entry)
         elif kind == 'trampoline':
             print(f'\t\t\tengineer drop TRAMPOLINE on cell {cell}: {player.name} jumps +2')
-            if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append(f'🦘 trampoline on cell {cell} — jump +2')
+            if log_entry is not None:
+                log_entry['notes'].append(f'🦘 trampoline on cell {cell} — {_mover}jump +2')
             current_game = _jump(player, 2, current_game, log_entry)
         elif kind == 'gluetrap':
             print(f'\t\t\tengineer drop GLUETRAP on cell {cell}: {player.name} knocked back -1')
-            if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append(f'🩹 gluetrap on cell {cell} — knocked back -1')
+            if log_entry is not None:
+                log_entry['notes'].append(f'🩹 gluetrap on cell {cell} — {_mover}knocked back -1')
             player.current_position = max(0, cell - 1)   # direct recoil (no re-trigger)
         elif kind == 'landmine':
             print(f'\t\t\tengineer drop LANDMINE on cell {cell}: {player.name} BLOCKED for the rest of the turn')
-            if log_entry is not None and log_entry.get('player') == player.name:
+            if log_entry is not None:
                 log_entry['notes'].append(f'💥 landmine on cell {cell} — {player.name} blocked')
             player.landmine_blocked = True
         else:
@@ -1514,11 +1541,16 @@ def apply_copy_effect(game, copier, copier_action, facing_player, facing_action,
 # part of the public resolution. No hand/mana/deck content ever goes in here.
 
 def _append_instant(current_game, player_name, phrase):
-    """ Record an INSTANT effect (a play-time effect or a dwelling tap) in the
-     CURRENT TURN's log entry — the 'instant' section the UI renders at the TOP of
-     the turn, before the stopovers. Instant effects fire at PLAY TIME (before the
-     trip chain) or on a TAP (a quick action, never part of the chain), so they do
-     not belong to any stopover line.
+    """ Record an INSTANT / board-furniture action in the CURRENT TURN's log entry
+     — the 'instant' section the UI renders at the TOP of the turn, before the stopovers.
+     What belongs here (never on a stopover line):
+       * play-time instant effects: pet_trap, engineer drops, wrecking_ball, swap_cards,
+         Celestial_reversal, thermic_flux, nobodymoves, Apocalypticritual
+       * dwelling PLACES (refinery / laboratory / black_hole) and dwelling TAPS
+       * pending-zone PLACES (epo / virus / bloodtest / mercurochrome)
+     They fire at PLAY TIME (before the trip chain) or on a TAP (a quick action), so they
+     do not belong to any stopover line. The pending card ATTACHED to a move card is the
+     exception: its note goes on that card's line, see process_card.
      Creates the turn's log entry if it does not exist yet (instant effects fire
      before process_trip_chain runs, which normally creates the entry). """
     log_list = current_game.log
@@ -1629,9 +1661,10 @@ def process_trip_chain(current_game, resume=None):
         log_list = current_game.log
         if not isinstance(log_list, list):
             current_game.log = log_list = []
-        # REUSE the turn's entry if an INSTANT effect (a play-time effect or a
-        # dwelling tap) already created it at play time — it carries the 'instant'
-        # section that must survive the trip chain (a new entry would orphan it)
+        # REUSE the turn's entry if an INSTANT effect (a play-time effect, a dwelling
+        # tap/place or a pending-zone place) already created it at play time — it
+        # carries the 'instant' section that must survive the trip chain (a new entry
+        # would orphan it)
         turn_log = log_list[-1] if (log_list and log_list[-1].get('turn') == current_game.turn) else None
         if turn_log is None:
             turn_log = {'turn': current_game.turn, 'stopovers': []}
@@ -1903,6 +1936,10 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
     #     defend cards on the SAME stopover (block / unstoppable / shields vs mana). ---
     grappling_activated = False
     effect_activated = False
+    # doctors: why an ATTACHED pending card did not fire (None = it fired / none attached).
+    # The pending is consumed at PLAY time, so when its effect cannot happen the log must
+    # still say so — otherwise the card just disappears from the zone (see the flush below).
+    _pend_reason = None
     for card_id in card_ids[:1]:   # normal play: exactly 1 card
         rows = CARDS_DB.filter(pl.col('card_id') == card_id)
         if rows.is_empty():
@@ -1932,6 +1969,7 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
                 if log_entry is not None:
                     log_entry['negatives'].append('landmine — blocked')
                 current_game.message = {'success': True, 'message': f'{player.name} is blocked by landmine'}
+                _pend_reason = 'the card was canceled by a landmine'
                 continue
 
         # nobodymoves: GAME-LEVEL movement LOCK (all players) —
@@ -1974,12 +2012,18 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
                         log_entry['negatives'].append(f'blocked — shields {shields} ≥ cost {row["mana"]}')
                     if oppo_entry is not None:
                         oppo_entry['notes'].append(f'blocked {player.name}’s card on {stopover}')
+                    _pend_reason = f'the card was blocked by {oppo.name}'
                     continue
                 print(f'\t\t\tblock failed (shields {shields} < mana {row["mana"]}), card {card_id} plays normally')
                 if log_entry is not None:
                     log_entry['notes'].append(f'block broken — shields {shields} < cost {row["mana"]}')
 
         current_game, grappling_activated, effect_activated = _resolve_card(row, player, current_game, stopover, log_entry, movement_locked=movement_locked)
+        if _pending_card and not effect_activated:
+            # condition not met, or the effect was canceled: the pending effect cannot fire
+            _negs = ' '.join((log_entry or {}).get('negatives') or [])
+            _pend_reason = ('the card effect was canceled' if 'effect canceled' in _negs
+                            else "the card's condition was not met")
 
         # doctors: apply the attached pending card's effect.
         # Fires only if the main card's condition was met and its effect was not
@@ -1992,6 +2036,8 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         _pcard = cards_dict.get('pending_card')
         if _pcard and effect_activated and current_game.state != "game over":
             current_game = _apply_pending_effect(_pcard, player, current_game, log_entry, movement_locked=movement_locked)
+        elif _pcard and effect_activated:
+            _pend_reason = 'the game ended before it could fire'
 
     # doctors: move the attached pending card to the discard
     # pile (it was consumed from the pending zone at play time; it is not in any
@@ -2001,6 +2047,16 @@ def process_card(cards_dict, player, current_game, log_entry=None, oppo_entry=No
         if player.discard is None:
             player.discard = []
         player.discard.append(_pcard_discard)
+        # LOG: every pending the player spent must be visible on the card line. The
+        # effects that FIRE write their own note (see _apply_pending_effect); here the
+        # ones that are only PRESENT (mercurochrome, passive) or WASTED (blocked /
+        # canceled / condition unmet / game over) get theirs, so a pending never
+        # vanishes from the zone without a word.
+        if log_entry is not None and not any(_pcard_discard in str(n) for n in (log_entry.get('notes') or [])):
+            if _pcard_discard == 'mercurochrome':
+                log_entry['notes'].append('💊 mercurochrome attached — unstoppable this turn')
+            else:
+                log_entry['notes'].append(f'💊 {_pcard_discard} spent — {_pend_reason or "its effect did not fire"}')
 
     print(f'\t\t\tcurrent position: {player.current_position} (len(earth): {len(current_game.earth)})')
 
@@ -2350,6 +2406,9 @@ def _apply_pending_effect(pcard, player, current_game, log_entry=None, movement_
             current_game.pending_discard = {'player': oppo.name, 'n': 1}
             if log_entry is not None:
                 log_entry['_pending_discard'] = 1
+                # the pause itself is only logged as a generic 'discard selection' line
+                # later — name the pending card that caused it
+                log_entry['notes'].append(f'💊 bloodtest — {oppo.name} must choose 1 card to discard')
             print(f'\t\t\tpending bloodtest: PAUSED - {oppo.name} must choose 1 card to discard')
         else:
             if log_entry is not None:
@@ -2730,14 +2789,16 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game, l
     if effect == 'advancing':
         bonus = effect_number   # extra forward cells on top of base
         print(f'\t\t\teffect advancing: +{bonus} extra cell(s)')
-        return process_advancing(basic_advancing + bonus, player, current_game)
+        # log_entry travels with the movement: a drop stepped onto during this move, the
+        # biome bonus and a win all belong on the resolving card's line
+        return process_advancing(basic_advancing + bonus, player, current_game, log_entry=log_entry)
 
     if effect == 'backward':
         recoil = effect_number   # negative value (e.g. -1 or -2)
-        current_game = process_advancing(basic_advancing, player, current_game)
+        current_game = process_advancing(basic_advancing, player, current_game, log_entry=log_entry)
         if current_game.state != "game over":     # no recoil after crossing the finish line
             print(f'\t\t\teffect backward: {recoil} cell(s) recoil')
-            current_game = process_advancing(recoil, player, current_game)
+            current_game = process_advancing(recoil, player, current_game, log_entry=log_entry)
         return current_game
 
     # --- opponent movement effects (the player's own basic advancing is still applied by process_card) ---
@@ -2745,14 +2806,16 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game, l
         oppo = _get_oppo(player, current_game)
         if oppo is not None and current_game.state != "game over":
             print(f'\t\t\teffect advancing_oppo: {oppo.name} advances {effect_number} cell(s)')
-            current_game = process_advancing(effect_number, oppo, current_game)
+            # the movement is caused BY this card, so it is logged on this card's line
+            # (process_advancing names the token that moved — see _trigger_board_drops)
+            current_game = process_advancing(effect_number, oppo, current_game, log_entry=log_entry)
         return current_game
 
     if effect == 'backward_oppo':
         oppo = _get_oppo(player, current_game)
         if oppo is not None and current_game.state != "game over":
             print(f'\t\t\teffect backward_oppo: {oppo.name} recoils {effect_number} cell(s)')
-            current_game = process_advancing(effect_number, oppo, current_game)   # negative value (e.g. -1), clamped at position 0
+            current_game = process_advancing(effect_number, oppo, current_game, log_entry=log_entry)   # negative value (e.g. -1), clamped at position 0
         return current_game
 
     # --- card effects: draw / discard (own or opponent) ---
@@ -2893,8 +2956,12 @@ def apply_effect(effect, effect_number, basic_advancing, player, current_game, l
         if n:
             del current_game.drop_tokens[cell]
             print(f'\t\t\tdrop token(s) on cell {cell}: {player.name} knocked back -{n}')
-            if log_entry is not None and log_entry.get('player') == player.name:
-                log_entry['notes'].append(f'🪤 drop on cell {cell} — knocked back -{n}')
+            if log_entry is not None:
+                # same rule as the engineers' drops: the note stays on the resolving
+                # card's line even when the moving token is the opponent's (the
+                # knockback happened, so the log must show it)
+                _who = '' if log_entry.get('player') == player.name else f'{player.name} '
+                log_entry['notes'].append(f'🪤 drop on cell {cell} — {_who}knocked back -{n}')
             player.current_position = max(0, cell - n)   # direct recoil (no per-step checks -> no re-trigger)
         return current_game
 

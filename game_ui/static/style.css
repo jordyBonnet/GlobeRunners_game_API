@@ -682,8 +682,12 @@ body.cell-selecting .cell-target:hover {
 .log-tag.effect.dim { opacity: .55; text-decoration: line-through; }
 .log-tag.neg { color: var(--danger); background: rgba(252,129,129,.14); border: 1px solid rgba(252,129,129,.55); }
 .log-tag.shield { color: #b7c5ea; background: rgba(139,154,199,.14); border: 1px solid rgba(139,154,199,.45); }
+/* support-faction play (Engineers / Doctors / Mages): no pool effect to name — the
+   effect text is in the turn's INSTANT section (or on the attached card's line) */
+.log-tag.sup { color: var(--accent-2); background: rgba(246,173,85,.12); border: 1px solid rgba(246,173,85,.45); }
 .log-note { font-size: .68rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
-/* turn-level INSTANT section — the play-time instant effects + dwelling taps of the
+/* turn-level INSTANT section — the play-time instant effects, the dwelling PLACES +
+   TAPS (refinery / laboratory / black_hole) and the pending-zone PLACES of the
    turn, rendered at the TOP of the turn (before the stopovers) so they read as the
    turn's opening event, distinct from the per-card resolution notes below. */
 .log-instant-sec {

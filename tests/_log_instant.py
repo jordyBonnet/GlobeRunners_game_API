@@ -3,8 +3,13 @@
 #    new 'instant' section (a list of {'player', 'what'}), rendered at the TOP of the
 #    turn (before the stopovers):
 #        * play-time instant effects: pet_trap, engineer drops, wrecking_ball,
-#          Celestial_reversal, nobodymoves, thermic_flux, Apocalypticritual
-#        * dwelling taps: refinery (draw), laboratory (epo), black_hole (rotate)
+#          swap_cards, Celestial_reversal, nobodymoves, thermic_flux, Apocalypticritual
+#        * dwelling PLACES (refinery / laboratory / black_hole) and dwelling TAPS
+#        * pending-zone PLACES (epo / virus / bloodtest / mercurochrome)
+#  - A pending ATTACHED to a card is the exception: its note goes on THAT CARD's line —
+#    'pending epo — +1 advancing' / '💊 bloodtest — …' when it fires, '💊 mercurochrome
+#    attached — unstoppable this turn' when it is passive, '💊 <card> spent — <why not>'
+#    when the effect could not happen (blocked / canceled / condition unmet / game over).
 #  - These notes are NOT in the per-card 'notes' arrays (they fire at PLAY TIME or on
 #    a TAP — before / outside the trip chain). Resolution-time notes (cataclysm strike,
 #    knockback suppression, grappling copy, ...) stay in 'notes'.
@@ -117,6 +122,26 @@ def tap(gs, name, first_second, rotation=None):
     p, gs, okk, msgtxt = ge.player_play(first_second, p, gs)
     return gs, okk, msgtxt
 
+def place_pending(gs, name, first_second, card):
+    """ put a doctor pending card in the pending zone (to: 'pending_zone'). """
+    p = gs.players[name]
+    cost = max(ge._play_cost(gs, card), 1)
+    ensure_mana(gs, name, cost)
+    p.mana_spend = 0
+    p.message = {'cards': [card], 'to': 'pending_zone', 'mode': '', 'pendings': []}
+    gs.state = f"turn {gs.turn} - waiting for {first_second} player ({gs.turn_order[0]}) to play"
+    p, gs, okk, msgtxt = ge.player_play(first_second, p, gs)
+    return gs, okk, msgtxt
+
+def move_token(gs, name, cell):
+    """ put a token on `cell` (current_position + the earth array, kept in sync). """
+    p = gs.players[name]
+    for ct in gs.earth:
+        while name in ct:
+            ct.remove(name)
+    p.current_position = cell
+    gs.earth[cell].append(name)
+
 def ws(gid, name, message):
     """ drive the game through the REAL WS entry point (populates messages_history). """
     conn, _, gs = ge.get_current_game(gid)
@@ -129,6 +154,14 @@ def ws(gid, name, message):
     if isinstance(resp, str):
         resp = json.loads(resp)
     return gs, (resp.get('message') or {}) if isinstance(resp, dict) else {}
+
+def persist(gs, gid):
+    """ write an in-memory state back to games.db (so the WS entry point can resume a
+     trip chain that PAUSED, e.g. on a bloodtest / discard selection). """
+    conn = sqlite3.connect(ge.DB_PATH)
+    conn.execute("UPDATE games SET state_json = ? WHERE game_id = ?", (gs.to_json(), gid))
+    conn.commit()
+    conn.close()
 
 def instant_of(gs, turn=None):
     """ the 'instant' section of the given turn (default: last turn entry). """
@@ -291,6 +324,133 @@ check(bool(found) and (found.get('instant') or []) and not (found.get('stopovers
       f"the tap-only turn has an 'instant' section and no stopovers: {found}")
 
 # ============================================================================
+print("=== 6) board furniture + pending cards: EVERY support action leaves a trace ===")
+# ============================================================================
+#  - a dwelling PLACE (refinery / laboratory / black_hole) and a PENDING PLACE are
+#    recorded in the turn's 'instant' section (they are play-phase board actions, never
+#    trip-chain cards) — before 2026-11-09 only the dwelling TAP was recorded, so the
+#    3-mana placement and the pending zone were invisible in the ingame log.
+#  - a pending ATTACHED to a card is recorded on THAT CARD's line: the effects that fire
+#    already wrote their own note (epo / virus / bloodtest); the ones that are only
+#    PRESENT (mercurochrome) or WASTED (blocked / canceled / condition unmet / game over)
+#    now write theirs — a pending never leaves the zone without a word.
+#  - an engineer drop that fires is noted on the line of the card being RESOLVED, even
+#    when the token it caught is the OPPONENT's (pushed there by advancing_oppo) — the
+#    note then names the token it caught.
+cards_for_6 = {
+    # its OWNER walks 2 cells (draw is not a movement effect -> basic advancing applies)
+    'step2': q(condition='no_condition', effect='draw', advancing=2)['card_id'].to_list(),
+    # pushes the OPPONENT 1 cell (barely moves its owner)
+    'push1': q(condition='no_condition', effect='advancing_oppo', effect_number=1, mana=1)['card_id'].to_list(),
+    # turn 1 is always DAY -> this card's condition is never met on turn 1
+    'night': q(condition='night', mana=1)['card_id'].to_list(),
+    # a card that always resolves (zone effect, no instant effect, no movement effect)
+    'plain': q(condition='no_condition', effect='ramp', mana=1)['card_id'].to_list(),
+}
+step2 = cards_for_6['step2'][0] if cards_for_6['step2'] else None
+push1 = cards_for_6['push1'][0] if cards_for_6['push1'] else None
+night_card = cards_for_6['night'][0] if cards_for_6['night'] else None
+plain = cards_for_6['plain'][0] if cards_for_6['plain'] else None
+gid6b = gid6c = gid6d = gid6e = None
+
+# --- 6a) dwelling PLACE + pending PLACE + a WASTED pending, in one game ---
+gs6, gid6 = new_game(['laboratory', 'epo', night_card], [plain])
+set_biomes(gs6, 'OC')
+force_hand(gs6, 'A', ['laboratory', 'epo', night_card])
+force_hand(gs6, 'B', [plain])
+gs6, ok6, m6 = place_dwelling(gs6, 'A', 'first', 'laboratory')
+check(ok6, f"A placed the laboratory (dwelling): {m6}")
+check(any('laboratory placed on the board' in w for w in instant_whats(gs6)),
+      f"'instant' records the dwelling PLACE: {instant_whats(gs6)}")
+gs6, ok6, m6 = place_pending(gs6, 'A', 'first', 'epo')
+check(ok6, f"A placed 'epo' in the pending zone: {m6}")
+check(any('epo — pending card placed' in w for w in instant_whats(gs6)),
+      f"'instant' records the PENDING PLACE: {instant_whats(gs6)}")
+gs6, ok6, m6 = play(gs6, 'A', 'first', night_card, pendings=['epo'])
+check(ok6, f"A played the night card with the epo attached: {m6}")
+gs6, ok6, m6 = play(gs6, 'B', 'second', plain)
+check(ok6, f"B played a card: {m6}")
+gs6 = ge.process_trip_chain(gs6)
+notes6 = [n for n in all_entry_notes(gs6) if 'epo' in n]
+check(any('epo spent' in n and 'condition was not met' in n for n in notes6),
+      f"the WASTED pending is on the card's line: {notes6}")
+check('epo' in (gs6.players['A'].discard or []), "the spent epo is conserved (in A's discard)")
+check(not gs6.players['A'].pendings, "A's pending zone is empty again")
+
+# --- 6b) mercurochrome: attached, passive (nothing to block) ---
+gs6b, gid6b = new_game(['mercurochrome', plain], [plain])
+set_biomes(gs6b, 'OC')
+force_hand(gs6b, 'A', ['mercurochrome', plain])
+force_hand(gs6b, 'B', [plain])
+gs6b, ok6, _ = place_pending(gs6b, 'A', 'first', 'mercurochrome')
+check(ok6, "A placed 'mercurochrome'")
+gs6b, ok6, _ = play(gs6b, 'A', 'first', plain, pendings=['mercurochrome'])
+check(ok6, "A played a card with the mercurochrome attached")
+gs6b, _, _ = play(gs6b, 'B', 'second', plain)
+gs6b = ge.process_trip_chain(gs6b)
+nb = [n for n in all_entry_notes(gs6b) if 'mercurochrome' in n]
+check(any('mercurochrome attached' in n and 'unstoppable' in n for n in nb),
+      f"the PASSIVE pending is on the card's line: {nb}")
+check(any('mercurochrome — pending card placed' in w for w in instant_whats(gs6b)),
+      f"'instant' records the mercurochrome placement: {instant_whats(gs6b)}")
+
+# --- 6c) bloodtest: the trigger moment is named (not only the generic discard line) ---
+gs6c, gid6c = new_game(['bloodtest', plain], [plain, plain])
+set_biomes(gs6c, 'OC')
+force_hand(gs6c, 'A', ['bloodtest', plain])
+force_hand(gs6c, 'B', [plain])
+gs6c, ok6, _ = place_pending(gs6c, 'A', 'first', 'bloodtest')
+check(ok6, "A placed 'bloodtest'")
+gs6c, ok6, _ = play(gs6c, 'A', 'first', plain, pendings=['bloodtest'])
+check(ok6, "A played a card with the bloodtest attached")
+gs6c, _, _ = play(gs6c, 'B', 'second', plain)
+gs6c = ge.process_trip_chain(gs6c)
+check(bool(gs6c.pending_discard) and gs6c.pending_discard.get('player') == 'B',
+      f"the chain paused: B must choose a card to discard ({gs6c.pending_discard})")
+nc = [n for n in all_entry_notes(gs6c) if 'bloodtest' in n]
+check(not nc, "the paused stopover is only written to the log once the chain resumes")
+persist(gs6c, gid6c)                      # the chain paused mid-turn -> persist, then answer
+_choice = list(gs6c.players['B'].hand)[0]
+gs6c, r6 = ws(gid6c, 'B', {'cards': [_choice], 'to': 'discard_pile', 'mode': '', 'pendings': []})
+nc = [n for n in all_entry_notes(gs6c) if 'bloodtest' in n]
+check(bool(nc) and any('must choose 1 card to discard' in n for n in nc),
+      f"the bloodtest TRIGGER is named on the card's line: {nc}")
+check(any('discard selection' in n for n in all_entry_notes(gs6c)),
+      f"and the discard itself is recorded too: {[n for n in all_entry_notes(gs6c) if 'discard' in n]}")
+
+# --- 6d) engineer drop fires on its OWNER's token ---
+gs6d, gid6d = new_game(['boost', step2], [plain])
+set_biomes(gs6d, 'OC')
+force_hand(gs6d, 'A', ['boost', step2])
+move_token(gs6d, 'A', 1)
+gs6d, ok6, _ = play(gs6d, 'A', 'first', 'boost', cell=2)
+check(ok6, "A placed a boost on cell 2")
+gs6d, ok6, _ = play(gs6d, 'A', 'first', step2, to='stopover_3')
+check(ok6, "A played a card that walks onto cell 2")
+gs6d = pas(gs6d, 'B', 'second')
+gs6d = ge.process_trip_chain(gs6d)
+nd = [n for n in all_entry_notes(gs6d) if 'boost on cell' in n]
+check(bool(nd), f"the boost TRIGGER is on the log (owner arrival): {nd}")
+check(bool(nd) and ' B ' not in nd[0], f"unnamed when the drop caught its own owner: {nd}")
+
+# --- 6e) engineer drop fires on the OPPONENT's token (pushed by advancing_oppo) ---
+gs6e, gid6e = new_game(['boost', push1], [plain])
+set_biomes(gs6e, 'OC')
+force_hand(gs6e, 'A', ['boost', push1])
+move_token(gs6e, 'A', 10)          # keep A's own walk away from cell 1
+gs6e, ok6, _ = play(gs6e, 'A', 'first', 'boost', cell=1)
+check(ok6, "A placed a boost on cell 1 (where B starts one cell away)")
+gs6e, ok6, _ = play(gs6e, 'A', 'first', push1, to='stopover_3')
+check(ok6, "A played the card that pushes B forward")
+gs6e = pas(gs6e, 'B', 'second')
+gs6e = ge.process_trip_chain(gs6e)
+ne = [n for n in all_entry_notes(gs6e) if 'boost on cell' in n]
+check(bool(ne) and 'B' in ne[0],
+      f"a drop that caught the OPPONENT is logged AND named: {ne}")
+check(gs6e.players['B'].current_position >= 3,
+      f"B really got the +2 (cell {gs6e.players['B'].current_position})")
+
+# ============================================================================
 print("=== 7) replay reconstructs the Apocalypticritual pile from 'instant' ===")
 # ============================================================================
 CATACLYSM = q(condition='cataclysm')['card_id'].to_list()
@@ -362,7 +522,7 @@ else:
     print("  (no cataclysm card in the pool — skipping the replay check)")
 
 # --- cleanup the other games ---
-for g in (gid, gid2, gid3, gid4, gid5):
+for g in (gid, gid2, gid3, gid4, gid5, gid6, gid6b, gid6c, gid6d, gid6e):
     try:
         _delete(g)
     except Exception:

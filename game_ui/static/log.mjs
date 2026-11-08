@@ -2,7 +2,7 @@
 "use strict";
 
 import { $ } from "./utils.mjs";
-import { CARDPOOL, cardImg } from "./cards.mjs";
+import { CARDPOOL, SUPPORT, cardImg, cardTitle } from "./cards.mjs";
 import { game } from "./game.mjs";
 import { makeStaticCard } from "./zones.mjs";
 import { showCardHover, hideCardHover, showCardModal } from "./modals.mjs";
@@ -32,6 +32,16 @@ function effectLabel(id) {
   }
 }
 
+// Support-faction card (Engineers / Doctors / Mages): the support table has NO
+// `effect` / `condition` column, so there is no pool label to show. The card's effect
+// text lives in the turn's INSTANT section (placements, instants, dwelling taps) or on
+// the line of the card it was attached to (pending cards) — so the log line only states
+// that this was a support play, and the hover title gives the full description.
+function supportLabel(id) {
+  const s = SUPPORT[id];
+  return s ? `\u2699 ${s.support_faction_name}` : null;
+}
+
 // "stopover_4" (1st slot of the turn) -> "stopover 1" (the UI's numbering 1..5)
 function stopoverLabel(sv) {
   const m = /^stopover_(\d+)/.exec(sv || '');
@@ -44,7 +54,7 @@ function stopoverLabel(sv) {
 function makeLogCardEl(id) {
   const el = document.createElement('span');
   el.className = 'log-card';
-  el.title = (CARDPOOL[id] && CARDPOOL[id].name) || id;
+  el.title = cardTitle(id);   // support-aware: "refinery (⚙ engineers) — When tapped, …"
   el.innerHTML = `<img src="${cardImg(id)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/placeholder.svg'">`;
   el.addEventListener('mouseenter', () => showCardHover(id));
   el.addEventListener('mouseleave', hideCardHover);
@@ -97,6 +107,10 @@ function buildLogEntryEl(e) {
     if (eff) {
       const dim = /blocked|canceled/.test(negatives.join(' '));
       flow.append(makeTag('effect' + (dim ? ' dim' : ''), eff));
+    } else {
+      // no pool effect = a support card play -> neutral "⚙ <faction>" tag
+      const sup = supportLabel((e.cards || [])[0]);
+      if (sup) flow.append(makeTag('sup', sup));
     }
     for (const s of negatives) flow.append(makeTag('neg', s));
   }
@@ -118,9 +132,10 @@ function buildLogEntryEl(e) {
 
 /** The turn-level INSTANT section, rendered at the TOP of a turn, before the
  *  stopovers. `t.instant` is a list of {player, what} — the play-time instant
- *  effects (pet_trap, engineer drops, wrecking_ball, the Mages' instant cards) and
- *  the dwelling taps (refinery / laboratory / black_hole) of that turn. Old games
- *  have no 'instant' key -> nothing is rendered. */
+ *  effects (pet_trap, engineer drops, wrecking_ball, swap_cards, the Mages' instant
+ *  cards), the dwelling PLACES + TAPS (refinery / laboratory / black_hole) and the
+ *  pending-zone PLACES (epo / virus / bloodtest / mercurochrome) of that turn. Old
+ *  games have no 'instant' key -> nothing is rendered. */
 function buildInstantEl(items) {
   if (!Array.isArray(items) || !items.length) return null;
   const box = document.createElement('div');
