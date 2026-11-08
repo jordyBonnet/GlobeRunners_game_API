@@ -418,6 +418,21 @@ body.cell-selecting .cell-target:hover {
   content: ""; position: absolute; inset: 0;
   background: url('/assets/GR_cards_back.png') center/cover no-repeat; opacity: .95;
 }
+
+/* ---------------- faction droplet particles (droplets.mjs) ---------------- */
+/* the pixel droplets a GRABBED hand card sheds: a few tiny faction-colored
+   squares that fall to the bottom of the viewport (the floor), bounce once and
+   flatten into a fading puddle. The layer is on <body> — OUTSIDE the themed
+   scopes — so droplets.mjs copies the resolved --accent onto it at spawn time
+   (same pattern as .card-fly above), and the background/glow below resolve it. */
+#fx-layer { position: fixed; inset: 0; z-index: 84; pointer-events: none; overflow: hidden; }
+.droplet {
+  position: absolute; left: 0; top: 0;
+  width: 4px; height: 4px; border-radius: 1px; opacity: .9;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+  will-change: transform, opacity;
+}
 /* a NEW board token (pet trap / engineer drop) pops into place instead of appearing */
 .drop-token.token-pop { animation: tokenPop .55s cubic-bezier(.3,1.6,.5,1); }
 @keyframes tokenPop {

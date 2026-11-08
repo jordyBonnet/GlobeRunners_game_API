@@ -8,6 +8,7 @@ import { game } from "./game.mjs";
 import { renderAll } from "./state.mjs";
 import { showCardModal } from "./modals.mjs";
 import { showDiscardPopup } from "./actions.mjs";
+import { attachHandDroplets } from "./droplets.mjs";
 
 export function makeHandCard(id, interactive, me) {
   const el = document.createElement("div");
@@ -28,6 +29,9 @@ export function makeHandCard(id, interactive, me) {
   // click: selection (1 card for play/mana-pass, up to 3 in init);
   // discard selection re-opens the discard popup (renderAll auto-opens it)
   if (interactive) {
+    // grabbing the card sheds a few faction-colored pixel droplets (droplets.mjs)
+    attachHandDroplets(el);
+
     el.onclick = () => {
       const ph = detectPhase(game.state);
       if (ph && ph.kind === "discard") { showDiscardPopup(ph.n); return; }
