@@ -46,12 +46,18 @@ def random_ai_deck(n: int = 20) -> list[str]:
     return ai_deck.build_ai_deck()
 
 
-def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
+def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI, tutorial: bool = False):
     """Computes the robot's next action from the current state.
 
     Returns the message {'cards','to','mode','pendings'} to submit, or None if the
     robot should not (yet) act. `st` carries the loop's phase flags (acted / fallback)
     so that only one action is played per phase.
+
+    `tutorial` (the setup page's "quick in-game tutorial" checkbox, forwarded by
+    /create_game_ai): the tutorial walks the player through turn 1's trip-chain
+    resolution card by card, so it NEEDS a real opponent card on that chain. While the
+    robot has no MAIN-faction card there yet, it plays one before anything else — see
+    3.0 TUTORIAL SHOWCASE below.
     """
     state = game.state
     # reset the phase flags when the state changes.
@@ -76,7 +82,10 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
     if state == init_state:
         need = ge.start_cards_in_mana - len(me.mana or [])
         if need > 0 and (me.hand or []):
-            cards = ai.put_mana(need, in_turn=False)
+            # `keep_cheap` (tutorial only): the opening pool is 3 mana, so burn the priciest
+            # cards and keep what 3 mana can actually play — otherwise the showcase has no
+            # affordable card to put on the chain (see PlayerAI.put_mana).
+            cards = ai.put_mana(need, in_turn=False, keep_cheap=bool(tutorial))
             return {"cards": cards, "to": "mana", "mode": "", "pendings": []}
         return None
 
@@ -119,12 +128,27 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
         acted = [a for a in (me.action_chain or []) if a]
         moved_this_turn = any(a.get("mode") == "move" and a.get("cards") for a in acted)
 
+        # 3.0 TUTORIAL SHOWCASE: a main-faction card must reach the turn-1 TRIP CHAIN. The
+        #     tutorial's resolution replay teaches the chain from the LOG entries, so a turn
+        #     where the robot only taps its dwelling, parks a support placeholder or passes
+        #     would show the learner a half-empty chain. "main faction" = the card id is in
+        #     the main pool (a support card played in move mode is NOT one), and a defend
+        #     counts: it is a chain entry the tutorial explains. Only while nothing is there
+        #     yet; once the robot has played one main card it behaves normally again.
+        main_on_chain = any(
+            a.get("mode") in ("move", "defend") and a.get("cards")
+            and (a["cards"][0] or "") in ai.MAIN_ROWS
+            for a in acted)
+        showcase = bool(tutorial) and (game.turn or 1) == 1 and not main_on_chain
+
         # 3.1 DWELLING TAP (free QUICK action, once per turn) — do it FIRST: for a black_hole
         #     the rotation changes which biome is under each token, which affects the biome
         #     conditions of cards resolved later this SAME turn. Quick actions don't alternate,
         #     so the state string doesn't change; tapped_this_turn prevents re-sending (it is
         #     cleared on phase change / rejection by run_ai_loop).
-        if me.dwelling and not me.dwelling_tapped and not st.get("tapped_this_turn"):
+        #     Skipped while the showcase is pending: a dwelling is a trip-chain PLACEHOLDER, so
+        #     it would consume the display slot the teaching card needs to appear in.
+        if me.dwelling and not me.dwelling_tapped and not st.get("tapped_this_turn") and not showcase:
             tap = ai.tap_dwelling()
             if tap is not None:
                 st["tapped_this_turn"] = True
@@ -133,7 +157,9 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
         # 3.2 THREAT RESPONSE (before committing my own movement this turn): nobodymoves locks
         #     ALL players' movement for the rest of the turn - only sensible as a first action,
         #     never after I have declared a move myself (A.3 refines the threat estimate).
-        if not moved_this_turn:
+        #     Suppressed during the showcase: locking the turn would leave the tutorial's first
+        #     resolution with nothing to advance.
+        if not moved_this_turn and not showcase:
             nm = ai.play_nobodymoves_threat()
             if nm is not None:
                 nm["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
@@ -156,7 +182,10 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
             return defend
 
         # 3.4 MAIN: play a card (move) — the robot advances every turn (original behavior).
-        msg = ai.play_card()
+        #     During the showcase the pass discipline (#26) is lifted (`force`): a card with no
+        #     positive expected value is still played, because the point of turn 1 is to SEE a
+        #     card resolve. The card choice itself stays PlayerAI's.
+        msg = ai.play_card(force=showcase)
         if msg is not None and msg.get("mode") == "move" and msg.get("cards"):
             msg["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
             return msg
@@ -164,11 +193,14 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
         # 3.5 SUPPORT FALLBACK (A.1): no main move card playable/worth it -> spend the leftover
         #     mana on a support card: engineers' drops/dwelling, doctors' pending/laboratory,
         #     mages' instant cards. The builders already carry every required choice field.
-        smsg = ai.choose_support_play()
-        if smsg is not None:
-            if smsg.get("mode") == "move" and smsg.get("cards"):
-                smsg["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
-            return smsg
+        #     Skipped while the showcase is pending — the main card comes first (and reaching
+        #     here means nothing affordable is left, so the turn simply ends).
+        if not showcase:
+            smsg = ai.choose_support_play()
+            if smsg is not None:
+                if smsg.get("mode") == "move" and smsg.get("cards"):
+                    smsg["to"] = ge._player_stopover(game, me.name, me.play_count or 0)
+                return smsg
 
         # nothing playable left -> pass (ends my part of the play phase)
         return {"cards": [], "to": "", "mode": "pass", "pendings": []}
@@ -176,7 +208,8 @@ def ai_decide(game, ai_name: str, st: dict, ai: PlayerAI):
     return None
 
 
-async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4, hard_mode: bool = False):
+async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4, hard_mode: bool = False,
+                      tutorial: bool = False):
     """Background loop: as soon as it's the robot's turn, it plays.
 
     Stops when the game is over or if the game has disappeared from the DB.
@@ -184,6 +217,10 @@ async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4, hard_mo
     G #37 information policy: fair play by default - every decision uses PUBLIC info + the robot's
     own state only. `hard_mode=True` is an explicit opt-in (testing / difficulty tier): the robot may
     then read the opponent's hidden hand to sharpen threat detection (see PlayerAI.hard_mode).
+
+    `tutorial=True` (the setup page's checkbox, from /create_game_ai) makes the robot guarantee a
+    main-faction play on the turn-1 trip chain, so the in-game tutorial has a card to replay; it
+    changes that one decision only, never the robot's general strength.
     """
     ai = PlayerAI(player_state=None)
     if hard_mode:
@@ -204,7 +241,7 @@ async def run_ai_loop(game_id: str, ai_name: str, interval: float = 0.4, hard_mo
         # exception, rejected action...) must NEVER kill the robot task: we log, reset the
         # phase flags and retry on the next cycle.
         try:
-            msg = ai_decide(game, ai_name, st, ai)
+            msg = ai_decide(game, ai_name, st, ai, tutorial=tutorial)
             if msg is None:
                 continue
 

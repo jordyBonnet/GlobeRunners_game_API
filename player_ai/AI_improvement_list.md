@@ -357,3 +357,35 @@ otherwise sit in the zone, so this is a few percent of tempo, not a P0.)
 | 4 | E #31–#34, F #35–#36, G #37–#38, H rest | Tactical depth + hardening + docs/tests |
 | 5 | I #43 | Mana pool managed by decision (pass when the pool covers the hand), not automatic sacrifice |
 | 6 | J #44-#48 | Effect-coverage audit: nothing is burned/undervalued anymore (Mages instants, ep0 stock, play-time instants) |
+| 7 | K #50 | Tutorial showcase: the robot guarantees a main-faction play on the turn-1 chain |
+
+---
+
+## K. Tutorial showcase — guarantee a main-faction play on turn 1 — ✅ DONE (2026-11-08)
+
+**#50 DONE** — the setup page's "quick ingame tutorial" checkbox is now sent to
+`/create_game_ai` (`CreateGameRequest.tutorial`) and forwarded to
+`run_ai_loop(..., tutorial=True)` → `ai_decide(..., tutorial=True)`. The in-game tutorial
+replays **turn 1's trip chain card by card** from the log, so that turn must contain a real
+opponent card; measured before the change, the robot put **no main-faction card** on the turn-1
+chain in roughly a third of games (it defended only, parked a support placeholder, tapped its
+dwelling, or passed a card with no positive expected value). New rule (**3.0 TUTORIAL SHOWCASE**):
+while the robot has no **main-faction** card on its own chain (`card_id in ai.MAIN_ROWS` — a
+support card played in move mode is *not* one, a defend *is*), on **turn 1 only**, it
+- skips the dwelling tap, the `nobodymoves` threat response and the support fallback (none of
+  them is a main-faction chain card; the tap also consumes a chain position),
+- lifts the C #26 pass discipline **once** — `play_card(force=True)` keeps PlayerAI's card choice
+  and only bypasses the "net ≤ 0 → pass" gate, preferring a real effect, unblocked, that advances,
+- and at INIT sacrifices mana with `put_mana(keep_cheap=True)`: each mana-zone card is worth
+  exactly 1 mana, so it burns the priciest cards **but keeps the cheapest main card the 3-mana
+  opening pool can pay for** (without this the robot burned the only card it could afford — the
+  dominant failure mode, 4 of 5 misses in the first measurement).
+
+Honest limit: a hand with **no main card costing ≤ 3** cannot produce a play at all, and no rule
+changes that. Measurements (paired: same random Robot deck, both flags): `tests/_ai_tutorial_flow.py`
+**ON 12/12 vs OFF 7/12**, the guarantee holding on 12/12 payable hands; two independent 20-deck
+samples **19/20 ON vs 15/20 and 12/20 OFF**, the single miss in both being an unpayable hand.
+Turns 2+ are untouched — the flag changes that one decision, never the robot's strength.
+Tests: `tests/_ai_tutorial_showcase.py` (rule, 8 checks) + `tests/_ai_tutorial_flow.py`
+(flow through `handle_websocket_message`, 36 checks). Docs: *Tutorial showcase* in
+`game_ui/APP_OVERVIEW.md`, the `/create_game_ai` row + change log in `game_ui/static/app-js-overview.md`.

@@ -295,6 +295,14 @@ class PlayerAI:
 			return 40 if self._choose_cataclysm_order() is not None else 12
 		return 5
 
+	def _card_cost(self, cid):
+		"""Mana cost of ANY hand card: main-pool `mana`, support card `mana_cost`, unknown -> 5."""
+		row = self.MAIN_ROWS.get(cid)
+		if row is not None:
+			return int(row['mana'])
+		info = self.SUPPORT_INFO.get(cid)
+		return int(info['cost']) if info is not None else 5   # unknown support -> assume the max
+
 	def _hand_total_cost(self):
 		"""I.1: the TOTAL mana cost of playing EVERY card currently in my hand (main-pool rows
 		by their `mana`, support cards by their `mana_cost`). The yardstick of the mana-phase
@@ -302,12 +310,7 @@ class PlayerAI:
 	everything I own this turn and growing it further is pure waste."""
 		total = 0
 		for cid in (self.player_state.hand or []):
-			row = self.MAIN_ROWS.get(cid)
-			if row is not None:
-				total += int(row['mana'])
-				continue
-			info = self.SUPPORT_INFO.get(cid)
-			total += int(info['cost']) if info is not None else 5   # unknown support -> assume the max
+			total += self._card_cost(cid)
 		return total
 
 	def _mana_keep_value(self, cid):
@@ -350,7 +353,7 @@ class PlayerAI:
 			return max(v, DROP_KEEP)
 		return v
 
-	def put_mana(self, num_cards=3, in_turn=False):
+	def put_mana(self, num_cards=3, in_turn=False, keep_cheap=False):
 		"""Select `num_cards` from the hand to put into the mana zone.
 
 		The robot may put ANY card in hand (main OR support) - the engine accepts both and
@@ -369,14 +372,31 @@ class PlayerAI:
 		Returns exactly `num_cards` cards whenever the hand has that many (this is what lets
 		the init phase put its mandatory 3 in one valid message even when the hand is a
 		main+support mix). An empty hand returns [] (init) or a pass; an in_turn call
-		returns the pass message when the pool already covers the hand (I.1)."""
+		returns the pass message when the pool already covers the hand (I.1).
+
+		`keep_cheap` (the turn-1 TUTORIAL SHOWCASE, INIT only): every mana-zone card is worth
+		exactly 1 mana whatever its printed cost, but a card burned there is never played again.
+		So the burning keeps the CHEAPEST MAIN card the pool can pay for (on turn 1 that pool is
+		the 3 INIT cards) and sacrifices the priciest of everything else. Without it the robot can
+		burn the only main card it could afford and then have nothing to put on the chain — a
+		support card left in hand does not count (see 3.0 TUTORIAL SHOWCASE in ai_driver)."""
 		hand = list(self.player_state.hand or [])
 		if not hand:
 			if in_turn:  # empty hand: nothing to put in mana, pass instead
 				return {'cards': [], 'to': '', 'mode': 'pass', 'pendings': []}
 			return []
-		ranked = sorted(hand, key=self._mana_keep_value)   # stable sort: ties keep hand order
-		top = ranked[:num_cards]
+		if keep_cheap:
+			pool_after = len(self.player_state.mana or []) + num_cards
+			keeper = min((c for c in hand if c in self.MAIN_ROWS and self._card_cost(c) <= pool_after),
+					   key=self._card_cost, default=None)
+			burn = sorted([c for c in hand if c != keeper],
+					    key=lambda c: (-self._card_cost(c), self._mana_keep_value(c)))[:num_cards]
+			if len(burn) < num_cards and keeper is not None:
+				burn.append(keeper)          # tiny hand: the engine still requires its 3 cards
+			top = burn
+		else:
+			ranked = sorted(hand, key=self._mana_keep_value)   # stable sort: ties keep hand order
+			top = ranked[:num_cards]
 		if in_turn:
 			# I.1: pool >= total hand cost -> PASS (the pool can already play the whole hand;
 			# a sacrificed card is never played again, so extra mana here is pure waste).
@@ -1494,7 +1514,7 @@ class PlayerAI:
 		# --- virus: self-penalizing (-1 knockback to me), never auto-attached (still counts for `pending`) ---
 		return None
 
-	def play_card(self):
+	def play_card(self, force=False):
 		"""C #22-#26: pick the MAIN card with positive expected value from hand (affordable).
 		Score = (win?, net expected value = fwd+tempo, raw forward, -cost):
 		  * effective movement is the REAL resolution model (#22): met condition -> effect-aware
@@ -1507,6 +1527,8 @@ class PlayerAI:
 		Pass discipline (#26): returns None when even the best card has no positive expected value
 		(no win and net forward+tempo <= 0) - unused mana carries over to next turn. The chosen
 		card may carry an attached pending card (A.2 #8). Support cards are deliberately NOT
+		one that is not an unimplemented placeholder, is not certainly blocked and visibly advances
+		(see 3.0 TUTORIAL SHOWCASE in game_ui/ai_driver.py). Support cards are deliberately NOT
 		candidates here: choose_support_play / play_nobodymoves_threat handle them.
 		Facing awareness (§E): the score includes what my next column FACES publicly -
 		effect_canceled denies a declared opponent effect (#32), grappling_hook copies its advancing
@@ -1577,7 +1599,17 @@ class PlayerAI:
 		# C #26 pass discipline: do not spend a card + slot when the play has no positive expected
 		# value - unused mana carries over (the zone persists; only mana_spend resets each turn).
 		if not wins and net <= 0:
-			return None
+			if not force:
+				return None
+			# forced (turn-1 tutorial showcase): the lesson needs a card to resolve, so rank the
+			# affordable ones by what the learner will SEE (a real effect, unblocked, forward motion)
+			# and fall back to the normal expected value only to break ties.
+			best_row = max(rows, key=lambda r: (
+				1 if r['effect'] != 'fwd_placeholder' else 0,
+				0 if self._will_be_blocked(r) else 1,
+				1 if int(r['advancing'] or 0) > 0 else 0,
+				score(r)[1],
+			))
 
 		best_card = best_row['card_id']
 		out = {

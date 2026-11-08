@@ -6,6 +6,8 @@ import { cardEl, cardImg, CARDPOOL, SUPPORT } from "./cards.mjs";
 import { game } from "./game.mjs";
 import { stopPolling, teardownWs } from "./comm.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
+import { stopTutorial } from "./tutorial.mjs";
+import { resetLaunchButton } from "./setup.mjs";
 
 /* hover preview: the card shows at 3x in the bottom-left (delegation, robust to re-renders) */
 const hoverEl = $("#card-hover"), hoverImg = $("#card-hover-img"), hoverText = $("#card-hover-text");
@@ -92,6 +94,10 @@ function hoverCardText(id) {
   if (sup && sup.description) return { condition: null, effect: sup.description };
   return null;
 }
+
+/* exported for the tutorial's "card anatomy" step (tutorial.mjs): the same
+   condition/effect wording as the hover preview, for any card id (null = none) */
+export function cardLegend(id) { return hoverCardText(id); }
 
 export function showCardHover(id) {
   if (!id) return;
@@ -228,6 +234,8 @@ $("#btn-endgame-ok").onclick = () => {
 
 function leaveGame() {
   stopPolling();
+  stopTutorial();   // the tutorial belongs to the game page — never carry it home
+  resetLaunchButton();   // re-enable / re-label "Start" for the next game
   document.querySelectorAll(".discard-pile-popup").forEach((m) => m.remove());
   teardownWs();   // close the socket, kill any pending reconnect, settle in-flight action promises
   game.state = null; game.id = null; game.selected.clear();

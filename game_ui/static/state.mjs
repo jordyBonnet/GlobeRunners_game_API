@@ -13,6 +13,7 @@ import { renderBoard, slotEls, N_STOPOVERS } from "./board.mjs";
 import { renderLog } from "./log.mjs";
 import { canDropOnStopover, showDiscardPopup, freeCols } from "./actions.mjs";
 import { refreshDiscardPilePopup } from "./modals.mjs";
+import { tutorialTick } from "./tutorial.mjs";
 import { syncGameThemes } from "./theme.mjs";
 
 // client-side guard: card cost vs available mana (mana zone - mana spent).
@@ -180,4 +181,7 @@ export function renderAll() {
   renderBoard(st, me, oppoName);
   renderLog(st);
   highlightValidCells();
+  // the quick in-game tutorial (tutorial.mjs): a state-driven scan — idempotent, it
+  // only ever shows the next eligible step / repositions the current one
+  tutorialTick();
 }

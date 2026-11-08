@@ -92,6 +92,12 @@ def load_support_cards() -> "pl.DataFrame":
 class CreateGameRequest(BaseModel):
     name: str
     deck: List[str]
+    # the client's "quick in-game tutorial" checkbox. Ignored by /create_game (a
+    # human-vs-human game teaches itself through the UI); game_ui's /create_game_ai
+    # forwards it to the robot, which then GUARANTEES one main-faction play on the
+    # turn-1 trip chain so the tutorial's resolution replay has something to teach
+    # from — see *AI wiring* in game_ui/APP_OVERVIEW.md.
+    tutorial: bool = False
 
 
 app = FastAPI(title="GlobeRunners API")

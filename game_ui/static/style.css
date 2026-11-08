@@ -467,7 +467,11 @@ body.cell-selecting .cell-target:hover {
 
 /* trip-chain resolution animation: when a turn just resolved, the slots pulse in
    the exact resolution order — gold = first player of the turn, silver = second */
+/* .chain-live = the sustained variant used by the tutorial's card-by-card replay
+   (chainanim.pulseStep): the automatic run pulses each slot once and moves on, a tip
+   stays up as long as the player reads */
 .slot.chain-pulsing { animation: chain-pulse .46s ease-in-out; }
+.slot.chain-pulsing.chain-live { animation: chain-pulse 1.6s ease-in-out infinite; }
 .slot.chain-pulsing.chain-first  { --chain-glow: rgba(255, 197, 66, .95); }
 .slot.chain-pulsing.chain-second { --chain-glow: rgba(186, 205, 235, .9); }
 @keyframes chain-pulse {
@@ -484,6 +488,16 @@ body.cell-selecting .cell-target:hover {
 .chain-thread.first-top    { background: linear-gradient(180deg, rgba(255, 197, 66, .95), rgba(186, 205, 235, .9)); }
 .chain-thread.first-bottom { background: linear-gradient(180deg, rgba(186, 205, 235, .9), rgba(255, 197, 66, .95)); }
 @keyframes chain-thread { 0%, 100% { opacity: 0; } 35% { opacity: 1; } }
+.chain-thread.chain-live { animation: none; opacity: 1; }
+/* the tutorial's Earth tip: the token that is about to move */
+.marker.tu-marker-hi {
+  z-index: 9;
+  animation: tu-marker-hi 1.1s ease-in-out infinite;
+}
+@keyframes tu-marker-hi {
+  0%, 100% { box-shadow: 0 3px 8px rgba(0,0,0,.6), 0 0 0 0 rgba(255,204,64,0); }
+  50%      { box-shadow: 0 3px 8px rgba(0,0,0,.6), 0 0 0 12px rgba(255,204,64,.45); }
+}
 .slot {
   position: relative;
   width: clamp(70px, 8vw, 98px); aspect-ratio: 180 / 260; border-radius: 10px;
@@ -708,9 +722,11 @@ a.primary-btn { display: inline-block; text-decoration: none; text-align: center
 .conn-ok { color: var(--ok); }
 .conn-bad { color: var(--danger); }
 
-/* card hover preview: 3x bigger, vertically centered (at Earth level) */
+/* card hover preview: 3x bigger, vertically centered (at Earth level).
+   z-index 66: ABOVE the tutorial spotlight shades (62) — hovering a card inside
+   the spotlight must stay readable while the tutorial is on screen (tutorial.mjs) */
 #card-hover {
-  position: fixed; left: 16px; top: 50%; z-index: 55;
+  position: fixed; left: 16px; top: 50%; z-index: 66;
   width: calc(clamp(58px, 6.6vw, 92px) * 3);
   border-radius: 14px; overflow: hidden; pointer-events: none;
   box-shadow: 0 18px 44px rgba(0,0,0,.75), 0 0 0 2px var(--accent-2);
@@ -834,10 +850,123 @@ a.primary-btn { display: inline-block; text-decoration: none; text-align: center
 
 /* toast */
 #toast {
-  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 60;
+  /* z-index 70: above the tutorial shades (62) — an error toast ("Not enough mana")
+     must stay readable over the tutorial */
+  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 70;
   background: #24304f; border: 1px solid var(--accent); color: var(--text);
   padding: 10px 20px; border-radius: 10px; font-size: .85rem; box-shadow: 0 8px 24px rgba(0,0,0,.6);
   opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 80vw; text-align: center;
 }
 #toast.show { opacity: 1; }
 
+
+/* ============================================================ quick in-game tutorial
+   Coach-mark overlay (tutorial.mjs): the page darkens with a click-through
+   spotlight on the element being explained + a tip card (text, images, OK button).
+   Layers: shades 62 < card-hover 66 < toast 70 < tip / chip 72. */
+#tu-layer { position: fixed; inset: 0; z-index: 62; pointer-events: none; }
+/* the darkening is 4 rects around the spotlight — the spotlight itself stays live,
+   so an "act" step can be answered by really dragging a card */
+#tu-layer .tu-shade {
+  position: fixed; background: rgba(4, 7, 16, .78); pointer-events: auto;
+  transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease;
+}
+/* "your move" steps: the shade is visual only — the player must use the real board */
+#tu-layer.tu-act .tu-shade { pointer-events: none; }
+/* a game popup opened (defense / discard / mage choice): step aside completely */
+#tu-layer.tu-mute .tu-shade, #tu-layer.tu-mute .tu-halo, #tu-layer.tu-mute .tu-tip {
+  opacity: 0 !important; pointer-events: none !important;
+}
+.tu-halo {
+  position: fixed; border: 2px solid var(--accent-2); border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 28%, transparent),
+              0 0 34px 8px color-mix(in srgb, var(--accent-2) 40%, transparent);
+  animation: tuHalo 1.9s ease-in-out infinite;
+  transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease;
+}
+@keyframes tuHalo {
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-2) 16%, transparent),
+                    0 0 44px 14px color-mix(in srgb, var(--accent-2) 55%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .tu-halo { animation: none; } }
+
+.tu-tip {
+  position: fixed; z-index: 72; pointer-events: auto; box-sizing: border-box;
+  width: min(430px, calc(100vw - 24px)); max-height: min(80vh, 720px); overflow: auto;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--panel)), var(--panel));
+  border: 1px solid var(--accent-2); border-radius: 16px; padding: 13px 15px 11px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .8); opacity: 0; transition: opacity .18s ease;
+}
+.tu-tip.show { opacity: 1; }
+/* the tail pointing at the spotlight: a LAYER child (a .tu-tip::after would count as
+   overflow inside the scrollable card and raise a horizontal scrollbar).
+   dir = the direction it points (the target is on that side of the tip) */
+.tu-arrow { position: fixed; z-index: 72; width: 0; height: 0; border: 9px solid transparent; pointer-events: none; }
+.tu-arrow[data-dir="up"]    { border-bottom-color: var(--accent-2); }
+.tu-arrow[data-dir="down"]  { border-top-color: var(--accent-2); }
+.tu-arrow[data-dir="left"]  { border-right-color: var(--accent-2); }
+.tu-arrow[data-dir="right"] { border-left-color: var(--accent-2); }
+.tu-arrow[data-dir="none"]  { display: none; }
+.tu-tip.tu-center { transform: none; }
+
+/* while the tutorial runs: #log-panel (absolute, later in the DOM) paints OVER the
+   stopover rows on narrow windows, so a spotlight on stopover 1 would frame the log
+   instead of the slot — raise the trip chain for the duration of the tutorial only */
+body.tu-on #stopovers { z-index: 2; }
+
+.tu-kicker { font-size: .66rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--accent-2); }
+.tu-title { margin: 2px 0 8px; font-size: 1.02rem; color: var(--text); }
+.tu-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.tu-imgs:empty { display: none; }
+.tu-img {
+  height: 74px; width: auto; max-width: 120px; object-fit: contain; border-radius: 8px;
+  background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
+}
+.tu-body { font-size: .84rem; line-height: 1.5; color: var(--text); }
+.tu-body p { margin: 0 0 8px; }
+.tu-body ol.tu-ol { margin: 0 0 8px; padding-left: 20px; }
+.tu-body ol.tu-ol li { margin-bottom: 5px; }
+.tu-live { color: var(--accent-2); font-size: .78rem; font-style: italic; }
+.tu-good { color: var(--ok); font-weight: 600; }
+.tu-bad { color: var(--danger-bright); font-weight: 600; }
+/* the headline number of a resolution step: how many cells this card actually moved
+   its owner (works as a <p> and as an inline <span> inside the Earth tip) */
+.tu-total {
+  display: inline-block; margin: 2px 0; padding: 2px 9px; border-radius: 7px;
+  background: rgba(255, 197, 66, .16); border: 1px solid rgba(255, 197, 66, .5);
+  color: #ffe6a8; font-weight: 700;
+}
+.tu-track { width: 100%; height: auto; margin: 2px 0 10px; display: block; }
+
+/* card-anatomy step: the real card frame with numbered hotspots + the legend */
+.tu-anatomy { position: relative; display: block; width: 196px; margin: 2px auto 10px; }
+.tu-anatomy img { width: 100%; aspect-ratio: 180 / 260; object-fit: cover; display: block; border-radius: 10px; border: 1px solid var(--line); }
+.tu-hot {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 18px; height: 18px; border-radius: 50%; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .62rem; font-weight: 800; color: var(--accent-contrast);
+  background: var(--accent-2); box-shadow: 0 0 0 2px rgba(0, 0, 0, .65), 0 0 10px color-mix(in srgb, var(--accent-2) 80%, transparent);
+}
+.tu-anat-legend { list-style: none; margin: 0 0 8px; padding: 0; font-size: .78rem; line-height: 1.45; }
+.tu-anat-legend li { margin-bottom: 5px; }
+.tu-anat-legend b {
+  display: inline-flex; width: 16px; height: 16px; border-radius: 50%; vertical-align: -2px;
+  align-items: center; justify-content: center; background: var(--accent-2); color: var(--accent-contrast); font-size: .64rem;
+}
+.tu-anat-legend i { color: var(--accent-2); font-style: normal; font-weight: 600; }
+
+.tu-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tu-progress { font-size: .7rem; color: var(--muted); }
+/* the single control of the whole overlay (the tip has no other button) */
+.tu-btns { display: flex; }
+.tu-foot .primary-btn { padding: 8px 26px; font-size: .84rem; }
+
+/* the Start button + the "quick ingame tutorial" opt-in, side by side */
+.launch-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tutorial-opt {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: .8rem; color: var(--muted); line-height: 1.35; user-select: none;
+}
+.tutorial-opt:hover { color: var(--text); }
+.tutorial-opt input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex: 0 0 auto; }

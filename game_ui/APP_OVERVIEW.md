@@ -219,13 +219,43 @@ Creates a game the human plays immediately, with the Robot already in:
 3. `ge.create_new_game(<human PlayerState>)` → `game_id`.
 4. `ge.p2_connect_to_game(<Robot PlayerState, deck=random_ai_deck()>)` — the Robot
    joins, so the game initializes (hands dealt, planet rolled).
-5. `asyncio.create_task(run_ai_loop(game_id, ai_name))` — the Robot plays in a
-   background task (see `game_ui/ai_driver.py`). The loop is fire-and-forget; the
-   response returns as soon as the game exists.
+5. `asyncio.create_task(run_ai_loop(game_id, ai_name, tutorial=req.tutorial))` — the
+   Robot plays in a background task (see `game_ui/ai_driver.py`). The loop is
+   fire-and-forget; the response returns as soon as the game exists.
 6. Response: `{success, game_id, player_id: <human>, opponent: <robot>}`.
 
-`random_ai_deck()` builds a 20-main + 10-support deck for the Robot (never plays
-support cards, but puts them in mana — see `ai_driver.py`).
+`random_ai_deck()` builds a 20-main + 10-support deck for the Robot; since A.1 the
+Robot **does** play support cards (`ai_decide` 3.5 fallback), it is not a mana-token
+only hand.
+
+### Tutorial showcase (`tutorial=True`)
+
+The setup page's **"I want to activate the quick ingame tutorial"** checkbox is sent in
+the `/create_game_ai` body (`CreateGameRequest.tutorial`, default `False`; `/create_game`
+ignores it) and forwarded to the Robot's loop. The in-game tutorial replays **turn 1's
+trip chain card by card** (from the log entries), so that turn needs a real opponent
+card on the chain — a turn where the Robot only taps its dwelling, parks a support
+placeholder or passes would teach from a half-empty chain. While the Robot has **no
+main-faction card on its own chain** (`ai.MAIN_ROWS` lookup — a support card played in
+move mode is not one, a defend is), on **turn 1 only**, `ai_decide` (§3.0 TUTORIAL
+SHOWCASE in `ai_driver.py`):
+
+- skips the dwelling tap, the `nobodymoves` threat response and the support fallback
+  (none of them is a main-faction chain card, and the tap consumes a chain position);
+- lifts PlayerAI's pass discipline **once** (`play_card(force=True)`) — the card choice
+  stays PlayerAI's, only the "no positive expected value → pass" gate is bypassed;
+- and at INIT sacrifices its mana cards with `put_mana(keep_cheap=True)`: the cheapest
+  **affordable main** card stays in hand (the opening pool is exactly 3 mana, and a
+  burned card is never played again) — otherwise the showcase has nothing to pay for.
+
+Honest limit: if the opening hand holds **no main card costing ≤ 3**, nothing can be
+played and the Robot passes (measured on 2×20 paired games — same Robot deck, both
+flags: **19/20 with the flag vs 15/20 and 12/20 without**, and in both samples the
+single miss was exactly such a hand). Turn 2+ behaves completely normally: the flag
+changes that one decision on turn 1, never the Robot's general strength.
+Test: `tests/_ai_tutorial_showcase.py` (weak-card hand → refused / forced, the flag as
+the only difference between pass and play, not forced twice, support card does not
+count, turn 2 not forced).
 
 ## Game-over backup (`game_ui/hf_backup.py`)
 
@@ -318,6 +348,12 @@ Every finished game is backed up to the Hugging Face dataset
   full state to the HF dataset `jordyBonnet/globerunners-games` on a background
   thread; `huggingface-hub` added to the dependencies; test
   `tests/_game_over_hook.py`.
+- **2026-11-08** — **Tutorial showcase**: `/create_game_ai` accepts
+  `tutorial` (the setup page's tutorial checkbox) and forwards it to
+  `run_ai_loop(..., tutorial=True)`; the Robot then guarantees one main-faction card on
+  the turn-1 trip chain (see *Tutorial showcase*), so the in-game tutorial's resolution
+  replay always has an opponent card. No new route, no state/engine change; the flag is
+  an AI-loop parameter only. Test `tests/_ai_tutorial_showcase.py`.
 - **2026-09-23** — `LOCAL_TEST` toggle for card art: `True` → local
   `cards_framed_0.6` mount (previous behavior); `False` → new route
   `serve_card_image()`: support art served from the new **repo bundle

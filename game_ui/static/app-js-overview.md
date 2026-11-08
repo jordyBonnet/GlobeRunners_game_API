@@ -25,20 +25,21 @@ communication with the engine.
 | `utils.mjs` | Tiny DOM/fetch helpers shared by everything | `$`, `$$`, `toast`, `api` |
 | `cards.mjs` | Card data (main + support pools), lookup helpers, **designer starter decks** (`STARTER_DECKS`), UI constants, deck-size constants, `buildSupportDeck`, **deck-rules checker** (JS mirror of `deck_rules.py`) | `CARDPOOL`, `SUPPORT`, `loadCardpool`, `loadSupportCards`, `STARTER_DECKS`, `loadStarterDecks`, `cardInfo`, `cardTitle`, `cardImg`, `cardCost`, `cardName`, `earthBgSrc`, `ENGINEER_DROPS`, `ENGINEER_DWELLING`, `isEngineerDrop`, `isEngineerDwelling`, `DOCTOR_PENDING`, `DOCTOR_DWELLING`, `isDoctorPending`, `isDoctorDwelling`, `MAGE_CELASTIAL_REVERSAL`, `isMageCelestial`, `MAGE_NOBODYMOVES`, `isMageNobodyMoves`, `MAGE_THERMIC_FLUX`, `isMageThermicFlux`, `MAGE_APOCALYPTICRITUAL`, `isMageApocalypticritual`, `MAGE_BLACK_HOLE`, `isMageBlackHole`, `FACTIONS`, `SUPPORT_FACS`, `getFactionKey`, `dwellingPlaceholderSrc`, `factionLogoSrc`, `buildSupportDeck`, `MAIN_DECK_SIZE`, `SUPPORT_DECK_SIZE`, `COND_FAMILY`, `condFamily()`, `MAX_PER_CONDITION`, `MAX_PER_EFFECT`, `BANNED_DECK_VALUES`, `checkMainDeck()` |
 | `phase.mjs` | Phase detection (parses the engine `state` string) + whose turn | `detectPhase`, `myTurn`, `START_MANA_N` |
-| `game.mjs` | Game-page state object, engineer cell-selection mode, `enterGame` | `game`, `cellSelect`, `enterCellSelect`, `exitCellSelect`, `confirmCell`, `enterGame` |
+| `game.mjs` | Game-page state object, engineer cell-selection mode, `enterGame` (which also **starts the tutorial** when the setup-page checkbox is ticked — `tutorial.enabled`) | `game`, `cellSelect`, `enterCellSelect`, `exitCellSelect`, `confirmCell`, `enterGame` |
 | `comm.mjs` | WebSocket + polling + the `applyState` render funnel + **auto-reconnect** (host sleep/wake) | `connectWs`, `sendAction`, `teardownWs`, `setConn`, `startPolling`, `stopPolling`, `applyState`, `wsUrl` |
-| `state.mjs` | `renderAll` + the client-side mana guard | `checkMana`, `renderEnv`, `highlightValidCells`, `renderAll` |
+| `state.mjs` | `renderAll` + the client-side mana guard; `renderAll` ends with **`tutorialTick()`** (the tutorial's only state feed — idempotent) | `checkMana`, `renderEnv`, `highlightValidCells`, `renderAll` |
 | `zones.mjs` | Zone panels & side rows (hand, mana backs, dwelling/pendings/deck/discard) — the two **discard side-panels are clickable** (open the pile viewer, wired in `modals.mjs`) | `publicCount`, `renderOppZone`, `renderMyZone`, `renderSideRows`, `makeStaticCard` (also toggles the `#dz-mana.mana-waiting` purple glow) |
-| `board.mjs` | The Earth ring + stopover slots + tokens/drops/markers | `BIOME_NAMES`, `N_CELLS`, `N_STOPOVERS`, `slotEls`, `POS24`, `buildBoard`, `renderBoard` |
+| `board.mjs` | The Earth ring + stopover slots + tokens/drops/markers | `BIOME_NAMES`, `N_CELLS`, `N_STOPOVERS`, `slotEls`, `POS24`, `buildBoard`, `renderBoard`, `setMarkerOverride`, `clearMarkerOverrides` |
 | `actions.mjs` | Stopover ordering (**per-player** positions) + the unified play dispatch | `playedCount`, `rootedCount`, `nextPosition`, `occupiedCols`, `freeCols`, `nextSlotCol`, `actionStopoverNum`, `canDropOnStopover`, `playCardToStopover`, `orderHint`, `dispatchPlay` |
 | `interaction.mjs` | The hand card element (click-select, drag & drop, playable outline) | `makeHandCard` |
 | `anim.mjs` | Card-movement ("where do my cards go") flight animation | `FLY_MS`, `FLY_STAGGER_MS`, `REDUCED_MOTION`, `snapshotZones`, `planPlayerMoves`, `flyCard`, `flipMyHand`, `popNewBoardTokens`, `animateZoneTransitions` |
 | `theme.mjs` | **Per-faction UI theme colors** — loads `static/faction_themes.json` (editable, no-cache) and applies each MAIN faction's palette as CSS variables (`--accent` / `--accent-2` / `--accent-contrast`, opponent variant `--oppo-*`): setup page (selected faction, hover previews a palette), game page (my palette = page default, opponent's palette on `#oppo-zone` / `#oppo-side` / `#row-oppo` + their board marker). All tints/glows in `style.css` derive from these vars with `color-mix()`; the page **background is never themed** | `THEME_DEFAULTS`, `loadFactionThemes`, `factionTheme`, `applyFactionTheme`, `applyOpponentTheme`, `syncGameThemes` |
 | `bg.mjs` | **Setup-page animated background** — random cards (main + support art, **9-bucket equal-faction distribution**: 1/9 each for the 6 main + 3 support factions) floating up the screen behind the setup page at low opacity, all knobs driven by the JSON file `static/background_cards_parameters.json` (spawn rate, rise speed, size + jitter, rotation speed, starting-rotation range, opacity, spread, max on screen); started from `setup.mjs` `boot()`, stopped (and the `#bg-cards` layer removed) by `game.mjs` `enterGame()`, **restarted by `modals.mjs` `leaveGame()`** ("Back to home" / "✕ Leave") — the background is **setup-page only**; **hovering a background card freezes it and shows the 3x preview** (`dataset.hoverId` + the delegated `modals.mjs` hover, selector `.card, .bg-card`; CSS: `#view-setup` is `pointer-events:none` with `button/input/label/a/.card` re-enabled (the setup page's external links, e.g. the deck-builder panel), `.bg-card:hover` brightens) | `startBgCards`, `stopBgCards` |
 | `log.mjs` | The game-log panel renderer | `effectLabel`, `stopoverLabel`, `makeLogCardEl`, `makeTag`, `buildInstantEl`, `buildLogEntryEl`, `buildLogTurnEl`, `fitLogWidth`, `renderLog` |
-| `chainanim.mjs` | Trip-chain resolution animation (slot pulses + thread) | `clearChainAnim`, `placeThread`, `playChainAnim` |
-| `modals.mjs` | Hover preview (**with a condition/effect legend under the image** — `hoverCardText` + `COND_TOOLTIPS`/`EFF_TOOLTIPS`, "X" = the card's `effect_number` magnitude; support cards show their pool `description`; hidden for card backs), card zoom modal, **discard-pile viewer** (my + opponent pile), server message, endgame, leave | `showCardHover`, `hideCardHover`, `showCardModal`, `showDiscardPilePopup`, `refreshDiscardPilePopup`, `showServerMsg`, `showEndgame`, `leaveGame` |
-| `setup.mjs` | Setup page (deck building, factions, launch, waiting) + `boot()` (which also starts the card background — `bg.mjs`, and loads the faction themes JSON — `theme.mjs`). Picking a faction **themes the setup page with that faction's colors** (`setSetupTheme`); hovering a faction button previews its palette, mouseleave restores the selection. **Loading a text-file deck also themes the page** — the handler detects the loaded deck's dominant faction (majority of the cards) and calls `setSetupTheme` with it, so the setup palette follows the file. **Faction tooltips**: every main + support faction button carries a hover tooltip with a short role description (`addFactionTip`, text in `FACTION_TIPS`, support colors in `SUPPORT_TIP_COLORS`; the tooltip background = the faction's OWN color — `factionTheme(name)` for the mains, banner color for the supports; CSS `.faction-tip` in `style.css`, revealed by pure `:hover`). **Deck-rules panel**: `renderDeckIssues()` renders a live ✓/✗ list under the deck preview (`#deck-issues`, `cards.mjs` `checkMainDeck`) — duplicates / mixed factions / >5-per-condition-family (numeric variants merged) / >5-per-effect / banned `face_point_*` — and `updateLaunchBtn()` + `launch()` **block launch** while any rule is violated (the server re-checks via `deck_rules.py`). **"Why is Start disabled?" list**: `updateLaunchBtn()` also renders one ✗ line per missing piece — in order **1. main faction** ("Select a main faction" or "Main deck invalid — N deck-rule violation(s)"), **2. support faction** ("Select a support faction"), **3. nickname** ("Write your nickname"), plus "Write the game ID to join" in join mode — in **`#launch-blockers`** — the div just **above** the Start button — in the vibrant red `--danger-bright` (`#ff3b3b`), hidden when Start is enabled. **Starter deck source**: the faction buttons call `buildStarterDeck(factionKey, seedStr)`, which returns the **designer-authored list** (`STARTER_DECKS[key]`, from `GET /starter_decks` → `cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt`) **as-is** when it passes `checkMainDeck`; otherwise it falls back to the previous **seeded random build** (FNV-1a hash of the nickname, rarity-weighted, rule-capped) — silently when no list is loaded yet, with a **one-shot toast** when the authored list exists but breaks a deck rule (never a silent substitution). `boot()` also **rebuilds** a deck picked before the pools landed | `setup`, `initSetup`, `boot`, `buildStarterDeck`, `renderDeckPreview`, `renderDeckIssues` |
+| `chainanim.mjs` | Trip-chain resolution animation (slot pulses + thread) | `clearChainAnim`, `placeThread`, `playChainAnim`, `setChainAnimHold`, `pulseStep`, `clearPulse` |
+| `tutorial.mjs` | **Quick in-game tutorial** (coach marks) — the optional opt-in overlay the setup-page checkbox starts: darkened page + click-through spotlight on the element being explained + a tip card (text, images, OK button) that walks the player through their FIRST turn, step by step, from `game.state`. Read-only layer: it never sends a message and never mutates `game.state` (see the *Quick in-game tutorial* section) | `tutorial`, `startTutorial`, `stopTutorial`, `tutorialTick` |
+| `modals.mjs` | Hover preview (**with a condition/effect legend under the image** — `hoverCardText` + `COND_TOOLTIPS`/`EFF_TOOLTIPS`, "X" = the card's `effect_number` magnitude; support cards show their pool `description`; hidden for card backs) — the legend text is also exported as **`cardLegend(id)`** for the tutorial's *card anatomy* step (single source of truth for the wording), card zoom modal, **discard-pile viewer** (my + opponent pile), server message, endgame, leave | `showCardHover`, `hideCardHover`, `showCardModal`, `showDiscardPilePopup`, `refreshDiscardPilePopup`, `showServerMsg`, `showEndgame`, `leaveGame`, `cardLegend` |
+| `setup.mjs` | Setup page (deck building, factions, launch, waiting) + `boot()` + the **`#chk-tutorial` checkbox** ("I want to activate the quick ingame tutorial", in `.launch-row` next to the Start button, checked by default; its `onchange` sets `tutorial.enabled`, which `enterGame()` reads) + **`resetLaunchButton()`** (called by `modals.mjs` `leaveGame`: `launch()` leaves the button labelled "Starting…"/"Waiting for the opponent…" and disabled, so without this a player who left a game could not start another one without a page reload) (which also starts the card background — `bg.mjs`, and loads the faction themes JSON — `theme.mjs`). Picking a faction **themes the setup page with that faction's colors** (`setSetupTheme`); hovering a faction button previews its palette, mouseleave restores the selection. **Loading a text-file deck also themes the page** — the handler detects the loaded deck's dominant faction (majority of the cards) and calls `setSetupTheme` with it, so the setup palette follows the file. **Faction tooltips**: every main + support faction button carries a hover tooltip with a short role description (`addFactionTip`, text in `FACTION_TIPS`, support colors in `SUPPORT_TIP_COLORS`; the tooltip background = the faction's OWN color — `factionTheme(name)` for the mains, banner color for the supports; CSS `.faction-tip` in `style.css`, revealed by pure `:hover`). **Deck-rules panel**: `renderDeckIssues()` renders a live ✓/✗ list under the deck preview (`#deck-issues`, `cards.mjs` `checkMainDeck`) — duplicates / mixed factions / >5-per-condition-family (numeric variants merged) / >5-per-effect / banned `face_point_*` — and `updateLaunchBtn()` + `launch()` **block launch** while any rule is violated (the server re-checks via `deck_rules.py`). **"Why is Start disabled?" list**: `updateLaunchBtn()` also renders one ✗ line per missing piece — in order **1. main faction** ("Select a main faction" or "Main deck invalid — N deck-rule violation(s)"), **2. support faction** ("Select a support faction"), **3. nickname** ("Write your nickname"), plus "Write the game ID to join" in join mode — in **`#launch-blockers`** — the div just **above** the Start button — in the vibrant red `--danger-bright` (`#ff3b3b`), hidden when Start is enabled. **Starter deck source**: the faction buttons call `buildStarterDeck(factionKey, seedStr)`, which returns the **designer-authored list** (`STARTER_DECKS[key]`, from `GET /starter_decks` → `cards/starter_decks/GlobeRunners_<Faction>_starter_deck.txt`) **as-is** when it passes `checkMainDeck`; otherwise it falls back to the previous **seeded random build** (FNV-1a hash of the nickname, rarity-weighted, rule-capped) — silently when no list is loaded yet, with a **one-shot toast** when the authored list exists but breaks a deck rule (never a silent substitution). `boot()` also **rebuilds** a deck picked before the pools landed | `setup`, `initSetup`, `boot`, `buildStarterDeck`, `renderDeckPreview`, `renderDeckIssues`, `resetLaunchButton` |
 | `app.mjs` | **Entry point** — imports `setup.mjs` (pulls the graph) and calls `boot()` | — (side effect) |
 
 ### Import graph (safe circularity)
@@ -96,7 +97,8 @@ State lives in the owning module and is imported by its consumers (no `window.*`
 | `cellSelect` | `game.mjs` | engineer drop placement mode: `{active, cardId}` |
 | `slotEls` / `POS24` | `board.mjs` | DOM refs to the 2×5 stopover slots + the 24 earth-cell positions (`{x%, y%}`), built once by `buildBoard()` |
 | `pendingResolvers` | `comm.mjs` | queue of Promise resolvers — serializes "send action → await reply" over the WS |
-| `chainGen` | `chainanim.mjs` | generation counter that invalidates pending trip-chain animation timers |
+| `chainGen` / `hold` | `chainanim.mjs` | generation counter that invalidates pending trip-chain animation timers / **hold mode** (the tutorial owns the stepping: clones are placed, nothing self-advances) |
+| `tutorial` | `tutorial.mjs` | the tutorial run: `enabled` (setup checkbox), `active`, `visible`, `muted` (a game popup took the screen), `index` (current step in the live `SEQ`) |
 
 Helpers: `$` / `$$` (querySelector shorthands), `toast()`, `api()` (fetch + JSON + error unwrap) — all in `utils.mjs`.
 
@@ -121,7 +123,7 @@ card that might be a support card:
 
 | Mode | Request | Then |
 |---|---|---|
-| `ai` | `POST /create_game_ai` `{name, deck}` | straight into `enterGame()` |
+| `ai` | `POST /create_game_ai` `{name, deck, **tutorial**}` (`tutorial.enabled` — tells the ROBOT to guarantee a main-faction card on the turn-1 trip chain, see *Tutorial showcase* in `game_ui/APP_OVERVIEW.md`) | straight into `enterGame()` |
 | `create` | `POST /create_game` `{name, deck}` | shows the game id (copyable) + `startWaitingForOpponent()` → `enterGame()` when the 2nd player joins |
 | `join` | `POST /join_game/{id}` `{name, deck}` | `enterGame()`; a **409** (already in the game, page reload) is swallowed if the player is present in `GET /game/{id}` |
 
@@ -200,7 +202,7 @@ Every send is preceded by the same guards: my turn → slot order (a **free** po
 
 ## Rendering invariants
 
-- **Full re-render per state**: `applyState → renderAll` rewrites the zones, board rows and slots from scratch (the DOM is treated as a function of `game.state`). The exceptions are deliberately transient/incremental: the **log** (`game.logTurnsRendered` + `game.logTurnSigs`, `log.mjs` — new turns are appended, and a rendered turn whose **content changed** is re-rendered in place keeping its open/closed state; this is required because the engine creates a turn's log entry at PLAY TIME with only the `instant` section, and the same entry gains its stopovers when the trip chain resolves — the turn count does not change), the **selection/cell-select** UI, the **trip-chain animation** (its `.chain-anim-card` clones are spared by `renderBoard`'s slot wipe — `.played:not(.chain-anim-card)` — and torn down by `clearChainAnim` / the run's final step; `chainGen` invalidates pending timers, `chainanim.mjs`), the **player markers** (`.marker[data-player=…]` are repositioned across renders so their CSS left/top transition animates the advance — `board.mjs`), and the **card-flight clones** (`.card-fly`, self-removing, never part of the rendered state — `anim.mjs`).
+- **Full re-render per state**: `applyState → renderAll` rewrites the zones, board rows and slots from scratch (the DOM is treated as a function of `game.state`). The exceptions are deliberately transient/incremental: the **log** (`game.logTurnsRendered` + `game.logTurnSigs`, `log.mjs` — new turns are appended, and a rendered turn whose **content changed** is re-rendered in place keeping its open/closed state; this is required because the engine creates a turn's log entry at PLAY TIME with only the `instant` section, and the same entry gains its stopovers when the trip chain resolves — the turn count does not change), the **selection/cell-select** UI, the **trip-chain animation** (its `.chain-anim-card` clones are spared by `renderBoard`'s slot wipe — `.played:not(.chain-anim-card)` — and torn down by `clearChainAnim` / the run's final step; `chainGen` invalidates pending timers, `chainanim.mjs`), the **player markers** (`.marker[data-player=…]` are repositioned across renders so their CSS left/top transition animates the advance — `board.mjs`; they can also be **visually pinned** to a cell that is *not* the player's `current_position` via `setMarkerOverride(name, cell)` / released with `clearMarkerOverrides()` — `renderBoard` draws from that override map, so a state poll cannot snap a pinned token back mid-replay; the override map is the only place a marker position can come from besides `current_position`, it is never written by anything but those two functions, and the marker tooltip then reads `… (replay — real: N)`), and the **card-flight clones** (`.card-fly`, self-removing, never part of the rendered state — `anim.mjs`).
 - **Delegated hover**: card hover previews are wired on `document` (mouseover/mouseout + `.card[data-hover-id]`), not per element — required because re-renders destroy per-element listeners. New card elements **must** keep `data-hover-id`. (in `modals.mjs`)
 - **Faction themes (per-faction colors, editable JSON)**: `static/faction_themes.json` holds each MAIN faction's UI palette (`accent` / `accent2` / `onAccent`, sampled from the faction logo) — **edit it and reload to change the colors, no code change**. `theme.mjs` sets three CSS variables per scope (`--accent`, `--accent-2`, `--accent-contrast`; opponent variant `--oppo-accent*`) and `style.css` derives **every** tint/glow/gradient from them with `color-mix()` (so a scope override cascades — there are **no hardcoded accent hex/rgba left** in the CSS except the `:root` default teal/orange fallback). Scopes: the **setup page** `#view-setup` (the selected faction's palette; hover previews), the **game page** `#view-game` (MY faction = page default via `syncGameThemes` in `renderAll`), the **opponent containers** `#oppo-zone` / `#oppo-side` / `#row-oppo` (THEIR faction's palette), and the opponent's **board marker** (`.marker.oppo` reads `--oppo-accent` set on `#view-game`). The page **background stays the dark blue** (`--bg-*`), and the mana-drop / tap / discard mechanic colors (purple / red) are intentionally NOT themed. `anim.mjs` `flyCard` copies the current `--accent` onto its body-level clone so the flight glow ring matches. (`theme.mjs` + `setup.mjs` + `state.mjs` + `style.css`)
 - **Stopover slot watermarks**: every stopover slot contains the **row owner's main-faction logo** as a faint watermark (`.slot-logo`, built once in `buildBoard`, src set per row in `renderBoard` from `p.faction` via `factionLogoSrc`) — my row shows MY logo, the opponent's row shows THEIRS; hidden when the faction is unknown. Purely visual, behind the cards (z-index 0). (`board.mjs` + `style.css`)
@@ -271,6 +273,153 @@ threads / clones. `renderBoard`'s slot wipe uses `.played:not(.chain-anim-card)`
 clones survive mid-run polling re-renders. Purely visual — no state, no messages, no
 engine coupling.
 
+**Hold mode + step API (for the tutorial's card-by-card replay).** `setChainAnimHold(true)`
+(`tutorial.mjs` calls it on `startTutorial`, `false` on `endReplay`/`stopTutorial`) makes
+`playChainAnim(t)` **only place the clones and return** — no timer, no automatic pulse run —
+and `pulseStep(row, col, first, pairRow)` then lights exactly one facing pair with the
+sustained `.chain-live` styling (`.slot.chain-live` = the infinite variant of the 460 ms
+`chain-pulse`, `.chain-thread.chain-live` = the thread kept at full opacity) while the tip is
+being read; `clearPulse()` / `clearChainAnim()` take it down. `unlight()` selects
+`.slot.chain-live, .slot.chain-pulsing` (both classes, so a slot that lost one of them can
+never keep a stale glow). The clone placement is factored into `placeChainClones(t)`
+(idempotent: it skips a card already cloned on that slot). Note that `renderLog` deliberately
+does **not** animate the **first** rendered turn (`added && start > 0`) — turn 1 of a fresh
+game is that turn — which is why the tutorial calls `playChainAnim(t)` itself when its replay
+starts: without it every resolution tip would frame an empty slot.
+
+
+## Quick in-game tutorial (`tutorial.mjs`) — opt-in coach marks
+
+**Switch**: the setup-page checkbox `#chk-tutorial` ("I want to activate the quick ingame
+tutorial", in `.launch-row` next to **Start**, **checked by default**) → `tutorial.enabled`
+→ `game.mjs` `enterGame()` calls `startTutorial()`. Nothing else reads it; leaving the game
+(`modals.mjs` `leaveGame`) and the end of the game call `stopTutorial()`.
+
+**It is a pure READ-ONLY overlay**: no message is ever sent, `game.state` is never mutated,
+no render function is modified. It reads `game.state` + the live DOM and positions
+`position: fixed` divs it owns (`#tu-layer`, created lazily on first start).
+
+**Feed**: `renderAll` ends with `tutorialTick()` (state change) + a 500 ms interval (element
+moved / popup opened). Both call the same idempotent `tick()`, wrapped in a `try/catch` that
+`stopTutorial()`s on a bug — a broken tutorial can never break `renderAll` or `enterGame`.
+
+**Flow control** — `SEQ` is a linear list of step descriptors (`STEPS.slice()` at start;
+`doneIds` remembers what finished). On every tick: if a step is showing, an `act` step whose
+`auto(c)` is true closes itself; otherwise the scan walks to the first unfinished step and —
+`expired(c)` → mark done **silently** (the moment passed: a player who never used the mana
+phase, a rejoin on turn 5 …), `when(c)` → show it, else **wait** for the next state — and while
+it waits `sync()` **hides the layer**, so a finished tip never stays frozen on screen
+(OK would look dead); it reappears on the tick where the next moment arrives. The last
+step also carries `expired: turn > 3`, so a run always terminates. The sequence can
+therefore never wedge, never repeat and never leave a ghost overlay. A step can additionally
+carry **`enter(c)`** (run once when it is displayed — attach a visual) and **`onDone(c)`**
+(run when OK closes it; a returned number of ms becomes `moveHoldUntil`, a delay during which
+no new tip appears — used to let a token slide finish).
+**The resolution replay** (`resolve-intro` + `expandResolution()`). The engine resolves a
+whole turn in **one** message, so when the client first sees the turn log both tokens already
+stand on their final cells: reading about the chain would be reading about something invisible.
+So when `resolve-intro` finishes, `expandResolution()` splices a **pair of generated steps per
+card actually played in turn 1**, in the engine's real resolution order (the turn-1 log entry's
+`stopovers` → `entries`, first player's entry first):
+
+1. a **card step** — frames that card's own slot (`slotEls[row][col]`, `col = stopover_N % 5`),
+   shows its art and narrates the real outcome from the log entry: mana cost + shield, the
+   play-time **instant** lines of that card (`t.instant`), **1. block check** (the facing
+   defense's shield total vs the card's cost, blocked/not blocked), **2. condition**
+   (+ ✓ met / ✗ not met), **3. effect** (+ not applied / canceled), **4. basic advancing**
+   (card value, the **+1 faction biome** bonus computed from `st.earth[pos_before]` ×
+   `FACTION_BIOMES`, or "only cost − 1" when ✗) and a highlighted **`Total advancement:
+   cell A → cell B = +N`** (`.tu-total`) — plus the entry's `negatives`/`notes`. Card wording
+   comes from `modals.mjs` `cardLegend()`, the numbers from `cards.mjs` `cardInfo`/`cardCost`
+   (a card id absent from the served pool degrades to the log numbers only, never to 0).
+2. an **Earth step** — frames `#board-stage`, pulses that player's token (`.tu-marker-hi`) and
+   announces the move in words (`cell 4 (Desert) → cell 7 (Jungle) — total +3`, the `jump`
+   skip-the-in-between-cells note, or *why nothing moves*: blocked / canceled / clamped at
+   cell 0). **The movement is the OK itself**: the step's `onDone` calls
+   `setMarkerOverride(player, pos_after)` and returns `MOVE_HOLD_MS` (900 ms), during which
+   `tickInner` keeps the layer off screen so the slide (450 ms CSS transition) is actually
+   seen, then the next tip appears. Defense plays get no Earth step (they never move a token).
+
+`enter`/`onDone` are generic step hooks: `show()` calls `step.enter(c)` once per display (the
+card steps use it for `pulseStep(row, col, first, pairRow)` — the pair stays lit through
+**both** of its tips — the Earth steps add the marker pulse; the turn's cards are cloned onto
+their slots once, when the replay starts) and `advance()`
+calls `step.onDone(c)` when OK closes the step, taking its return value as the hold delay; both
+are individually `try/catch`ed. The replay's view state is bounded in three places: the intro
+step's `enter` pins both tokens to their chain-start cells (`pos_before` of each player's first
+entry) and starts hold mode, the `log` step's `enter` calls `endReplay()` (unpin + `clearPulse`
++ `setChainAnimHold(false)`, which also removes the clones), and `stopTutorial()` calls
+`endReplay()` too — by then the replayed position equals the real one, so nothing jumps. A page
+reload mid-replay drops the overrides (self-healing: the tokens return to their real cells).
+
+**Two step modes**
+
+| Mode | Shade | Exit |
+|---|---|---|
+| `info` (default) | the 4 shade rects **capture clicks** — the page is paused while the player reads | **OK** only (`Enter`/`Space` = OK; `Esc` deliberately does nothing) |
+| `act` (`mode:"act"`) | `#tu-layer.tu-act` → shade `pointer-events:none`: the darkening is visual only, the player **really** drags the cards / clicks Pass (those controls must stay live, otherwise the step could never complete) | self-closes when `auto(c)` (e.g. `me.mana.length >= 3`, `action_chain.length > 0`, `!myTurn()`) or when `expired(c)` |
+
+**ONE control**: the tip's footer holds a **single button — `OK`** (its label can change, e.g. **Finish** on the last step) and it is the only
+`<button>` in `#tu-layer`. There is deliberately **no** skip / hide / end control: on an `info` step the shades swallow every other click, so OK is
+the only clickable button on the whole screen.
+
+**Spotlight geometry** (`sync()`): the target comes from `step.el(c)` **re-queried on every
+sync** (re-renders replace hand cards, so nothing is cached), then 4 `.tu-shade` rects are
+laid out around `rect ± step.pad` (default 10 px; 26 for `goal` so both ring-edge tokens are
+inside) and a pulsing `.tu-halo` frames the hole. **The hole itself is never covered** — that
+is why the darkening is 4 rects instead of one full-screen div with a `box-shadow` hole. The
+tip goes on the side with the most room (`bottom/right/left/top`) and `.tu-arrow` (a **layer
+child**, not a `::after`, which would raise a horizontal scrollbar inside the scrollable card)
+points at the target; the arrow hides and the tip becomes a **bottom sheet** under 760 px.
+No/zero-size target → full-page shade + centred tip, no halo.
+
+**Steps** (`STEPS`, 15 static): 1 goal (`#board-stage` + the inline 🏁→🏆 SVG) · 2.1 trip
+chain (`#stopovers`) · 2.2 hand · 2.3 mana zone (`#dz-mana`) · 2.4 discard panel · 3 **card
+anatomy** (`.tu-anatomy`: the chosen hand card's own art with 6 numbered hotspots + legend —
+mana cost / basic advancing / shield / condition / effect / faction biomes; the positions
+mirror the printed frame: left column = cost, advancing, shield, bottom strip = condition |
+effect, and the two biome icons flank the name; the card is picked to maximise the visible
+elements) · 4 the 3 planet cards (`#env-cards`) · 5 `act` init 3 mana · 6 `act` first play
+(its text adapts: first/second player, whether the opponent already played, the actual
+available mana) · 7 `act` more-or-Pass (**only after the player's own first card of the turn** —
+`when: turn===1 && myPlayTurn(c) && playedThisTurn(c)` — so OK-ing step 6 never stacks a second
+"your move" tip on the board; it points at the next slot or at `#btn-pass` depending on
+`manaAvail` vs the cheapest hand card) · 8 `resolve-intro` + **the replay**: per card of the
+turn a **card step** (its slot, the 4 engine checks, the total advancement) followed by an
+**Earth step** (`#board-stage`, OK = the token slides) ·
+9 log (`#log-panel`; its `enter` ends the replay) · 10 cleaning (`#topbar`) · 11 `act` mana
+phase · 12 the 3 support factions (targets a support card in hand; button label **Finish**).
+
+**Layering** (z-index): shades/halo **62** < `#card-hover` **66** (a hover preview inside the
+spotlight must stay readable) < `#toast` **70** (an error toast must be readable over the
+tutorial) < tip **72**. Two rules make the overlay coexist with the page:
+`popupOpen()` (`.modal:not(.hidden)` / a pending-defend-discard-swap popup, z-index 50 → below
+the layer) → the layer adds `.tu-mute` (`opacity: 0` + `pointer-events: none` on shade, halo and
+tip) and comes back by itself when the popup closes, so a mandatory game popup is never covered; and
+`body.tu-on #stopovers { z-index: 2 }` raises the trip chain above the absolutely-pinned
+`#log-panel` (position absolute, `z-index: auto`), which overlaps the right end of the
+chain: **measured** at a 1414 px window, `elementFromPoint` at the centre of two stopover
+slots returns `#log-body` without the rule and the slot itself with it — otherwise a
+spotlight on stopover 1 would frame the log text instead of the slot, and the halo would
+sit on an element the player cannot even hit.
+
+**A step may be gated on the action of the previous one**: `playedThisTurn(c)` is
+`(me.action_chain || []).length > 0` — the engine's own per-turn play list, cleared in the
+cleaning phase (so it never leaks across turns) and covering move **and** defend plays. Step 7
+uses it as `when`, which is what makes "Spend the rest, or Pass" arrive after the first card
+instead of on top of it. **Whenever a `when` is tightened like that, `expired` must also cover
+"the moment is over"** (`turn > 1 || resolvedTurn(c)` here): the linear scan stops at the first
+step that is neither done nor eligible, so a step that can never become eligible any more would
+otherwise block every step behind it.
+
+**Never wedges the game** (and OK is enough to walk it): a step is shown only while its
+`when(c)` holds, a step whose moment passed is marked done **without ever showing** (`expired`),
+the layer steps off screen while the next moment has not come, and the last step expires after
+turn 3 — so one OK at a time always reaches the end of the run, `game over`/`leaveGame` stop it
+from the outside, and a slow reader keeps all the time they want (nothing auto-dismisses a tip;
+the only timer is the 500 ms reposition/eligibility tick). Because there is no skip control, a
+step can never be lost by mistake — and never re-shown either (`doneIds`).
+
 ## Discard-pile viewer (click a discard side-panel → popup with all discarded cards)
 
 - **Trigger**: clicking either discard side-panel (`#my-side .side-panel.discard` or `#oppo-side .side-panel.discard`) opens a **read-only** modal (`.discard-pile-popup`) listing **all** of that player's discarded cards (most recent first) with the standard 3x hover preview (`cardEl()` → `data-hover-id` → the delegated `modals.mjs` hover). The panels are static DOM, so the listeners (wired at the top level of `modals.mjs`) survive re-renders; both panels gain `cursor:pointer` + a "click to see all discarded cards" title hint.
@@ -310,9 +459,15 @@ links** — no JS, no module, no state: they leave the SPA, so the deck selectio
 2. New card type / support faction → extend `cardInfo`/`cardTitle`/`cardImg`/`cardCost` (`cards.mjs`), the UI constants (`ENGINEER_DROPS` pattern) and the button dispatch table (`actions.mjs`).
 3. Any change to `renderLog` / `applyState` / `makeHandCard` → keep the incremental + delegation invariants (section "Rendering invariants").
 4. New module or new top-level cross-module `const` read → re-verify the import graph is still TDZ-safe (see "Import graph").
-5. Update this file in the same commit.
+5. Anything that must stay **visible above** the tutorial overlay (a toast, a hover preview, a popup) has to sit above z-index 62, or open as a `.modal` so `tutorial.mjs` mutes itself.
+6. Update this file in the same commit.
 
 ## Change log
+
+- **2026-11-08 — the tutorial checkbox is now also a PROMISE to the robot.** `launch()` sends `tutorial: tutorial.enabled` in the `/create_game_ai` body (the field is `CreateGameRequest.tutorial`, default `false`; `/create_game` ignores it) and `app.py` forwards it to `run_ai_loop(..., tutorial=True)`. Why: the resolution replay below teaches turn 1 from the log entries, and on roughly one turn 1 in three the robot put no **main-faction** card on that chain at all (it defended, parked a support placeholder, tapped its dwelling, or passed a card with no positive expected value), so the learner replayed a half-empty chain. The robot now guarantees one — *Tutorial showcase* in `game_ui/APP_OVERVIEW.md` (`ai_driver` 3.0 + `PlayerAI.play_card(force=)` + `put_mana(keep_cheap=)`), limited only by what it can actually afford. **No frontend behaviour change**: one extra field in one existing request body, read by nothing else in the module set.
+- **2026-11-08 — the tutorial now REPLAYS the trip chain card by card (per-card step → Earth step → movement).** The resolution step used to be one static explanation shown while the whole turn had already resolved (the engine resolves a turn in one message, so the tokens were already home). A player reading it saw nothing of the order the rules describe. Now, for **each card of turn 1 in the engine's own resolution order**, the tutorial shows a **card step** (that card's slot lit, its art, and the real outcome read from the turn log: mana cost/shield, the card's play-time **instant** lines, **1. block check** with the facing shield total vs the cost, **2. condition** ✓/✗ with the hover-popup wording, **3. effect** applied/not-applied/canceled, **4. basic advancing** with the card value and the **+1 faction biome** bonus it actually got, and a highlighted **Total advancement: cell A → cell B = +N**) followed by an **Earth step** that frames `#board-stage`, pulses the token that is about to move and says exactly what will happen — **pressing OK performs the movement** and the next tip waits 900 ms so the slide is seen. Defense plays get no Earth step (they never move a token); a 0-movement card says why (blocked / canceled / clamped at cell 0 / no advancing). Touch points (all visual — **no engine, message, AI or rules change**): `tutorial.mjs` (`startReplay`/`endReplay`, the `enter`+`onDone` step hooks, the `moveHoldUntil` gate in `tickInner`, the enriched `resBody` + new `moveBody`, `biomeAt`/`biomeBonusAt`/`facingShields` reading only public info), `board.mjs` (**`setMarkerOverride`/`clearMarkerOverrides`** + `placeMarker(el, name, st)` factored out of `renderBoard`, which now draws a marker from the override map so a poll cannot snap it back mid-replay; the tooltip then shows `… (replay — real: N)`), `chainanim.mjs` (**hold mode** `setChainAnimHold`, the sustained `pulseStep`/`clearPulse` step API, clone placement factored into the idempotent `placeChainClones`; the automatic 460 ms run is untouched when hold is off, and `renderLog` still never animates the first rendered turn — which is why the tutorial calls `playChainAnim` itself so the replay is not explained over empty slots), `style.css` (`.tu-total`, `.slot.chain-pulsing.chain-live` + `.chain-thread.chain-live`, `.marker.tu-marker-hi`), `index.html` (cache-bust `style.css?v=54`→`55`, `app.mjs?v=58`→`59`). **Verified in a browser** (AI games, module-level harness recording the cell each token is drawn on, computed as the nearest `POS24` entry): the sequence `resolve-intro → card → Earth → card → Earth → log` in resolution order; during a card's own tips its owner's token is pinned to that entry's `pos_before` (`0*`) and it reaches `pos_after` (`5`) exactly on that tip's OK; at the `log` step both tokens sit on their **real** positions with the overrides released (`final == log pos_after`, no jump); the facing pair stays lit (`lit=1/2`) and the played card stays cloned on its slot (`clones=1`) through both of its tips; a game where the opponent played nothing produced exactly one pair of resolution steps; run ends normally, `err: null`, no console errors. Test games deleted from `games.db` afterwards (by nickname; the player's own games untouched).
+
+- **2026-11-07 — Quick in-game tutorial (opt-in coach-mark overlay) + Start-button reset on leave.** New module **`tutorial.mjs`**: the setup page gained a **`#chk-tutorial` checkbox** next to the Start button ("I want to activate the quick ingame tutorial", in a new `.launch-row`, checked by default) and, when it is ticked, `enterGame()` starts a **guided tour of the player's first turn**: the page darkens with a **click-through spotlight** on the element being explained (4 shade rects + a pulsing halo — the hole stays genuinely interactive, which is why the darkening is 4 rects and not one `box-shadow` div), and a tip card (title, text, **images**, `Step n / N`) waits for the reader. The tip has **exactly one button — `OK`** (labelled **Finish** on the last step): no Skip, no Hide, no End, no 🎓 chip, and `Esc` does nothing — on an `info` step the shades capture every other click, so OK is literally the only clickable button on the page while a tip is up. 15 static steps (goal → trip chain → hand → mana zone → discard → **card anatomy** (the player's own card art with 6 numbered hotspots + a legend built from the card row and `modals.mjs` `cardLegend`) → the 3 planet cards → *do it yourself* steps for the 3-card init, the first play and Pass → resolution → log → cleaning → the next mana phase → the 3 support factions), and the resolution intro **spawns one step per card actually played in turn 1**, read from `st.log` (condition ✓/✗, effect applied/not, `pos_before → pos_after`, notes), each pointing at that card's own slot. "Info" steps block the page until OK; "act" steps make the shade transparent and close themselves when the action is really done (`me.mana.length >= 3`, `action_chain.length > 0`, `!myTurn()`), with `expired()` skipping a step whose moment has passed (rejoin on turn 5, a player who never used a phase), `when()` gating a step on the action of the previous one (step 7 waits for a real first play: `playedThisTurn`) so the run can neither wedge nor repeat, `sync()` hiding the layer while the next step's moment has not come yet (no frozen tip), and the last step expiring after turn 3 so a run always terminates. It is a **read-only layer**: no message, no `game.state` write, no render function changed — fed by `renderAll`'s new `tutorialTick()` call plus a 500 ms reposition timer, both inside a `try/catch` that stops the tutorial instead of ever breaking `renderAll`/`enterGame`. Other touch points: `setup.mjs` (`tutorial.enabled` from the checkbox, new **`resetLaunchButton()`**), `game.mjs` (`enterGame` starts it), `state.mjs` (`renderAll` feeds it), `modals.mjs` (`cardLegend` export + `leaveGame` → `stopTutorial()` **and `resetLaunchButton()`** — a bug found while testing: `launch()` leaves Start labelled "Starting…" and disabled, so leaving a game made a second game impossible without a page reload), `index.html` (the `.launch-row` markup; cache-bust `style.css?v=52`→`54`, `app.mjs?v=56`→`58`), `style.css` (the `#tu-layer` / `.tu-shade` / `.tu-halo` / `.tu-arrow` / `.tu-tip` / `.tu-btns` / `.tu-anatomy` / `.launch-row` / `.tutorial-opt` block, `body.tu-on #stopovers` — which raises the trip chain over the `#log-panel`, since that panel overlaps stopover 1 on narrow windows — and the **z-index bumps** `#card-hover` 55→66 + `#toast` 60→70 so both stay readable above the 62 overlay). **Unchanged**: engine, message shapes, AI, replay, all rules. **Verified in a browser** (local server, AI games): checkbox ON/OFF (no layer at all when off), the steps in order with the spotlight proven to sit on the intended element (`elementFromPoint` at the halo centre: `#board-stage` → `#stopovers` → `#my-hand` → `#dz-mana` → the discard panel → a hand card → `#env-cards` → the next free slot → `#btn-pass` → `#stopovers` → each played card's slot → `#log-panel` → `#topbar`), auto-advance of the act steps on the real actions (3 mana / a real play / Pass), the generated per-card steps reading the real log, the rejoin path (a game re-entered on turn 2 silently skips the finished steps and still explains the resolution), `querySelectorAll('#tu-layer button')` = **1** (the OK) with every other page control under the shade on an `info` step, the layer muting itself while a `.modal` is open and restoring after, the narrow-viewport bottom sheet, `leaveGame` → Start re-enabled + re-labelled → a second game starting at Step 1, and **0 console messages** through the whole session. Test games deleted from `games.db` afterwards (9 games, none reached a game-over, so nothing reached the HF backup hook).
 
 - **2026-11-07 — "Balance lab" panel on the setup page (link to the report).** `index.html` only — new section **5. Balance lab** in the right `setup-col`, after the deck-builder panel: a hint + `<a class="primary-btn balance-report" href="/report" target="_blank" rel="noopener">📊 Open the balance report</a>`. **No `*.mjs` change** (no module, no state, no message — see the new *Setup-page outbound links* section), **no CSS** (`.primary-btn` + `a.primary-btn` already style it and the faction accent themes it), **no cache-bust bump** (neither `style.css` nor `app.mjs` changed; `index.html` is served fresh by `GET /`). Server side (same change, in `game_ui/app.py`): `balance_report()` on `GET /report` + `GET /report/` serving `balance_lab/report.html` (re-read per request, `no-store`, relative `assets/` refs rewritten) and the new `/report/assets` static mount — documented in `APP_OVERVIEW.md`); `.gitignore`
   `balance_lab/` → `balance_lab/*` + `!balance_lab/report.html` + `!balance_lab/assets`

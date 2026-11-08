@@ -8,7 +8,58 @@ import { game, cellSelect, confirmCell } from "./game.mjs";
 import { canDropOnStopover, playCardToStopover, orderHint, actionStopoverNum, playedCount, freeCols, nextSlotCol } from "./actions.mjs";
 import { makeStaticCard } from "./zones.mjs";
 
+/* ---------------------------------------------------------------- marker placement
+   A marker can be VISUALLY PINNED to a cell that is not the player's real
+   `current_position` (`setMarkerOverride`) — used by the tutorial to replay the trip
+   chain card by card: the engine has already applied the whole turn, the public turn
+   log carries each card's `pos_before` / `pos_after`, and the tokens are walked through
+   those intermediate cells. Purely visual: `game.state` is never touched, `updateBoard`
+   keeps drawing from the override (so a state poll cannot snap the token back
+   mid-replay), and clearing it restores the true position — which by then equals the
+   last replayed one, so the token does not jump. */
 export const BIOME_NAMES = { OC: "Ocean", MO: "Mountain", DE: "Desert", JU: "Jungle" };
+const markerOverride = new Map();            // player name -> pinned cell
+
+/* the cell the marker must be drawn on (override wins over the real position) */
+const markerCellOf = (name, p) => markerOverride.has(name)
+  ? markerOverride.get(name) : Math.min(p.current_position || 0, N_CELLS - 1);
+
+/* position one marker element on its (possibly overridden) cell: the CSS left/top
+   transition on `.marker` is what makes it slide along the ring */
+function placeMarker(el, name, st) {
+  const pos = markerCellOf(name, st.players[name]);
+  const pt = POS24[pos];
+  if (pt) {
+    el.style.left = pt.x + "%";
+    el.style.top = pt.y + "%";
+    // offset to avoid the two tokens overlapping on the same position
+    const shared = Object.entries(st.players).some(([n, q]) => n !== name && markerCellOf(n, q) === pos);
+    el.style.marginTop = shared ? "-16px" : "";
+  }
+  const tokens = (st.earth || [])[pos] || [];
+  const biome = tokens.find((t) => ["OC", "MO", "DE", "JU"].includes(t));
+  const real = st.players[name].current_position;
+  el.title = `${name} — position ${pos}` + (biome ? ` (${BIOME_NAMES[biome]})` : "")
+    + (markerOverride.has(name) && markerOverride.get(name) !== real ? ` (replay — real: ${real})` : "");
+}
+
+/* pin (cell != null) / un-pin (cell == null) one marker, and redraw it right now */
+export function setMarkerOverride(name, cell) {
+  if (cell == null) markerOverride.delete(name);
+  else markerOverride.set(name, Math.max(0, Math.min(N_CELLS - 1, cell)));
+  const el = document.querySelector(`#markers-layer .marker[data-player="${CSS.escape(name)}"]`);
+  if (el && game.state && game.state.players && game.state.players[name]) placeMarker(el, name, game.state);
+}
+
+export function clearMarkerOverrides() {
+  const names = [...markerOverride.keys()];
+  markerOverride.clear();
+  if (!game.state || !game.state.players) return;
+  for (const name of names) {
+    const el = document.querySelector(`#markers-layer .marker[data-player="${CSS.escape(name)}"]`);
+    if (el && game.state.players[name]) placeMarker(el, name, game.state);
+  }
+}
 export const N_CELLS = 24;        // 24 radial positions (invisible) around the Earth
 export const N_STOPOVERS = 5;     // 5 stopovers per row (2 rows: opponent + player)
 export const slotEls = { me: [], oppo: [] };   // slotEls[row][col] -> element
@@ -150,18 +201,7 @@ export function renderBoard(st, me, oppoName) {
     const logo = factionLogoSrc(p.faction);
     el.innerHTML = (logo ? `<img class="marker-logo" src="${logo}" alt="" onerror="this.remove()">` : "")
       + `<b class="marker-letter">${name.slice(0, 1).toUpperCase()}</b>`;
-    const pos = Math.min(p.current_position || 0, N_CELLS - 1);
-    const tokens = earth[pos] || [];
-    const biome = tokens.find((t) => ["OC", "MO", "DE", "JU"].includes(t));
-    el.title = `${name} — position ${p.current_position}` + (biome ? ` (${BIOME_NAMES[biome]})` : "");
-    const pt = POS24[pos];
-    if (pt) {
-      el.style.left = pt.x + "%";
-      el.style.top = pt.y + "%";
-      // offset to avoid the two tokens overlapping on the same position
-      const shared = Object.entries(st.players).some(([n, q]) => n !== name && Math.min(q.current_position || 0, N_CELLS - 1) === pos);
-      el.style.marginTop = shared ? "-16px" : "";
-    }
+    placeMarker(el, name, st);
   }
   layer.querySelectorAll(".marker").forEach((m) => { if (!seen.has(m.dataset.player)) m.remove(); });
 

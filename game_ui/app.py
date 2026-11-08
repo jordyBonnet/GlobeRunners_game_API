@@ -188,8 +188,9 @@ async def create_game_ai(req: CreateGameRequest):
     ai_player = PlayerState(name=ai_name, deck=random_ai_deck())
     ge.p2_connect_to_game(ai_player.model_dump(), game_id)
 
-    # the robot plays in a background task
-    asyncio.create_task(run_ai_loop(game_id, ai_name))
+    # the robot plays in a background task; `tutorial` is the setup page's checkbox
+    # (it guarantees the turn-1 teaching play — see ai_decide / *AI wiring*).
+    asyncio.create_task(run_ai_loop(game_id, ai_name, tutorial=req.tutorial))
     return {"success": True, "game_id": game_id, "player_id": name, "opponent": ai_name}
 
 

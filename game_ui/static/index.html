@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobeRunners</title>
 <link rel="icon" href="/assets/GlobeRunners_icone.png">
-<link rel="stylesheet" href="/static/style.css?v=52">
+<link rel="stylesheet" href="/static/style.css?v=55">
 </head>
 <body>
 
@@ -92,7 +92,14 @@
       </div>
 
       <div id="launch-blockers" class="launch-blockers hidden"></div>
-      <button id="btn-launch" class="primary-btn" disabled>Start</button>
+      <div class="launch-row">
+        <button id="btn-launch" class="primary-btn" disabled>Start</button>
+        <label class="tutorial-opt" for="chk-tutorial"
+               title="Step-by-step tooltips pointing at the board for your first turn — you can end it at any moment">
+          <input type="checkbox" id="chk-tutorial" checked>
+          <span>I want to activate the quick ingame tutorial</span>
+        </label>
+      </div>
       <p id="setup-error" class="error-msg"></p>
     </section>
 
@@ -272,6 +279,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/app.mjs?v=56"></script>
+<script type="module" src="/static/app.mjs?v=60"></script>
 </body>
 </html>

@@ -9,6 +9,7 @@ import { checkMana } from "./state.mjs";
 import { playedCount, nextSlotCol, orderHint, freeCols } from "./actions.mjs";
 import { N_STOPOVERS } from "./board.mjs";
 import { setup } from "./setup.mjs";
+import { tutorial, startTutorial } from "./tutorial.mjs";
 import { stopBgCards } from "./bg.mjs?v=5";
 
 export const game = {
@@ -69,4 +70,8 @@ export function enterGame() {
   $("#log-body").innerHTML = "";
   connectWs();
   startPolling();   // the WS only receives a state when WE send: we also poll to see the opponent
+  // the setup-page "quick ingame tutorial" checkbox — the coach-mark overlay
+  // (tutorial.mjs; the checkbox in setup.mjs sets `tutorial.enabled`) waits for the
+  // first state (renderAll → tutorialTick) before showing step 1
+  if (tutorial.enabled) startTutorial();
 }

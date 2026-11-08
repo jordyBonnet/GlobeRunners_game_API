@@ -4,6 +4,7 @@
 import { $, $$, api, toast } from "./utils.mjs";
 import { CARDPOOL, loadCardpool, loadSupportCards, loadStarterDecks, STARTER_DECKS, cardImg, cardTitle, cardEl, FACTIONS, SUPPORT_FACS, buildSupportDeck, MAIN_DECK_SIZE, SUPPORT_DECK_SIZE, getFactionKey, checkMainDeck, condFamily } from "./cards.mjs";
 import { enterGame } from "./game.mjs";
+import { tutorial } from "./tutorial.mjs";
 import { startBgCards } from "./bg.mjs?v=5";
 import { loadFactionThemes, applyFactionTheme, factionTheme, THEME_DEFAULTS } from "./theme.mjs";
 
@@ -256,6 +257,16 @@ function updateLaunchBtn() {
   $("#btn-launch").disabled = blockers.length > 0;
 }
 
+/* Returning home (modals.mjs leaveGame) must hand the player a WORKING Start button:
+   launch() relabels it ("Starting…" / "Waiting for the opponent…") and disables it, and
+   the AI branch never restores it — without this the only way to start a second game was
+   a page reload. */
+export function resetLaunchButton() {
+  const btn = $("#btn-launch");
+  if (btn) btn.textContent = "Start";
+  updateLaunchBtn();
+}
+
 export function initSetup() {
   // tabs deck source
   $("#tab-starter").onclick = () => switchTab("#tab-starter", "#starter-panel");
@@ -335,6 +346,14 @@ export function initSetup() {
     catch { toast("Impossible de copier automatiquement"); }
   };
 
+  // "I want to activate the quick ingame tutorial" — the coach-mark overlay
+  // (tutorial.mjs) started by enterGame() when this box is ticked
+  const chk = $("#chk-tutorial");
+  if (chk) {
+    tutorial.enabled = chk.checked;
+    chk.onchange = () => { tutorial.enabled = chk.checked; };
+  }
+
   // launch
   $("#btn-launch").onclick = launch;
 
@@ -370,10 +389,13 @@ async function launch() {
   try {
     await loadCardpool();
     if (setup.mode === "ai") {
-      // game vs AI: the robot joins immediately, we go straight into the game
+      // game vs AI: the robot joins immediately, we go straight into the game.
+      // `tutorial` tells the ROBOT about the checkbox: with it on, the robot guarantees a
+      // main-faction card on the turn-1 trip chain, so the tutorial's resolution replay has
+      // an opponent card to walk through (game_ui/ai_driver.py, 3.0 TUTORIAL SHOWCASE).
       const res = await api("/create_game_ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, deck }),
+        body: JSON.stringify({ name, deck, tutorial: tutorial.enabled }),
       });
       setup.gameId = res.game_id;
       toast(`Game started against ${res.opponent}!`);
