@@ -4,12 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>GlobeRunners — Game analysis</title>
-<link rel="stylesheet" href="/style.css?v=1" />
+<link rel="stylesheet" href="/style.css?v=3" />
 </head>
 <body>
 <header class="topbar">
   <div class="brand">🌍 GlobeRunners <span class="sub">game analysis</span></div>
   <div class="controls">
+    <div class="src-filter" id="srcFilter" role="group" aria-label="Game source filter">
+      <button data-filter="all" title="Every game of both sources">All</button>
+      <button data-filter="local" title="Games stored in the local games.db">💾 Local</button>
+      <button data-filter="hf" title="Games of the Hugging Face backup dataset">☁️ HF</button>
+    </div>
     <label for="gameSelect">Game:</label>
     <select id="gameSelect" size="1"></select>
     <button id="expandAll" title="Expand all">⊞ Expand all</button>
@@ -17,10 +22,12 @@
   </div>
 </header>
 
+<div id="srcStatus" class="src-status"></div>
+
 <main id="content">
   <p class="loading">Loading games…</p>
 </main>
 
-<script src="/app.js?v=1"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

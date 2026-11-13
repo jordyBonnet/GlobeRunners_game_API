@@ -26,7 +26,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
+  flex-wrap: wrap;
   padding: 12px 20px;
   background: linear-gradient(90deg, #131a2b, #182238);
   border-bottom: 1px solid var(--border);
@@ -38,8 +39,23 @@ body {
 .brand { font-size: 20px; font-weight: 700; }
 .brand .sub { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 6px; }
 
-.controls { display: flex; align-items: center; gap: 10px; }
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .controls label { color: var(--muted); font-size: 13px; }
+
+/* ---- source filter tabs (All / 💾 Local games.db / ☁️ HF dataset) ---- */
+.src-filter {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.src-filter button {
+  background: transparent; border: none; border-radius: 0;
+  padding: 7px 11px; font-size: 12px; color: var(--muted); white-space: nowrap;
+}
+.src-filter button + button { border-left: 1px solid var(--border); }
+.src-filter button:hover { background: #2a3654; color: var(--text); }
+.src-filter button.active {
+  background: rgba(77,163,255,.16); color: var(--text); font-weight: 600;
+}
 
 select#gameSelect {
   min-width: 380px;
@@ -87,6 +103,20 @@ main#content { max-width: 1080px; margin: 0 auto; padding: 20px; }
 .badge.winner { background: rgba(61,220,132,.15); color: var(--good); border-color: rgba(61,220,132,.4); }
 .badge.verified { background: rgba(77,163,255,.15); color: var(--accent); border-color: rgba(77,163,255,.4); }
 .badge.unverified { background: rgba(255,176,32,.15); color: var(--warn); border-color: rgba(255,176,32,.4); }
+.badge.dataset { background: rgba(185,139,255,.16); color: #c9a6ff; border-color: rgba(185,139,255,.45); }
+
+/* ---- data-source status line (games.db + HF backup dataset) ---- */
+.src-status {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 6px 20px; font-size: 12px; color: var(--muted);
+  background: #121a2a; border-bottom: 1px solid var(--border);
+}
+.src-status .src { white-space: nowrap; }
+.src-status .cloud { color: #c9a6ff; text-decoration: none; }
+.src-status .cloud:hover { text-decoration: underline; }
+.src-status .bad { color: var(--bad); }
+.src-status .muted { color: var(--muted); }
+button.mini { padding: 3px 9px; font-size: 12px; border-radius: 6px; }
 
 .warnings { margin-top: 10px; font-size: 12px; color: var(--warn); }
 .warnings ul { margin: 4px 0 0; padding-left: 18px; }

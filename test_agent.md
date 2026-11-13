@@ -54,5 +54,6 @@ uv run python tests/_rooted_v15_replay.py  # replay verification: full engine fl
 # the server on :8001 MUST be running for these two:
 uv run python tests/_ui_e2e.py     # 2 fake players via REST+WS
 uv run python tests/_ai_e2e.py     # human vs Robot
+uv run python tests/_analysis_hf_source.py # ANALYSIS APP vs THE HF BACKUP DATASET (games/analysis/hf_source.py): game-id safety (a URL-supplied id can never escape path_in_repo / the local mirror), dataset listing + selector metadata shape, a HOSTED game (on the dataset, NOT in games.db — those exist only there) loaded and replayed by the real engine (reached the end), offline behaviour (mirror-first, and a failed listing falls back to the mirror instead of an empty list — never raises), app wiring (`load_state` source override db/hf + 404, `/api/games` merge tagged db/both/hf, the All / 💾 Local / ☁️ HF source filter: `local` == the games.db set, `hf` == the dataset set, `hosted-only` == dataset minus local, `all` == the union, unknown value → 400, support cards resolved to their `card_path` art instead of "Carte inconnue"). READ-ONLY: no games.db write, no upload (downloads land in the gitignored `games/analysis/hf_cache/`)
 uv run python -m games.analysis.replay   # replay auto-test
 ```

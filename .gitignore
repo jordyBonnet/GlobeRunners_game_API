@@ -30,3 +30,8 @@ video/
 balance_lab/*
 !balance_lab/report.html
 !balance_lab/assets
+
+# Local mirror of the HF backup dataset (games/analysis/hf_source.py): the finished
+# games downloaded from jordyBonnet/globerunners-games + the selector metadata cache.
+# Re-downloadable, machine-specific -> never committed.
+games/analysis/hf_cache/

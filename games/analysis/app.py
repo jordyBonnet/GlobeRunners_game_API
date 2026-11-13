@@ -1,4 +1,15 @@
-"""FastAPI web app for analyzing stored games from games/games.db.
+"""FastAPI web app for analyzing stored games.
+
+TWO game sources, merged into one selector:
+  * `games/games.db`            the local SQLite database (every game this
+                                 machine knows, finished or not) — `replay.py`;
+  * the HF **backup dataset**    `jordyBonnet/globerunners-games`, where
+                                 `game_ui/hf_backup.py` uploads every FINISHED
+                                 game — `hf_source.py`. This is the only place
+                                 the games played on a hosted deployment exist
+                                 (the container disk is ephemeral).
+Both hold the same `GameState.to_json()` shape, so `replay.analyze_game()`
+replays either one unchanged.
 
 Run (from the project root, with the venv activated):
     uvicorn analysis.app:app --reload --port 8017
@@ -6,10 +17,16 @@ or directly:
     python -m uvicorn games.analysis.app:app --port 8017   # see README in this folder
 
 Endpoints:
-    GET /                     -> static frontend (game selector + per-turn view)
-    GET /api/games            -> metadata of every stored game
-    GET /api/game/{game_id}   -> full trip-chain analysis for one game
-    GET /card/{card_id}.png   -> card art served from the external art folder
+    GET /                      -> static frontend (game selector + per-turn view)
+    GET /api/games             -> metadata of every game of both sources
+                                  ?filter=all|local|hf|hosted-only (the UI source
+                                  tabs) · ?refresh=1 re-reads the dataset listing,
+                                  bypassing its TTL
+    GET /api/game/{game_id}    -> full trip-chain analysis for one game
+                                  (?source=db|hf forces a source)
+    GET /api/hf_status         -> health of the HF dataset source (UI status line)
+    GET /card/{card_id}.png    -> card art served from the external art folder
+                                  (support cards resolve via their `card_path`)
 
 Card IDs are only used internally to resolve images; they are never rendered
 in the UI (only the card art + name are shown).
@@ -29,6 +46,7 @@ from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 import replay  # noqa: E402
+import hf_source  # noqa: E402
 
 # external folder containing <card_id>.png for every card of the pool
 ART_DIR = Path(r"C:\Users\jordy\Documents\python\projects\GlobeRunners_card_system\lib\artdesign\cards_framed_0.6")
@@ -37,12 +55,31 @@ app = FastAPI(title="GlobeRunners - Analyse de parties")
 
 _analysis_cache: dict[str, dict] = {}
 
+# Support-faction cards (Engineers / Doctors / Mages) are NOT in cardpool.parquet:
+# they live in cards/support_factions.parquet, keyed by `card_name` ("boost",
+# "epo", "black_hole", ...) with the art file in `card_path` ("Eng_boost.png").
+# The analysis reads them off the engine's own SUPPORT_DB so support cards get
+# their real name / support faction / art instead of "Carte inconnue".
+SUPPORT_CARDS: dict[str, dict] = {
+    name: {
+        "art": (row.get("card_path") or f"{name}.png").rsplit(".", 1)[0],
+        "faction": (row.get("support_faction_name") or "support"),
+    }
+    for name, row in (replay.ge.SUPPORT_DB or {}).items()
+}
+
 
 # ------------------------------------------------------------- presentation
 def _card_ref(card_id: str | None) -> dict | None:
     """Public reference for a card: image + name only (never the id)."""
     if not card_id:
         return None
+    sup = SUPPORT_CARDS.get(card_id)
+    if sup:
+        # support card: its own art file + its support faction (the biome label of
+        # _action_public does NOT apply to it - it has no biome)
+        return {"img": f"/card/{sup['art']}.png", "name": card_id,
+                "faction": f"{sup['faction'].title()} support", "support": True}
     row = replay.CARDS_DB.filter(replay.pl.col("card_id") == card_id)
     name = row["name"].item() if not row.is_empty() else "Carte inconnue"
     faction = row["faction"].item() if not row.is_empty() else ""
@@ -90,8 +127,9 @@ def _action_public(ev: dict | None, biomes: list[str]) -> dict | None:
     delta = (ev.get("pos_after") or 0) - (ev.get("pos_before") or 0)
     card = _card_ref(ev.get("card_id"))
     # replace the card's faction by the biome where the card was at the start of
-    # the resolution of this stopover (the cell of the board it stood on)
-    if card is not None:
+    # the resolution of this stopover (the cell of the board it stood on) — a
+    # support card has no biome, it keeps its support faction label
+    if card is not None and not card.get("support"):
         pos_before = ev.get("pos_before")
         if isinstance(pos_before, int) and 0 <= pos_before < len(biomes):
             code = biomes[pos_before]
@@ -108,12 +146,34 @@ def _action_public(ev: dict | None, biomes: list[str]) -> dict | None:
     }
 
 
-def get_analysis(game_id: str) -> dict | None:
-    """Replay a stored game (cached) and return presentation-ready JSON."""
-    if game_id in _analysis_cache:
-        return _analysis_cache[game_id]
+def load_state(game_id: str, source: str | None = None) -> tuple[dict | None, str | None]:
+    """`(state dict, source tag)` for a game id: local games.db, then the HF dataset.
 
-    state_dict = replay.load_game(game_id)
+    `source` ("db" / "hf") forces one source; None tries games.db first (no download
+    needed) and falls back to the dataset backup. Returns `(None, None)` when the id
+    exists in neither, which the route turns into a 404.
+    """
+    if source in (None, "db"):
+        state = replay.load_game(game_id)
+        if state is not None:
+            return state, "db"
+        if source == "db":
+            return None, None
+    if source in (None, "hf"):
+        state = hf_source.load_game(game_id)
+        if state is not None:
+            return state, "hf"
+    return None, None
+
+
+def get_analysis(game_id: str, source: str | None = None) -> dict | None:
+    """Replay a stored game (cached per game **and per forced source**) and return
+    presentation-ready JSON."""
+    key = (game_id, source or "auto")
+    if key in _analysis_cache:
+        return _analysis_cache[key]
+
+    state_dict, used_source = load_state(game_id, source)
     if state_dict is None:
         return None
 
@@ -143,12 +203,18 @@ def get_analysis(game_id: str) -> dict | None:
             "mana_puts": mana_puts,
             "hands_start": hands_start,
             "actions": actions_pub,
+            # board / dwelling / instant actions of the play phase (drops, dwelling
+            # place + tap, pending places, Mages instants, swap_cards) - play-time
+            # actions that are NOT part of the trip chain
+            "events": [{k: (v if k != "card" else _card_ref(v)) for k, v in e.items()}
+                       for e in (t.get("events") or [])],
             "positions_before": t["positions_before"],
             "positions_after": t["positions_after"],
         })
 
     out = {
         "game_id": game_id,
+        "source": used_source,
         "date_label": replay._date_label(game_id),
         "players": names,
         "temperature": state_dict.get("temperature"),
@@ -160,25 +226,91 @@ def get_analysis(game_id: str) -> dict | None:
         "verified": res["verified"],
         "warnings": res["warnings"],
     }
-    _analysis_cache[game_id] = out
+    _analysis_cache[key] = out
     return out
 
 
 # ------------------------------------------------------------------ routes
+# `/api/games?filter=` -> the `source` values each tab keeps (see api_games)
+GAME_FILTERS = {
+    "all": ("db", "both", "hf"),      # everything, deduplicated
+    "local": ("db", "both"),          # every game games.db holds
+    "hf": ("hf", "both"),             # every game of the HF dataset
+    "hosted-only": ("hf",),           # dataset only -> played on the hosted app
+}
+
+
 @app.get("/api/games")
-def api_games():
+def api_games(refresh: int = 0, filter: str = "all"):
+    """Games of both sources, deduplicated, oldest first (id = timestamp).
+
+    `source` per entry: "db" (local only), "hf" (dataset only -> the games played on
+    the hosted deployment) or "both". A dataset game already in games.db is never
+    re-downloaded for the list: its metadata comes from games.db.
+
+    `filter` (the UI's source tabs): `all` | `local` (games.db, so db+both) | `hf`
+    (the dataset, so hf+both) | `hosted-only` (on the dataset but NOT in games.db);
+    an unknown value is a 400. `all` == local ∪ hf (a "both" game is listed once).
+    """
+    if filter not in GAME_FILTERS:
+        raise HTTPException(status_code=400,
+                            detail="filter invalide (" + " | ".join(GAME_FILTERS) + ")")
     games = replay.list_games()
+    for g in games:
+        g["source"] = "db"
+    by_id = {g["id"]: g for g in games}
+    hf_ids: set[str] = set()
+    try:
+        for g in hf_source.list_games(force=bool(refresh)):
+            g.setdefault("date_label", replay._date_label(g["id"]))
+            hf_ids.add(g["id"])
+            known = by_id.get(g["id"])
+            if known is None:
+                games.append(g)
+                by_id[g["id"]] = g
+            else:
+                known["source"] = "both"
+    except Exception as e:  # pragma: no cover - hf_source already swallows errors
+        print(f"[analysis] HF dataset source unavailable: {e!r}")
+    for g in by_id.values():
+        if g["source"] == "db" and g["id"] in hf_ids:
+            g["source"] = "both"
+    games.sort(key=lambda g: g["id"])
     for g in games:
         g["label"] = (
             f"{g['date_label']} - {' vs '.join(g['players'])} "
             f"(turn {g['final_turn']}, winner: {g['winner'] or 'tie'})"
         )
-    return games
+    keep = GAME_FILTERS[filter]
+    return [g for g in games if g["source"] in keep]
+
+
+@app.get("/api/hf_status")
+def api_hf_status(refresh: int = 0):
+    """Health of the Hugging Face backup-dataset source (for the UI status line).
+
+    `?refresh=1` bypasses the listing TTL so the UI can re-check the dataset.
+    """
+    try:
+        if refresh:
+            hf_source.list_games(force=True)
+        st = hf_source.status()
+        # cross-source counts for the status line: how many games this machine has
+        # locally, and how many dataset games are NOT in games.db (the hosted ones)
+        db_ids = {g["id"] for g in replay.list_games()}
+        st["n_local"] = len(db_ids)
+        st["n_in_db"] = sum(1 for gid in hf_source.known_ids() if gid in db_ids)
+        return st
+    except Exception as e:  # pragma: no cover
+        return {"enabled": False, "repo": hf_source.REPO_ID, "error": repr(e),
+                "n_remote": 0, "n_mirrored": 0}
 
 
 @app.get("/api/game/{game_id}")
-def api_game(game_id: str):
-    data = get_analysis(game_id)
+def api_game(game_id: str, source: str | None = None):
+    if source not in (None, "db", "hf"):
+        raise HTTPException(status_code=400, detail="source invalide (db | hf)")
+    data = get_analysis(game_id, source)
     if data is None:
         raise HTTPException(status_code=404, detail="Partie introuvable")
     return data
@@ -190,6 +322,12 @@ def card_image(card_id: str):
     if not card_id or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for ch in card_id):
         raise HTTPException(status_code=400, detail="card_id invalide")
     path = ART_DIR / f"{card_id}.png"
+    if not path.is_file():
+        # support cards are stored under their pool name ("boost") but their art
+        # file carries the faction prefix ("Eng_boost.png")
+        sup = SUPPORT_CARDS.get(card_id)
+        if sup:
+            path = ART_DIR / f"{sup['art']}.png"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="image introuvable")
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})

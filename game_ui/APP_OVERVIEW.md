@@ -276,6 +276,10 @@ Every finished game is backed up to the Hugging Face dataset
   on HF Spaces) or a cached `hf auth login` token locally.
 - Test: `tests/_game_over_hook.py` (hook fires exactly once + real upload round-trip
   with cleanup).
+- **Reading the backups back**: `games/analysis` (port 8017) uses that dataset as a
+  second game source (`games/analysis/hf_source.py`) — the games played on the
+  hosted deployment, which exist nowhere else, are replayable/analyzable there
+  (see `games/analysis/README.md`, and `tests/_analysis_hf_source.py`).
 
 ## Invariants
 
